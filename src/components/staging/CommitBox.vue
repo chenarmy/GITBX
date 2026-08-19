@@ -3,11 +3,13 @@ import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
+import { useNotificationStore } from '@/stores/notification';
 import { Sparkles, Send } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
+const notification = useNotificationStore();
 
 const commitMessage = ref('');
 const isSubmitting = ref(false);
@@ -27,9 +29,10 @@ async function handleCommit() {
       settingsStore.authorName,
       settingsStore.authorEmail
     );
+    notification.success('Commit Created', commitMessage.value);
     commitMessage.value = '';
-  } catch (err) {
-    console.error('Commit failed:', err);
+  } catch (err: any) {
+    notification.error('Commit Failed', err?.message);
   } finally {
     isSubmitting.value = false;
   }
@@ -37,7 +40,7 @@ async function handleCommit() {
 </script>
 
 <template>
-  <div class="h-44 bg-card border-t border-border flex flex-col p-2 text-xs select-none">
+  <div class="h-44 bg-card border-t border-border flex flex-col p-2.5 text-xs select-none">
     <!-- Conventional Commit shortcuts & AI Trigger -->
     <div class="flex items-center justify-between mb-1.5">
       <div class="flex items-center space-x-1">
@@ -45,7 +48,7 @@ async function handleCommit() {
           v-for="tag in CONVENTIONAL_TAGS"
           :key="tag"
           @click="insertPrefix(tag)"
-          class="px-1.5 py-0.5 rounded bg-muted/60 hover:bg-accent text-muted-foreground hover:text-foreground font-mono text-[10px] transition"
+          class="px-1.5 py-0.5 rounded bg-secondary hover:bg-muted border border-border text-foreground font-mono text-[10px] transition active:scale-95 shadow-2xs"
         >
           {{ tag }}
         </button>
@@ -53,10 +56,10 @@ async function handleCommit() {
 
       <button
         @click="aiStore.openAiModal()"
-        class="flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition text-[11px]"
+        class="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 transition text-[11px] font-medium active:scale-95"
       >
-        <Sparkles class="w-3 h-3 text-indigo-400" />
-        <span>AI Generate</span>
+        <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+        <span>AI Message</span>
       </button>
     </div>
 
@@ -64,19 +67,19 @@ async function handleCommit() {
     <textarea
       v-model="commitMessage"
       placeholder="Commit summary (e.g. feat: add Canvas graph view)..."
-      class="flex-1 w-full bg-background/60 border border-border rounded p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground/60"
+      class="flex-1 w-full bg-background border border-border rounded-md p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground shadow-xs"
     ></textarea>
 
     <!-- Bottom Actions: Author info & Commit Button -->
-    <div class="flex items-center justify-between mt-2 pt-1 border-t border-border/40">
+    <div class="flex items-center justify-between mt-2 pt-1 border-t border-border">
       <div class="text-[11px] text-muted-foreground truncate">
-        Committer: <span class="font-medium text-foreground">{{ settingsStore.authorName }}</span> ({{ settingsStore.authorEmail }})
+        Committer: <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
       </div>
 
       <button
         @click="handleCommit"
         :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
-        class="flex items-center space-x-1.5 px-3 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+        class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
       >
         <Send class="w-3.5 h-3.5" />
         <span>Commit to {{ repoStore.repoInfo?.head_branch || 'main' }}</span>

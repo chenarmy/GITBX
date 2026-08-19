@@ -9,12 +9,21 @@ import CommitBox from '@/components/staging/CommitBox.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
 import SettingsModal from '@/components/dialogs/SettingsModal.vue';
+import AddRepoModal from '@/components/dialogs/AddRepoModal.vue';
+import BranchModal from '@/components/dialogs/BranchModal.vue';
+import TagModal from '@/components/dialogs/TagModal.vue';
+import StashModal from '@/components/dialogs/StashModal.vue';
+import MergeModal from '@/components/dialogs/MergeModal.vue';
+import RebaseModal from '@/components/dialogs/RebaseModal.vue';
+import ResetModal from '@/components/dialogs/ResetModal.vue';
+import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
+import ToastContainer from '@/components/ui/ToastContainer.vue';
 import { useRepoStore } from '@/stores/repo';
 
 const repoStore = useRepoStore();
 
 onMounted(async () => {
-  await repoStore.loadRepo('i:/GITBX');
+  await repoStore.loadRepo();
 });
 </script>
 
@@ -57,13 +66,23 @@ onMounted(async () => {
     </div>
 
     <!-- Modals -->
+    <AddRepoModal />
+    <BranchModal />
+    <TagModal />
+    <StashModal />
+    <MergeModal />
+    <RebaseModal />
+    <ResetModal />
+    <RenameBranchModal />
     <AiAssistantModal />
     <SettingsModal />
+
+    <!-- Global Toast Container -->
+    <ToastContainer />
   </div>
 </template>
 
 <style>
-/* Global app overrides */
 html, body {
   margin: 0;
   padding: 0;

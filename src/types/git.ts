@@ -34,6 +34,9 @@ export interface RepositoryInfo {
   head_commit_id?: string;
   is_dirty: boolean;
   remotes: string[];
+  is_merging?: boolean;
+  is_rebasing?: boolean;
+  is_cherry_picking?: boolean;
 }
 
 export interface BranchItem {
