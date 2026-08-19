@@ -7,6 +7,7 @@ export const useAiStore = defineStore('ai', () => {
   const isGenerating = ref<boolean>(false);
   const generatedMessage = ref<GeneratedCommitMessage | null>(null);
   const detectedSecrets = ref<SecretDetection[]>([]);
+  const draftCommitMessage = ref<string>('');
 
   const llmConfig = ref<LlmConfig>({
     provider: 'openai',
@@ -24,13 +25,19 @@ export const useAiStore = defineStore('ai', () => {
     isAiModalOpen.value = false;
   };
 
+  const applyCommitMessage = (msg: string) => {
+    draftCommitMessage.value = msg;
+  };
+
   return {
     isAiModalOpen,
     isGenerating,
     generatedMessage,
     detectedSecrets,
     llmConfig,
+    draftCommitMessage,
     openAiModal,
     closeAiModal,
+    applyCommitMessage,
   };
 });

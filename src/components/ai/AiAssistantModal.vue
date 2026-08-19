@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import {
   Sparkles,
@@ -21,14 +21,31 @@ const mockGeneratedCommit = ref({
   body: '- Added Rust gitbx-graph lane tracker and Bezier control points calculation\n- Integrated 60fps HTML Canvas with dual-buffering\n- Added branch and tag badges to commit table',
 });
 
+const displayedCommit = computed(() => {
+  if (aiStore.generatedMessage) {
+    return {
+      type: aiStore.generatedMessage.commit_type,
+      summary: aiStore.generatedMessage.summary,
+      body: aiStore.generatedMessage.body || '',
+    };
+  }
+  return mockGeneratedCommit.value;
+});
+
+function getFullMessage(): string {
+  const commit = displayedCommit.value;
+  return commit.body && commit.body.trim().length > 0
+    ? `${commit.summary}\n\n${commit.body}`
+    : commit.summary;
+}
+
 function applyToCommitBox() {
+  aiStore.applyCommitMessage(getFullMessage());
   aiStore.closeAiModal();
 }
 
 function copyMessage() {
-  navigator.clipboard.writeText(
-    `${mockGeneratedCommit.value.summary}\n\n${mockGeneratedCommit.value.body}`
-  );
+  navigator.clipboard.writeText(getFullMessage());
   isCopied.value = true;
   setTimeout(() => {
     isCopied.value = false;
@@ -82,9 +99,12 @@ function copyMessage() {
           </div>
 
           <div class="p-3 rounded-lg bg-background border border-border space-y-2 font-mono text-[11px]">
-            <div class="text-indigo-400 font-bold">{{ mockGeneratedCommit.summary }}</div>
-            <div class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2">
-              {{ mockGeneratedCommit.body }}
+            <div class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
+            <div
+              v-if="displayedCommit.body"
+              class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2"
+            >
+              {{ displayedCommit.body }}
             </div>
           </div>
 

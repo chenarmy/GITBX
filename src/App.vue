@@ -27,7 +27,6 @@ const repoStore = useRepoStore();
 const consoleStore = useConsoleStore();
 
 function handleKeyDown(e: KeyboardEvent) {
-  // Ctrl + ` or Ctrl + J toggles console
   if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === 'j')) {
     e.preventDefault();
     consoleStore.toggleConsole();
@@ -53,29 +52,29 @@ onUnmounted(() => {
     <MainToolbar />
 
     <!-- Main Workspace Container -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 flex overflow-hidden min-h-0">
       <!-- 1. Left Sidebar Navigation -->
       <SidebarWorkspace />
 
       <!-- 2. Central & Right Workspace Layout -->
-      <div class="flex-1 flex flex-col overflow-hidden">
-        <!-- Top Half: Commit Graph Tree View -->
-        <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+        <!-- Top Half: Commit Graph Tree View (45% height) -->
+        <div class="h-[45%] flex flex-col overflow-hidden min-h-[160px]">
           <CommitGraphCanvas />
         </div>
 
-        <!-- Bottom Half: Staging Panel + Commit Box + Diff Viewer -->
-        <div class="h-64 flex overflow-hidden border-t border-border">
-          <!-- Staging & Commit Area (Left) -->
-          <div class="w-80 flex flex-col border-r border-border shrink-0">
-            <div class="flex-1 overflow-hidden">
+        <!-- Bottom Half: Staging Panel + Commit Box + Diff Viewer (55% height) -->
+        <div class="flex-1 flex overflow-hidden border-t border-border min-h-[260px]">
+          <!-- Staging & Commit Area (Left) - Expanded to 384px -->
+          <div class="w-96 flex flex-col border-r border-border shrink-0 bg-card overflow-hidden">
+            <div class="flex-1 overflow-hidden min-h-0">
               <StagingPanel />
             </div>
             <CommitBox />
           </div>
 
           <!-- Diff Inspection Area (Right) -->
-          <div class="flex-1 overflow-hidden">
+          <div class="flex-1 overflow-hidden min-w-0">
             <DiffViewer />
           </div>
         </div>
