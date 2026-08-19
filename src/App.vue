@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import NavbarHeader from '@/components/layout/NavbarHeader.vue';
 import MainToolbar from '@/components/layout/MainToolbar.vue';
 import SidebarWorkspace from '@/components/layout/SidebarWorkspace.vue';
@@ -7,6 +7,8 @@ import CommitGraphCanvas from '@/components/graph/CommitGraphCanvas.vue';
 import StagingPanel from '@/components/staging/StagingPanel.vue';
 import CommitBox from '@/components/staging/CommitBox.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
+import ConsolePanel from '@/components/layout/ConsolePanel.vue';
+import FooterBar from '@/components/layout/FooterBar.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
 import SettingsModal from '@/components/dialogs/SettingsModal.vue';
 import AddRepoModal from '@/components/dialogs/AddRepoModal.vue';
@@ -19,11 +21,26 @@ import ResetModal from '@/components/dialogs/ResetModal.vue';
 import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import { useRepoStore } from '@/stores/repo';
+import { useConsoleStore } from '@/stores/console';
 
 const repoStore = useRepoStore();
+const consoleStore = useConsoleStore();
+
+function handleKeyDown(e: KeyboardEvent) {
+  // Ctrl + ` or Ctrl + J toggles console
+  if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === 'j')) {
+    e.preventDefault();
+    consoleStore.toggleConsole();
+  }
+}
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeyDown);
   await repoStore.loadRepo();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -43,12 +60,12 @@ onMounted(async () => {
       <!-- 2. Central & Right Workspace Layout -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- Top Half: Commit Graph Tree View -->
-        <div class="h-1/2 flex flex-col overflow-hidden">
+        <div class="flex-1 flex flex-col overflow-hidden min-h-0">
           <CommitGraphCanvas />
         </div>
 
         <!-- Bottom Half: Staging Panel + Commit Box + Diff Viewer -->
-        <div class="h-1/2 flex overflow-hidden border-t border-border">
+        <div class="h-64 flex overflow-hidden border-t border-border">
           <!-- Staging & Commit Area (Left) -->
           <div class="w-80 flex flex-col border-r border-border shrink-0">
             <div class="flex-1 overflow-hidden">
@@ -64,6 +81,12 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
+    <!-- Output & Operation Console Drawer -->
+    <ConsolePanel />
+
+    <!-- Bottom Status Bar -->
+    <FooterBar />
 
     <!-- Modals -->
     <AddRepoModal />
