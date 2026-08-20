@@ -3,6 +3,7 @@ pub mod branch;
 pub mod error;
 pub mod remote;
 pub mod repository;
+pub mod service;
 pub mod status;
 
 pub use auth::KeyringManager;
@@ -10,6 +11,7 @@ pub use branch::{BranchItem, StashItem, TagItem};
 pub use error::{GitbxError, Result};
 pub use remote::RemoteItem;
 pub use repository::{CommitDetail, Repository, RepositoryInfo};
+pub use service::GitService;
 pub use status::{FileDeltaStatus, FileStatusItem, RepoStatusSummary};
 
 pub fn open_repo<P: AsRef<std::path::Path>>(path: P) -> Result<Repository> {

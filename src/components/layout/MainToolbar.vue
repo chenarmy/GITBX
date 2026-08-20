@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -19,6 +20,7 @@ import {
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
 
 const isFetching = ref(false);
 const isPulling = ref(false);
@@ -64,7 +66,7 @@ async function handlePush() {
 }
 
 async function handleDiscardAll() {
-  if (confirm('Discard all uncommitted working tree changes? This cannot be undone.')) {
+  if (await confirmation.confirm({ title: 'Discard All Changes', message: 'Discard all uncommitted working tree changes? This cannot be undone.', danger: true, confirmText: 'Discard All' })) {
     try {
       await repoStore.discardFile();
       notification.warning('Changes Discarded', 'Clean working tree restored.');
@@ -94,7 +96,7 @@ function handleOpenStash() {
 
 async function handleCherryPick() {
   if (repoStore.selectedCommit) {
-    if (confirm(`Cherry-pick commit ${repoStore.selectedCommit.short_id} ("${repoStore.selectedCommit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`)) {
+    if (await confirmation.confirm({ title: 'Cherry-pick Commit', message: `Apply ${repoStore.selectedCommit.short_id} ("${repoStore.selectedCommit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`, danger: true })) {
       try {
         const res = await repoStore.cherryPick(repoStore.selectedCommit.id);
         if (res.conflict) {
@@ -137,6 +139,14 @@ async function handleCherryPick() {
         >
           <XCircle class="w-3 h-3" />
           <span>Abort Merge</span>
+        </button>
+        <button
+          v-if="repoStore.repoInfo?.is_merging"
+          @click="repoStore.continueMerge()"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+        >
+          <Play class="w-3 h-3" />
+          <span>Continue Merge</span>
         </button>
 
         <button

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
+import { useConfirmationStore } from '@/stores/confirmation';
 import {
   Plus,
   Minus,
@@ -13,6 +14,7 @@ import {
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
+const confirmation = useConfirmationStore();
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -40,9 +42,9 @@ function getStatusColor(status: string) {
   }
 }
 
-function handleDiscardFile(e: Event, filePath: string) {
+async function handleDiscardFile(e: Event, filePath: string) {
   e.stopPropagation();
-  if (confirm(`Discard changes to '${filePath}'? This cannot be undone.`)) {
+  if (await confirmation.confirm({ title: 'Discard Changes', message: `Discard changes to '${filePath}'? This cannot be undone.`, danger: true, confirmText: 'Discard' })) {
     repoStore.discardFile(filePath);
   }
 }

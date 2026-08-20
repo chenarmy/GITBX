@@ -1,4 +1,4 @@
-use crate::error::{GitbxError, Result};
+use crate::error::Result;
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 

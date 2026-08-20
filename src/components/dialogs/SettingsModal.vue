@@ -1,10 +1,27 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
+import { useGitApi } from '@/composables/useGitApi';
+import { useNotificationStore } from '@/stores/notification';
 import { Settings, X, User, Cpu } from 'lucide-vue-next';
 
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
+const gitApi = useGitApi();
+const notification = useNotificationStore();
+
+async function saveSettings() {
+  if (aiStore.llmConfig.api_key) {
+    try {
+      await gitApi.saveCredential(aiStore.llmConfig.provider, aiStore.llmConfig.api_key);
+      aiStore.llmConfig.api_key = '';
+      notification.success('Settings Saved', 'The AI credential was stored in the system keyring.');
+    } catch (error: any) {
+      notification.warning('Settings Saved', error?.message || 'The key remains in memory only.');
+    }
+  }
+  settingsStore.isSettingsModalOpen = false;
+}
 </script>
 
 <template>
@@ -22,7 +39,7 @@ const aiStore = useAiStore();
           <span class="font-bold text-sm text-foreground">GITBX Settings</span>
         </div>
         <button
-          @click="settingsStore.isSettingsModalOpen = false"
+          @click="saveSettings"
           class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           <X class="w-4 h-4" />
@@ -98,7 +115,7 @@ const aiStore = useAiStore();
       <!-- Footer -->
       <div class="h-11 bg-muted/30 px-4 flex items-center justify-end border-t border-border">
         <button
-          @click="settingsStore.isSettingsModalOpen = false"
+          @click="saveSettings"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
         >
           Save & Close

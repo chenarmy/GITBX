@@ -1,80 +1,55 @@
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('child_process');
 
 function request(options, data) {
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
       let body = '';
-      res.on('data', (c) => (body += c));
+      res.on('data', (chunk) => (body += chunk));
       res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          resolve(body);
-        }
+        try { resolve({ status: res.statusCode, body: JSON.parse(body) }); }
+        catch { resolve({ status: res.statusCode, body }); }
       });
     });
     req.on('error', reject);
-    if (data) {
-      req.write(typeof data === 'string' ? data : JSON.stringify(data));
-    }
+    if (data) req.write(JSON.stringify(data));
     req.end();
   });
 }
 
-async function verify() {
-  console.log('--- 1. Testing Repo Info & Multi-repo Switching ---');
-  const infoGitbx = await request({ hostname: '127.0.0.1', port: 5173, path: '/api/repo/info?path=I:%5CGITBX', method: 'GET' });
-  console.log('GITBX Repo Info:', infoGitbx.name, '| Branch:', infoGitbx.head_branch, '| Dirty:', infoGitbx.is_dirty);
-
-  const infoSample = await request({ hostname: '127.0.0.1', port: 5173, path: '/api/repo/info?path=I:%5CGITBX_SAMPLE_REPO', method: 'GET' });
-  console.log('Sample Repo Info:', infoSample.name, '| Branch:', infoSample.head_branch, '| Dirty:', infoSample.is_dirty);
-
-  console.log('\n--- 2. Testing Branch List & Head Status ---');
-  const branches = await request({ hostname: '127.0.0.1', port: 5173, path: '/api/repo/branches?path=I:%5CGITBX_SAMPLE_REPO', method: 'GET' });
-  branches.forEach(b => console.log(`  - Branch '${b.name}' (is_head: ${b.is_head}, commit: ${b.target_commit_id.slice(0, 7)})`));
-
-  console.log('\n--- 3. Testing Create Branch from Commit ---');
-  const createBranchRes = await request({
-    hostname: '127.0.0.1',
-    port: 5173,
-    path: '/api/repo/branch/create',
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }, { repo_path: 'I:\\GITBX_SAMPLE_REPO', name: 'feat/test-verification', checkout: false });
-  console.log('Create Branch Result:', createBranchRes);
-
-  console.log('\n--- 4. Testing Branch Rename (Alt+Shift+R) ---');
-  const renameRes = await request({
-    hostname: '127.0.0.1',
-    port: 5173,
-    path: '/api/repo/branch/rename',
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }, { repo_path: 'I:\\GITBX_SAMPLE_REPO', old_name: 'feat/test-verification', new_name: 'feat/verified-ok' });
-  console.log('Rename Branch Result:', renameRes);
-
-  console.log('\n--- 5. Testing Diff Extraction for Working Tree & Branch Compare ---');
-  const diffRes = await request({
-    hostname: '127.0.0.1',
-    port: 5173,
-    path: '/api/repo/diff?path=I:%5CGITBX_SAMPLE_REPO&compare=feature/user-auth',
-    method: 'GET'
-  });
-  console.log('Branch Diff Compare Result (length):', (diffRes.raw_diff || '').length, 'chars');
-
-  console.log('\n--- 6. Testing Commit Graph DAG generation ---');
-  const graphRes = await request({
-    hostname: '127.0.0.1',
-    port: 5173,
-    path: '/api/repo/graph?path=I:%5CGITBX_SAMPLE_REPO',
-    method: 'GET'
-  });
-  console.log(`Commit Graph contains ${graphRes.length} commits:`);
-  graphRes.forEach(c => console.log(`  * [${c.short_id}] (Lane ${c.lane}) ${c.summary} | Refs: [${c.branch_refs.concat(c.tag_refs).join(', ')}]`));
-
-  console.log('\n========================================');
-  console.log('✅ ALL VERIFICATION TESTS PASSED 100%!');
-  console.log('========================================');
+function git(repo, ...args) {
+  return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
 }
 
-verify().catch(console.error);
+async function verify() {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbx-verify-'));
+  try {
+    git(repo, 'init');
+    git(repo, 'config', 'user.name', 'GITBX Verification');
+    git(repo, 'config', 'user.email', 'verify@gitbx.local');
+    fs.writeFileSync(path.join(repo, 'README.md'), '# GITBX\n');
+    git(repo, 'add', 'README.md');
+    git(repo, 'commit', '-m', 'initial');
+
+    const base = { hostname: '127.0.0.1', port: 8080 };
+    const info = await request({ ...base, path: `/api/repo/info?path=${encodeURIComponent(repo)}`, method: 'GET' });
+    if (info.status !== 200 || !info.body.name) throw new Error(`repo info failed: ${JSON.stringify(info)}`);
+
+    const branch = await request({ ...base, path: '/api/repo/branch/create', method: 'POST', headers: { 'Content-Type': 'application/json' } }, {
+      repo_path: repo, name: 'feat/verification', checkout: false,
+    });
+    if (branch.status !== 200) throw new Error(`branch create failed: ${JSON.stringify(branch)}`);
+
+    const status = await request({ ...base, path: `/api/repo/status?path=${encodeURIComponent(repo)}`, method: 'GET' });
+    if (status.status !== 200 || !Array.isArray(status.body.staged_files)) throw new Error(`status failed: ${JSON.stringify(status)}`);
+
+    console.log('GITBX verification passed:', repo);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+}
+
+verify().catch((error) => { console.error(error); process.exitCode = 1; });

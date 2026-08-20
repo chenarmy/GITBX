@@ -20,6 +20,7 @@ import RebaseModal from '@/components/dialogs/RebaseModal.vue';
 import ResetModal from '@/components/dialogs/ResetModal.vue';
 import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConsoleStore } from '@/stores/console';
 
@@ -35,7 +36,11 @@ function handleKeyDown(e: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
-  await repoStore.loadRepo();
+  if (repoStore.activeRepoPath) {
+    await repoStore.loadRepo();
+  } else {
+    repoStore.isAddRepoModalOpen = true;
+  }
 });
 
 onUnmounted(() => {
@@ -101,6 +106,7 @@ onUnmounted(() => {
 
     <!-- Global Toast Container -->
     <ToastContainer />
+    <ConfirmationDialog />
   </div>
 </template>
 

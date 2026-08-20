@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
+import { useConfirmationStore } from '@/stores/confirmation';
 import type { GraphCommitNode } from '@/types/graph';
 import {
   GitCommit,
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>();
 
 const repoStore = useRepoStore();
+const confirmation = useConfirmationStore();
 
 const menuStyle = computed(() => {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
@@ -34,14 +36,14 @@ const menuStyle = computed(() => {
 });
 
 async function handleCherryPick() {
-  if (confirm(`Cherry-pick commit ${props.commit.short_id} ("${props.commit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`)) {
+  if (await confirmation.confirm({ title: 'Cherry-pick Commit', message: `Apply ${props.commit.short_id} ("${props.commit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`, danger: true })) {
     await repoStore.cherryPick(props.commit.id);
   }
   emit('close');
 }
 
 async function handleRevert() {
-  if (confirm(`Revert commit ${props.commit.short_id} ("${props.commit.summary}")?`)) {
+  if (await confirmation.confirm({ title: 'Revert Commit', message: `Revert ${props.commit.short_id} ("${props.commit.summary}")?`, danger: true })) {
     await repoStore.revertCommit(props.commit.id);
   }
   emit('close');
@@ -66,14 +68,14 @@ function handleNewTag() {
 }
 
 async function handleRebaseOnto() {
-  if (confirm(`Rebase branch '${repoStore.repoInfo?.head_branch}' onto commit ${props.commit.short_id}?`)) {
+  if (await confirmation.confirm({ title: 'Rebase Branch', message: `Rebase '${repoStore.repoInfo?.head_branch}' onto ${props.commit.short_id}?`, danger: true })) {
     await repoStore.rebase(props.commit.id);
   }
   emit('close');
 }
 
 async function handleMergeInto() {
-  if (confirm(`Merge commit ${props.commit.short_id} into '${repoStore.repoInfo?.head_branch}'?`)) {
+  if (await confirmation.confirm({ title: 'Merge Commit', message: `Merge ${props.commit.short_id} into '${repoStore.repoInfo?.head_branch}'?`, danger: true })) {
     await repoStore.mergeBranch(props.commit.id);
   }
   emit('close');

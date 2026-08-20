@@ -1,6 +1,7 @@
 use crate::error::{GitbxError, Result};
 use git2::Repository as Git2Repo;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +69,33 @@ impl Repository {
         &self.inner
     }
 
+    pub fn inner_mut(&mut self) -> &mut Git2Repo {
+        &mut self.inner
+    }
+
+    pub fn workdir_file(&self, relative_path: &str) -> Result<Vec<u8>> {
+        let workdir = self.inner.workdir().ok_or_else(|| {
+            GitbxError::General("Bare repositories do not have a working tree".into())
+        })?;
+        Ok(fs::read(workdir.join(relative_path))?)
+    }
+
+    pub fn index_file(&self, relative_path: &str) -> Result<Vec<u8>> {
+        let index = self.inner.index()?;
+        let entry = index.get_path(Path::new(relative_path), 0).ok_or_else(|| {
+            GitbxError::General(format!("File is not present in the index: {relative_path}"))
+        })?;
+        let blob = self.inner.find_blob(entry.id)?;
+        Ok(blob.content().to_vec())
+    }
+
+    pub fn commit_file(&self, commit_id: &str, relative_path: &str) -> Result<Vec<u8>> {
+        let commit = self.inner.find_commit(git2::Oid::from_str(commit_id)?)?;
+        let entry = commit.tree()?.get_path(Path::new(relative_path))?;
+        let blob = self.inner.find_blob(entry.id())?;
+        Ok(blob.content().to_vec())
+    }
+
     pub fn info(&self) -> Result<RepositoryInfo> {
         let name = self
             .path
@@ -126,7 +154,12 @@ impl Repository {
 
             commits.push(CommitDetail {
                 id: commit.id().to_string(),
-                short_id: commit.as_object().short_id()?.as_str().unwrap_or("").to_string(),
+                short_id: commit
+                    .as_object()
+                    .short_id()?
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
                 parent_ids,
                 author_name: author.name().unwrap_or("").to_string(),
                 author_email: author.email().unwrap_or("").to_string(),

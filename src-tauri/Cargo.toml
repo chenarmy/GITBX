@@ -10,6 +10,7 @@ gitbx-core = { path = "../crates/gitbx-core" }
 gitbx-graph = { path = "../crates/gitbx-graph" }
 gitbx-diff = { path = "../crates/gitbx-diff" }
 gitbx-ai = { path = "../crates/gitbx-ai" }
+git2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -24,3 +25,6 @@ tauri-plugin-fs = "2.0"
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
+
+[package.metadata.tauri]
+bundle = { active = true, targets = "all", icon = [] }

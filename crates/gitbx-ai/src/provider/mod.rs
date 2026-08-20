@@ -24,7 +24,11 @@ impl Default for LlmConfig {
 
 #[async_trait]
 pub trait LlmClient: Send + Sync {
-    async fn chat_completion(&self, system_prompt: &str, user_prompt: &str) -> anyhow::Result<String>;
+    async fn chat_completion(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> anyhow::Result<String>;
 }
 
 pub struct GenericOpenAiClient {
@@ -43,8 +47,15 @@ impl GenericOpenAiClient {
 
 #[async_trait]
 impl LlmClient for GenericOpenAiClient {
-    async fn chat_completion(&self, system_prompt: &str, user_prompt: &str) -> anyhow::Result<String> {
-        let url = format!("{}/chat/completions", self.config.api_base.trim_end_matches('/'));
+    async fn chat_completion(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> anyhow::Result<String> {
+        let url = format!(
+            "{}/chat/completions",
+            self.config.api_base.trim_end_matches('/')
+        );
         let mut req = self.client.post(&url);
 
         if let Some(ref key) = self.config.api_key {

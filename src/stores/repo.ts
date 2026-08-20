@@ -21,7 +21,7 @@ function getInitialRepos(): ManagedRepo[] {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {}
-  return [{ path: 'i:/GITBX', name: 'GITBX', lastOpened: Date.now() }];
+  return [];
 }
 
 function getInitialActiveRepo(): string {
@@ -29,7 +29,7 @@ function getInitialActiveRepo(): string {
     const saved = localStorage.getItem(ACTIVE_REPO_KEY);
     if (saved) return saved;
   } catch {}
-  return 'i:/GITBX';
+  return '';
 }
 
 export const useRepoStore = defineStore('repo', () => {
@@ -201,11 +201,7 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const renameBranch = async (oldName: string, newName: string) => {
-    await fetch('/api/repo/branch/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: activeRepoPath.value, old_name: oldName, new_name: newName }),
-    });
+    await gitApi.renameBranch(activeRepoPath.value, oldName, newName);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -233,6 +229,11 @@ export const useRepoStore = defineStore('repo', () => {
 
   const abortMerge = async () => {
     await gitApi.abortMerge(activeRepoPath.value);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const continueMerge = async () => {
+    await gitApi.continueMerge(activeRepoPath.value);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -335,6 +336,7 @@ export const useRepoStore = defineStore('repo', () => {
     popStash,
     mergeBranch,
     abortMerge,
+    continueMerge,
     rebase,
     continueRebase,
     abortRebase,

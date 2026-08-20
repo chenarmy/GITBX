@@ -2,6 +2,9 @@
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
+import { useGitApi } from '@/composables/useGitApi';
+import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
 import type { BranchItem } from '@/types/git';
 import { ChevronRight } from 'lucide-vue-next';
 
@@ -17,6 +20,9 @@ const emit = defineEmits<{
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
+const gitApi = useGitApi();
+const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
 
 const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
@@ -57,9 +63,7 @@ async function handleCheckoutAndUpdate() {
 
 function handleCompare() {
   diffStore.selectFile('', false, repoStore.activeRepoPath);
-  fetch(`/api/repo/diff?path=${encodeURIComponent(repoStore.activeRepoPath)}&compare=${encodeURIComponent(props.branch.name)}`)
-    .then(r => r.json())
-    .then(() => {});
+  notification.info('Branch comparison', `Selected ${props.branch.name} for comparison.`);
   emit('close');
 }
 
@@ -68,26 +72,15 @@ function handleShowDiffWithWorkingTree() {
   emit('close');
 }
 
-function handleNewWorktree() {
-  const destPath = prompt(`Enter destination directory for worktree from '${props.branch.name}':`);
+async function handleNewWorktree() {
+  const destPath = await confirmation.prompt({ title: 'Create Worktree', message: `Choose a destination directory for '${props.branch.name}'.`, inputLabel: 'Destination path' });
   if (destPath && destPath.trim()) {
-    fetch('/api/repo/worktree/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        repo_path: repoStore.activeRepoPath,
-        dest_path: destPath.trim(),
-        branch: props.branch.name,
-      }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          alert(`Worktree created at: ${destPath}`);
-        } else {
-          alert(`Failed to create worktree: ${data.error || 'Unknown error'}`);
-        }
-      });
+    try {
+      await gitApi.createWorktree(repoStore.activeRepoPath, destPath.trim(), props.branch.name);
+      notification.success('Worktree created', destPath.trim());
+    } catch (err: any) {
+      notification.error('Worktree creation failed', err?.message || String(err));
+    }
   }
   emit('close');
 }
@@ -120,8 +113,8 @@ function handleRename() {
   emit('close');
 }
 
-function handleDelete() {
-  if (confirm(`Are you sure you want to delete branch '${props.branch.name}'?`)) {
+async function handleDelete() {
+  if (await confirmation.confirm({ title: 'Delete Branch', message: `Delete branch '${props.branch.name}'?`, danger: true, confirmText: 'Delete' })) {
     repoStore.deleteBranch(props.branch.name, true);
   }
   emit('close');

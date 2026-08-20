@@ -10,10 +10,12 @@ name = "gitbx-server"
 path = "src/main.rs"
 
 [dependencies]
+gitbx-contracts = { path = "../crates/gitbx-contracts" }
 gitbx-core = { path = "../crates/gitbx-core" }
 gitbx-graph = { path = "../crates/gitbx-graph" }
 gitbx-diff = { path = "../crates/gitbx-diff" }
 gitbx-ai = { path = "../crates/gitbx-ai" }
+git2 = { workspace = true }
 axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }

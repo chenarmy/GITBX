@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+ import { ref, computed, watch } from 'vue';
 import { useAiStore } from '@/stores/ai';
+import { useRepoStore } from '@/stores/repo';
+import { useGitApi } from '@/composables/useGitApi';
 import {
   Sparkles,
   ShieldCheck,
@@ -11,15 +13,11 @@ import {
 } from 'lucide-vue-next';
 
 const aiStore = useAiStore();
+const repoStore = useRepoStore();
+const gitApi = useGitApi();
 
 const naturalCommand = ref('');
 const isCopied = ref(false);
-
-const mockGeneratedCommit = ref({
-  type: 'feat',
-  summary: 'feat(graph): implement Canvas-based commit DAG renderer with virtual lanes',
-  body: '- Added Rust gitbx-graph lane tracker and Bezier control points calculation\n- Integrated 60fps HTML Canvas with dual-buffering\n- Added branch and tag badges to commit table',
-});
 
 const displayedCommit = computed(() => {
   if (aiStore.generatedMessage) {
@@ -29,7 +27,28 @@ const displayedCommit = computed(() => {
       body: aiStore.generatedMessage.body || '',
     };
   }
-  return mockGeneratedCommit.value;
+  return { type: '', summary: '', body: '' };
+});
+
+async function generate() {
+  aiStore.isGenerating = true;
+  try {
+    const files = repoStore.statusSummary.staged_files;
+    const diffs = await Promise.all(files.map((file) => gitApi.getFileDiff(repoStore.activeRepoPath, file.path, true)));
+    const diffText = diffs.map((diff) => diff.raw_diff || JSON.stringify(diff)).join('\n');
+    aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
+    if (aiStore.detectedSecrets.length > 0) return;
+    aiStore.generatedMessage = await gitApi.generateCommitMessage(diffText, aiStore.llmConfig);
+  } catch (err: any) {
+    aiStore.generatedMessage = null;
+    throw err;
+  } finally {
+    aiStore.isGenerating = false;
+  }
+}
+
+watch(() => aiStore.isAiModalOpen, (open) => {
+  if (open && !aiStore.generatedMessage) generate().catch(() => undefined);
 });
 
 function getFullMessage(): string {
@@ -84,8 +103,8 @@ function copyMessage() {
           <div class="flex items-center space-x-2.5">
             <ShieldCheck class="w-5 h-5 text-emerald-400 shrink-0" />
             <div>
-              <div class="font-semibold text-emerald-300">Security & Secret Check Passed</div>
-              <div class="text-[11px] text-emerald-400/80">No private keys, AWS tokens, or hardcoded passwords found in staged diff.</div>
+              <div class="font-semibold text-emerald-300">{{ aiStore.detectedSecrets.length ? 'Potential secrets detected' : 'Security & Secret Check Passed' }}</div>
+              <div class="text-[11px] text-emerald-400/80">{{ aiStore.detectedSecrets.length ? 'Review detected secrets before committing.' : 'The staged diff has been checked for common credential patterns.' }}</div>
             </div>
           </div>
           <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">CLEAN</span>
@@ -99,13 +118,10 @@ function copyMessage() {
           </div>
 
           <div class="p-3 rounded-lg bg-background border border-border space-y-2 font-mono text-[11px]">
-            <div class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
-            <div
-              v-if="displayedCommit.body"
-              class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2"
-            >
-              {{ displayedCommit.body }}
-            </div>
+            <div v-if="aiStore.isGenerating" class="text-muted-foreground">Generating from staged changes…</div>
+            <div v-else-if="displayedCommit.summary" class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
+            <div v-else class="text-muted-foreground">Stage at least one file to generate a real commit message.</div>
+            <div v-if="displayedCommit.body" class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2">{{ displayedCommit.body }}</div>
           </div>
 
           <div class="flex items-center justify-end space-x-2 pt-1">
@@ -136,7 +152,7 @@ function copyMessage() {
               placeholder="e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."
               class="flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-xs"
             />
-            <button class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1">
+            <button @click="generate" :disabled="aiStore.isGenerating" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50">
               <Send class="w-3.5 h-3.5" />
               <span>Run</span>
             </button>

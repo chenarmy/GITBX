@@ -57,7 +57,11 @@ impl Merge3Engine {
                     section_type: ConflictSectionType::Conflict {
                         ours: ours_buf.join("\n"),
                         theirs: theirs_buf.join("\n"),
-                        base: if base_buf.is_empty() { None } else { Some(base_buf.join("\n")) },
+                        base: if base_buf.is_empty() {
+                            None
+                        } else {
+                            Some(base_buf.join("\n"))
+                        },
                     },
                     resolved_content: None,
                 });
@@ -88,5 +92,26 @@ impl Merge3Engine {
         }
 
         chunks
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ConflictSectionType, Merge3Engine};
+
+    #[test]
+    fn parses_diff3_conflict_markers() {
+        let chunks = Merge3Engine::parse_conflicted_file(
+            "before\n<<<<<<< ours\na\n||||||| base\nb\n=======\nc\n>>>>>>> theirs\nafter\n",
+        );
+        assert_eq!(chunks.len(), 3);
+        match &chunks[1].section_type {
+            ConflictSectionType::Conflict { ours, theirs, base } => {
+                assert_eq!(ours, "a");
+                assert_eq!(theirs, "c");
+                assert_eq!(base.as_deref(), Some("b"));
+            }
+            _ => panic!("expected conflict"),
+        }
     }
 }
