@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::repository::Repository;
-use git2::{FetchOptions, PushOptions, RemoteCallbacks};
+use git2::{Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,6 +11,38 @@ pub struct RemoteItem {
 }
 
 impl Repository {
+    fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
+        let config = self.inner().config()?;
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(
+            move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
+                if allowed.is_user_pass_plaintext() {
+                    if let Ok(credential) = Cred::credential_helper(&config, url, username_from_url)
+                    {
+                        return Ok(credential);
+                    }
+                }
+
+                if allowed.is_ssh_key() {
+                    return Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"));
+                }
+
+                if allowed.is_username() {
+                    return Cred::username(username_from_url.unwrap_or("git"));
+                }
+
+                if allowed.is_default() {
+                    return Cred::default();
+                }
+
+                Err(Error::from_str(
+                    "no supported credentials were found in Git Credential Manager or SSH agent",
+                ))
+            },
+        );
+        Ok(callbacks)
+    }
+
     pub fn list_remotes(&self) -> Result<Vec<RemoteItem>> {
         let remotes = self.inner().remotes()?;
         let mut list = Vec::new();
@@ -30,11 +62,8 @@ impl Repository {
 
     pub fn fetch_remote(&self, remote_name: &str) -> Result<()> {
         let mut remote = self.inner().find_remote(remote_name)?;
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, _username_from_url, _allowed_types| git2::Cred::default());
-
         let mut fetch_opts = FetchOptions::new();
-        fetch_opts.remote_callbacks(callbacks);
+        fetch_opts.remote_callbacks(self.authenticated_callbacks()?);
 
         remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
         Ok(())
@@ -55,12 +84,23 @@ impl Repository {
             .ok_or_else(|| crate::error::GitbxError::General("HEAD is detached".into()))?
             .to_string();
         let mut remote = self.inner().find_remote(remote_name)?;
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, _username, _allowed| git2::Cred::default());
         let mut options = PushOptions::new();
-        options.remote_callbacks(callbacks);
+        options.remote_callbacks(self.authenticated_callbacks()?);
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
-        remote.push(&[refspec.as_str()], Some(&mut options))?;
+        if let Err(error) = remote.push(&[refspec.as_str()], Some(&mut options)) {
+            let message = error.message().to_ascii_lowercase();
+            if message.contains("401")
+                || message.contains("403")
+                || message.contains("authentication")
+                || message.contains("credentials")
+            {
+                return Err(crate::error::GitbxError::AuthFailed(
+                    "Remote rejected the Git credentials. Sign in with Git Credential Manager or configure an SSH key, then retry Push."
+                        .into(),
+                ));
+            }
+            return Err(error.into());
+        }
         Ok(())
     }
 }

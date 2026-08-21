@@ -145,11 +145,13 @@ fn error_response(status: StatusCode, error: GitErrorResponse) -> Response {
 }
 
 fn git_error(error: GitbxError) -> GitErrorResponse {
-    let conflict = matches!(error, GitbxError::MergeConflict(_));
-    let mut result = GitErrorResponse::new(
-        if conflict { "CONFLICT" } else { "GIT_ERROR" },
-        error.to_string(),
-    );
+    let conflict = matches!(&error, GitbxError::MergeConflict(_));
+    let code = match &error {
+        GitbxError::MergeConflict(_) => "CONFLICT",
+        GitbxError::AuthFailed(_) => "AUTH_FAILED",
+        _ => "GIT_ERROR",
+    };
+    let mut result = GitErrorResponse::new(code, error.to_string());
     result.conflict = conflict;
     result.detail = Some(error.to_string());
     result
@@ -461,14 +463,14 @@ async fn repo_handler(
 
     match result {
         Ok(value) => (StatusCode::OK, Json(value)).into_response(),
-        Err(error) => error_response(
-            if endpoint == "not-found" {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            git_error(error),
-        ),
+        Err(error) => {
+            let status = match &error {
+                GitbxError::AuthFailed(_) => StatusCode::UNAUTHORIZED,
+                _ if endpoint == "not-found" => StatusCode::NOT_FOUND,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            error_response(status, git_error(error))
+        }
     }
 }
 

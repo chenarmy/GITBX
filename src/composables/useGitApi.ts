@@ -751,20 +751,28 @@ export function useGitApi() {
     const cmd = `git push`;
     getConsole().logCommand(cmd);
     if (isTauri()) {
-      await invoke('push', { repoPath });
-      getConsole().logSuccess('Push completed.');
-      return;
+      try {
+        await invoke('push', { repoPath });
+        getConsole().logSuccess('Push completed.');
+        return;
+      } catch (error) {
+        const message = formatGitError(error, 'Push failed');
+        getConsole().logError(`Push error: ${message}`, undefined, cmd);
+        throw new Error(message);
+      }
     }
     const res = await fetch('/api/repo/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
-    const data = await res.json();
-    if (data.success) {
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.success) {
       getConsole().logSuccess(`Push completed.`, data.output);
     } else {
-      getConsole().logError(`Push error: ${data.error}`, undefined, cmd);
+      const message = formatGitError(data?.error ?? data, `Push failed (HTTP ${res.status})`);
+      getConsole().logError(`Push error: ${message}`, undefined, cmd);
+      throw new Error(message);
     }
   };
 

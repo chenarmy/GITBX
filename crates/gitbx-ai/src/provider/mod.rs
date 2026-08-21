@@ -56,7 +56,10 @@ impl LlmClient for GenericOpenAiClient {
 
         if self.config.provider.eq_ignore_ascii_case("claude") {
             let url = format!("{base}/messages");
-            let mut req = self.client.post(url).header("anthropic-version", "2023-06-01");
+            let mut req = self
+                .client
+                .post(url)
+                .header("anthropic-version", "2023-06-01");
             if let Some(ref key) = self.config.api_key {
                 req = req.header("x-api-key", key);
             }
@@ -103,7 +106,10 @@ impl LlmClient for GenericOpenAiClient {
         if let Some(content) = json["choices"][0]["message"]["content"].as_str() {
             Ok(content.trim().to_string())
         } else {
-            Err(anyhow::anyhow!("Invalid OpenAI-compatible response: {:?}", json))
+            Err(anyhow::anyhow!(
+                "Invalid OpenAI-compatible response: {:?}",
+                json
+            ))
         }
     }
 }
