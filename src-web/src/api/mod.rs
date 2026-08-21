@@ -84,6 +84,15 @@ async fn ai_commit(
         );
     }
     let diff = body.get("diff_text").and_then(Value::as_str).unwrap_or("");
+    if diff.trim().is_empty() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            GitErrorResponse::new(
+                "AI_DIFF_EMPTY",
+                "No staged diff is available for commit message generation",
+            ),
+        );
+    }
     let config = body
         .get("config")
         .cloned()

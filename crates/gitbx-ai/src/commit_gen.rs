@@ -17,6 +17,10 @@ impl CommitGenerator {
         client: &dyn LlmClient,
         diff_text: &str,
     ) -> anyhow::Result<GeneratedCommitMessage> {
+        if diff_text.trim().is_empty() {
+            anyhow::bail!("No staged diff is available for commit message generation");
+        }
+
         let system_prompt = "You are an expert Git commit assistant. Generate a concise Conventional Commit message based on the provided diff. \
         The format must be: `<type>(<scope>): <summary>` followed by an optional body. \
         Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert. \

@@ -3,6 +3,7 @@
 import { useAiStore } from '@/stores/ai';
 import { useRepoStore } from '@/stores/repo';
 import { useGitApi } from '@/composables/useGitApi';
+import { useNotificationStore } from '@/stores/notification';
 import {
   Sparkles,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
 const aiStore = useAiStore();
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
+const notification = useNotificationStore();
 
 const naturalCommand = ref('');
 const isCopied = ref(false);
@@ -34,8 +36,22 @@ async function generate() {
   aiStore.isGenerating = true;
   try {
     const files = repoStore.statusSummary.staged_files;
+    if (files.length === 0) {
+      aiStore.generatedMessage = null;
+      notification.warning('No staged changes', 'Stage at least one file before generating a commit message.');
+      return;
+    }
+
     const diffs = await Promise.all(files.map((file) => gitApi.getFileDiff(repoStore.activeRepoPath, file.path, true)));
-    const diffText = diffs.map((diff) => diff.raw_diff || JSON.stringify(diff)).join('\n');
+    const diffText = diffs
+      .map((diff, index) => formatDiffForAi(diff, files[index].path))
+      .filter(Boolean)
+      .join('\n');
+    if (!diffText.trim()) {
+      aiStore.generatedMessage = null;
+      notification.warning('Empty staged diff', 'The staged files have no readable changes to analyze.');
+      return;
+    }
     aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
     if (aiStore.detectedSecrets.length > 0) return;
     aiStore.generatedMessage = await gitApi.generateCommitMessage(diffText, aiStore.llmConfig);
@@ -45,6 +61,27 @@ async function generate() {
   } finally {
     aiStore.isGenerating = false;
   }
+}
+
+function formatDiffForAi(diff: any, filePath: string): string {
+  if (typeof diff?.raw_diff === 'string' && diff.raw_diff.trim()) return diff.raw_diff;
+  if (diff?.is_binary) return `Binary file changed: ${filePath}`;
+  if (!Array.isArray(diff?.hunks)) return '';
+
+  const hunks = diff.hunks
+    .map((hunk: any) => {
+      const lines = Array.isArray(hunk.lines)
+        ? hunk.lines.map((line: any) => {
+            const prefix = line.line_type === 'Addition' ? '+' : line.line_type === 'Deletion' ? '-' : ' ';
+            return `${prefix}${line.content ?? ''}`;
+          }).join('\n')
+        : '';
+      return `${hunk.header ?? ''}\n${lines}`.trim();
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  return hunks ? `diff --git a/${filePath} b/${filePath}\n${hunks}` : '';
 }
 
 watch(() => aiStore.isAiModalOpen, (open) => {
