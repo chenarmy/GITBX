@@ -49,6 +49,12 @@ export interface BranchItem {
   behind_count: number;
 }
 
+export interface RemoteItem {
+  name: string;
+  url?: string;
+  push_url?: string;
+}
+
 export interface TagItem {
   name: string;
   target_commit_id: string;

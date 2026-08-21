@@ -3,6 +3,7 @@ import type {
   RepositoryInfo,
   RepoStatusSummary,
   BranchItem,
+  RemoteItem,
   TagItem,
   StashItem,
 } from '@/types/git';
@@ -37,6 +38,14 @@ export function formatGitError(error: unknown, fallback = 'Git operation failed'
     }
   }
   return fallback;
+}
+
+async function parseGitResponse<T>(res: Response, fallback: string): Promise<T> {
+  const data = await res.json().catch(() => null);
+  if (!res.ok || data?.error) {
+    throw new Error(formatGitError(data, `${fallback} (HTTP ${res.status})`));
+  }
+  return data as T;
 }
 
 export function useGitApi() {
@@ -107,7 +116,7 @@ export function useGitApi() {
       return await invoke<RepositoryInfo>('get_repo_info', { repoPath });
     }
     const res = await fetch(`/api/repo/info?path=${encodeURIComponent(repoPath)}`);
-    return await res.json();
+    return await parseGitResponse<RepositoryInfo>(res, 'Failed to load repository information');
   };
 
   const getRepoStatus = async (repoPath: string): Promise<RepoStatusSummary> => {
@@ -115,7 +124,7 @@ export function useGitApi() {
       return await invoke<RepoStatusSummary>('get_repo_status', { repoPath });
     }
     const res = await fetch(`/api/repo/status?path=${encodeURIComponent(repoPath)}`);
-    return await res.json();
+    return await parseGitResponse<RepoStatusSummary>(res, 'Failed to load repository status');
   };
 
   const listBranches = async (repoPath: string): Promise<BranchItem[]> => {
@@ -123,7 +132,63 @@ export function useGitApi() {
       return await invoke<BranchItem[]>('list_branches', { repoPath });
     }
     const res = await fetch(`/api/repo/branches?path=${encodeURIComponent(repoPath)}`);
-    return await res.json();
+    return await parseGitResponse<BranchItem[]>(res, 'Failed to load branches');
+  };
+
+  const listRemotes = async (repoPath: string): Promise<RemoteItem[]> => {
+    if (isTauri()) {
+      return await invoke<RemoteItem[]>('list_remotes', { repoPath });
+    }
+    const res = await fetch(`/api/repo/remotes?path=${encodeURIComponent(repoPath)}`);
+    return await parseGitResponse<RemoteItem[]>(res, 'Failed to load remotes');
+  };
+
+  const setRemoteUrl = async (
+    repoPath: string,
+    remoteName: string,
+    url: string,
+    pushUrl?: string,
+  ): Promise<void> => {
+    const fetchUrl = url.trim();
+    const separatePushUrl = pushUrl?.trim() || undefined;
+    const cmd = `git remote set-url "${remoteName}" "${fetchUrl}"`;
+    getConsole().logCommand(cmd);
+
+    if (isTauri()) {
+      try {
+        await invoke('set_remote_url', {
+          repoPath,
+          remoteName,
+          url: fetchUrl,
+          pushUrl: separatePushUrl,
+        });
+        getConsole().logSuccess(`Remote '${remoteName}' URL updated.`);
+        return;
+      } catch (error) {
+        const message = formatGitError(error, `Failed to update remote '${remoteName}'`);
+        getConsole().logError(message, undefined, cmd);
+        throw new Error(message);
+      }
+    }
+
+    const res = await fetch('/api/repo/remote/set-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repo_path: repoPath,
+        remote_name: remoteName,
+        url: fetchUrl,
+        push_url: separatePushUrl,
+      }),
+    });
+    try {
+      await parseGitResponse<unknown>(res, `Failed to update remote '${remoteName}'`);
+    } catch (error) {
+      const message = formatGitError(error, `Failed to update remote '${remoteName}'`);
+      getConsole().logError(message, undefined, cmd);
+      throw new Error(message);
+    }
+    getConsole().logSuccess(`Remote '${remoteName}' URL updated.`);
   };
 
   const createBranch = async (
@@ -227,7 +292,7 @@ export function useGitApi() {
       });
     }
     const res = await fetch(`/api/repo/graph?path=${encodeURIComponent(repoPath)}&max=${maxCount}`);
-    return await res.json();
+    return await parseGitResponse<GraphCommitNode[]>(res, 'Failed to load commit graph');
   };
 
   const listTags = async (repoPath: string): Promise<TagItem[]> => {
@@ -235,7 +300,7 @@ export function useGitApi() {
       return await invoke<TagItem[]>('list_tags', { repoPath });
     }
     const res = await fetch(`/api/repo/tags?path=${encodeURIComponent(repoPath)}`);
-    return await res.json();
+    return await parseGitResponse<TagItem[]>(res, 'Failed to load tags');
   };
 
   const createTag = async (
@@ -269,7 +334,7 @@ export function useGitApi() {
       return await invoke<StashItem[]>('list_stashes', { repoPath });
     }
     const res = await fetch(`/api/repo/stashes?path=${encodeURIComponent(repoPath)}`);
-    return await res.json();
+    return await parseGitResponse<StashItem[]>(res, 'Failed to load stashes');
   };
 
   const createStash = async (repoPath: string, message?: string): Promise<void> => {
@@ -839,6 +904,8 @@ export function useGitApi() {
     getRepoInfo,
     getRepoStatus,
     listBranches,
+    listRemotes,
+    setRemoteUrl,
     createBranch,
     checkoutBranch,
     renameBranch,

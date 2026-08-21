@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
+import { useI18n } from '@/i18n';
 import {
   FolderGit2,
   GitBranch,
@@ -15,9 +16,11 @@ import {
   Check,
   Trash2,
   MoreVertical,
+  GitFork,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
+const { t } = useI18n();
 
 const isReposOpen = ref(true);
 const isBranchesOpen = ref(true);
@@ -59,6 +62,14 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           title="Add Repository"
         >
           <Plus class="w-3.5 h-3.5" />
+        </button>
+        <button
+          @click.stop="repoStore.isRemoteModalOpen = true"
+          :disabled="!repoStore.activeRepoPath"
+          class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          :title="t('View and edit Git remotes')"
+        >
+          <GitFork class="w-3.5 h-3.5" />
         </button>
       </div>
 

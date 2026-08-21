@@ -230,6 +230,7 @@ async fn repo_handler(
         (Method::GET, "info") => read_repo()?.info().map(|value| json!(value)),
         (Method::GET, "status") => read_repo()?.get_status().map(|value| json!(value)),
         (Method::GET, "branches") => read_repo()?.list_branches(None).map(|value| json!(value)),
+        (Method::GET, "remotes") => read_repo()?.list_remotes().map(|value| json!(value)),
         (Method::GET, "tags") => read_repo()?.list_tags().map(|value| json!(value)),
         (Method::GET, "stashes") => {
             let mut repo = read_repo()?;
@@ -363,6 +364,15 @@ async fn repo_handler(
         (Method::POST, "branch/checkout") => write_op(&path, || {
             let name = body_json.get("name").and_then(Value::as_str).unwrap_or("");
             GitService::with_write_lock(&path, |repo| repo.checkout_branch(name))
+        }),
+        (Method::POST, "remote/set-url") => write_op(&path, || {
+            let name = body_json
+                .get("remote_name")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let url = body_json.get("url").and_then(Value::as_str).unwrap_or("");
+            let push_url = body_json.get("push_url").and_then(Value::as_str);
+            GitService::set_remote_urls(&path, name, url, push_url)
         }),
         (Method::POST, "tag/create") => write_op(&path, || {
             GitService::create_tag(

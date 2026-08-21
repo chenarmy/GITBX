@@ -267,6 +267,15 @@ impl GitService {
         Self::with_write_lock(path, |repo| repo.fetch_all())
     }
 
+    pub fn set_remote_urls(
+        path: &str,
+        name: &str,
+        url: &str,
+        push_url: Option<&str>,
+    ) -> Result<()> {
+        Self::with_write_lock(path, |repo| repo.set_remote_urls(name, url, push_url))
+    }
+
     pub fn push(path: &str, remote: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| repo.push_current(remote))
     }

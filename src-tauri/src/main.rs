@@ -19,6 +19,8 @@ fn main() {
             repo::clone_repo,
             repo::get_repo_status,
             repo::list_branches,
+            repo::list_remotes,
+            repo::set_remote_url,
             repo::stage_file,
             repo::unstage_file,
             repo::stage_all,

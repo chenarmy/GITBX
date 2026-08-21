@@ -19,6 +19,7 @@ import MergeModal from '@/components/dialogs/MergeModal.vue';
 import RebaseModal from '@/components/dialogs/RebaseModal.vue';
 import ResetModal from '@/components/dialogs/ResetModal.vue';
 import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
+import RemoteManagerModal from '@/components/dialogs/RemoteManagerModal.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
@@ -101,6 +102,7 @@ onUnmounted(() => {
     <RebaseModal />
     <ResetModal />
     <RenameBranchModal />
+    <RemoteManagerModal />
     <AiAssistantModal />
     <SettingsModal />
 

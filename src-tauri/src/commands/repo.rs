@@ -1,4 +1,6 @@
-use gitbx_core::{BranchItem, GitService, RepoStatusSummary, RepositoryInfo, StashItem, TagItem};
+use gitbx_core::{
+    BranchItem, GitService, RemoteItem, RepoStatusSummary, RepositoryInfo, StashItem, TagItem,
+};
 
 type CommandResult<T> = std::result::Result<T, String>;
 
@@ -40,6 +42,25 @@ pub async fn list_branches(repo_path: String) -> CommandResult<Vec<BranchItem>> 
     GitService::open(&repo_path)
         .map_err(|e| e.to_string())?
         .list_branches(None)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_remotes(repo_path: String) -> CommandResult<Vec<RemoteItem>> {
+    GitService::open(&repo_path)
+        .map_err(|e| e.to_string())?
+        .list_remotes()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_remote_url(
+    repo_path: String,
+    remote_name: String,
+    url: String,
+    push_url: Option<String>,
+) -> CommandResult<()> {
+    GitService::set_remote_urls(&repo_path, &remote_name, &url, push_url.as_deref())
         .map_err(|e| e.to_string())
 }
 

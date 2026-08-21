@@ -60,6 +60,26 @@ impl Repository {
         Ok(list)
     }
 
+    pub fn set_remote_urls(&self, name: &str, url: &str, push_url: Option<&str>) -> Result<()> {
+        let name = name.trim();
+        let url = url.trim();
+        if name.is_empty() {
+            return Err(crate::error::GitbxError::General(
+                "Remote name cannot be empty".into(),
+            ));
+        }
+        if url.is_empty() {
+            return Err(crate::error::GitbxError::General(
+                "Remote URL cannot be empty".into(),
+            ));
+        }
+
+        self.inner().remote_set_url(name, url)?;
+        let push_url = push_url.map(str::trim).filter(|value| !value.is_empty());
+        self.inner().remote_set_pushurl(name, push_url)?;
+        Ok(())
+    }
+
     pub fn fetch_remote(&self, remote_name: &str) -> Result<()> {
         let mut remote = self.inner().find_remote(remote_name)?;
         let mut fetch_opts = FetchOptions::new();
@@ -102,5 +122,47 @@ impl Repository {
             return Err(error.into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::repository::Repository;
+    use tempfile::tempdir;
+
+    #[test]
+    fn updates_and_clears_remote_urls() {
+        let dir = tempdir().expect("tempdir");
+        let repo = Repository::init(dir.path(), false).expect("init repository");
+        repo.inner()
+            .remote("origin", "https://example.com/old.git")
+            .expect("create remote");
+
+        repo.set_remote_urls(
+            " origin ",
+            " https://example.com/new.git ",
+            Some(" ssh://git@example.com/new.git "),
+        )
+        .expect("update remote URLs");
+
+        let remote = repo.inner().find_remote("origin").expect("find remote");
+        assert_eq!(remote.url(), Some("https://example.com/new.git"));
+        assert_eq!(remote.pushurl(), Some("ssh://git@example.com/new.git"));
+        drop(remote);
+
+        repo.set_remote_urls("origin", "https://example.com/new.git", Some("  "))
+            .expect("clear push URL");
+        let remote = repo.inner().find_remote("origin").expect("find remote");
+        assert_eq!(remote.pushurl(), None);
+    }
+
+    #[test]
+    fn rejects_empty_remote_name_and_url() {
+        let dir = tempdir().expect("tempdir");
+        let repo = Repository::init(dir.path(), false).expect("init repository");
+        assert!(repo
+            .set_remote_urls(" ", "https://example.com/repo.git", None)
+            .is_err());
+        assert!(repo.set_remote_urls("origin", " ", None).is_err());
     }
 }

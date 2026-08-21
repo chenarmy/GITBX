@@ -107,7 +107,14 @@ impl Repository {
             .inner
             .head()
             .ok()
-            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+            .and_then(|h| h.shorthand().map(|s| s.to_string()))
+            .or_else(|| {
+                self.inner
+                    .find_reference("HEAD")
+                    .ok()
+                    .and_then(|head| head.symbolic_target().map(str::to_string))
+                    .and_then(|target| target.strip_prefix("refs/heads/").map(str::to_string))
+            });
 
         let head_commit_id = self
             .inner
@@ -139,6 +146,19 @@ impl Repository {
     }
 
     pub fn get_commits(&self, max_count: usize) -> Result<Vec<CommitDetail>> {
+        if let Err(error) = self.inner.head() {
+            let has_unborn_target = self
+                .inner
+                .find_reference("HEAD")
+                .ok()
+                .and_then(|head| head.symbolic_target().map(str::to_string))
+                .is_some_and(|target| self.inner.find_reference(&target).is_err());
+            if has_unborn_target {
+                return Ok(Vec::new());
+            }
+            return Err(error.into());
+        }
+
         let mut revwalk = self.inner.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
@@ -175,5 +195,25 @@ impl Repository {
         }
 
         Ok(commits)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Repository;
+    use tempfile::tempdir;
+
+    #[test]
+    fn empty_repository_reports_branch_and_empty_history() {
+        let dir = tempdir().expect("tempdir");
+        let repo = Repository::init(dir.path(), false).expect("init repository");
+        repo.inner()
+            .set_head("refs/heads/main")
+            .expect("set unborn branch");
+
+        let info = repo.info().expect("repository info");
+        assert_eq!(info.head_branch.as_deref(), Some("main"));
+        assert!(info.head_commit_id.is_none());
+        assert!(repo.get_commits(100).expect("empty history").is_empty());
     }
 }
