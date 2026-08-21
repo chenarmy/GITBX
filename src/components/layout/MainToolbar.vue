@@ -17,10 +17,12 @@ import {
   Play,
   XCircle,
 } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
+const { t } = useI18n();
 
 const isFetching = ref(false);
 const isPulling = ref(false);
@@ -138,7 +140,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Merge</span>
+          <span>{{ t('Abort Merge') }}</span>
         </button>
         <button
           v-if="repoStore.repoInfo?.is_merging"
@@ -146,7 +148,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
         >
           <Play class="w-3 h-3" />
-          <span>Continue Merge</span>
+          <span>{{ t('Continue Merge') }}</span>
         </button>
 
         <button
@@ -155,7 +157,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Rebase</span>
+          <span>{{ t('Abort Rebase') }}</span>
         </button>
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
@@ -163,7 +165,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
         >
           <Play class="w-3 h-3" />
-          <span>Continue Rebase</span>
+          <span>{{ t('Continue Rebase') }}</span>
         </button>
 
         <button
@@ -172,7 +174,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Cherry-pick</span>
+          <span>{{ t('Abort Cherry-pick') }}</span>
         </button>
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
@@ -180,7 +182,7 @@ async function handleCherryPick() {
           class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
         >
           <Play class="w-3 h-3" />
-          <span>Continue Cherry-pick</span>
+          <span>{{ t('Continue Cherry-pick') }}</span>
         </button>
       </div>
     </div>
@@ -193,7 +195,7 @@ async function handleCherryPick() {
           @click="handleFetch"
           :disabled="isFetching"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Fetch from all remotes"
+          :title="t('Fetch from all remotes')"
         >
           <RefreshCw class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" :class="{ 'animate-spin': isFetching }" />
           <span>{{ isFetching ? 'Fetching...' : 'Fetch' }}</span>
@@ -204,7 +206,7 @@ async function handleCherryPick() {
           @click="handlePull"
           :disabled="isPulling"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Pull latest changes from upstream"
+          :title="t('Pull latest changes from upstream')"
         >
           <ArrowDownCircle class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" :class="{ 'animate-bounce': isPulling }" />
           <span>{{ isPulling ? 'Pulling...' : 'Pull' }}</span>
@@ -215,7 +217,7 @@ async function handleCherryPick() {
           @click="handlePush"
           :disabled="isPushing"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Push local commits to remote"
+          :title="t('Push local commits to remote')"
         >
           <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
           <span>{{ isPushing ? 'Pushing...' : 'Push' }}</span>
@@ -227,40 +229,40 @@ async function handleCherryPick() {
         <button
           @click="handleOpenBranch"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Create new branch"
+          :title="t('Create new branch')"
         >
           <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-          <span>Branch</span>
+          <span>{{ t('Branch') }}</span>
         </button>
 
         <!-- Merge Button -->
         <button
           @click="handleOpenMerge"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Merge branch into current branch"
+          :title="t('Merge branch into current branch')"
         >
           <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-          <span>Merge</span>
+          <span>{{ t('Merge') }}</span>
         </button>
 
         <!-- Rebase Button -->
         <button
           @click="handleOpenRebase"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Rebase current branch onto another branch"
+          :title="t('Rebase current branch onto another branch')"
         >
           <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-          <span>Rebase</span>
+          <span>{{ t('Rebase') }}</span>
         </button>
 
         <!-- Cherry-pick Button -->
         <button
           @click="handleCherryPick"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Cherry-pick selected commit into current branch"
+          :title="t('Cherry-pick selected commit into current branch')"
         >
           <GitCommit class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Cherry-pick</span>
+          <span>{{ t('Cherry-pick') }}</span>
         </button>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>
@@ -269,10 +271,10 @@ async function handleCherryPick() {
         <button
           @click="handleOpenStash"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Save uncommitted changes to stash"
+          :title="t('Save uncommitted changes to stash')"
         >
           <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
-          <span>Stash</span>
+          <span>{{ t('Stash') }}</span>
         </button>
 
         <!-- Discard All Button -->
@@ -280,10 +282,10 @@ async function handleCherryPick() {
           @click="handleDiscardAll"
           :disabled="repoStore.statusSummary.total_changes === 0"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 active:scale-95 text-foreground transition font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          title="Discard all uncommitted changes in working tree"
+          :title="t('Discard all uncommitted changes in working tree')"
         >
           <RotateCcw class="w-3.5 h-3.5 text-rose-500" />
-          <span>Discard All</span>
+          <span>{{ t('Discard All') }}</span>
         </button>
       </div>
 
@@ -292,7 +294,7 @@ async function handleCherryPick() {
         <div
           @click="handleOpenBranch"
           class="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-secondary/80 hover:bg-secondary border border-border font-mono text-[11px] cursor-pointer transition active:scale-95 shadow-sm"
-          title="Current checked out branch"
+          :title="t('Current checked out branch')"
         >
           <GitBranch class="w-3.5 h-3.5 text-primary" />
           <span class="font-bold text-foreground">{{ repoStore.repoInfo?.head_branch || 'main' }}</span>

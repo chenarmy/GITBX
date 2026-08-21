@@ -53,6 +53,10 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+### 多语言
+
+前端语言由 `src/i18n/config.ts` 配置，当前内置 English、日本語、Deutsch、Español、简体中文、繁體中文、Français 和 العربية。打开 GITBX 设置即可切换，选择会保存到本地并在下次启动时恢复；阿拉伯语会自动启用从右到左布局。新增语言时，在 `Locale`、`SUPPORTED_LOCALES` 和 `messages` 中增加对应配置即可。
+
 启动 Web 服务和前端开发服务器：
 
 ```powershell

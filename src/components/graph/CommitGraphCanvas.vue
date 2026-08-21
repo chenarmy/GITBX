@@ -6,8 +6,10 @@ import type { GraphCommitNode } from '@/types/graph';
 import CommitContextMenu from '@/components/menus/CommitContextMenu.vue';
 import { Tag } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
+const { t } = useI18n();
 const diffStore = useDiffStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -138,17 +140,17 @@ function formatTime(timestamp: number) {
   <div class="dbx-graph flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
     <!-- Header row -->
     <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
-      <div class="w-20 pl-2">Graph</div>
-      <div class="flex-1 pl-2">Description</div>
-      <div class="w-32">Author</div>
-      <div class="w-24">Date</div>
-      <div class="w-20 font-mono text-[11px]">Commit</div>
+      <div class="w-20 pl-2">{{ t('Graph') }}</div>
+      <div class="flex-1 pl-2">{{ t('Description') }}</div>
+      <div class="w-32">{{ t('Author') }}</div>
+      <div class="w-24">{{ t('Date') }}</div>
+      <div class="w-20 font-mono text-[11px]">{{ t('Commit') }}</div>
     </div>
 
     <!-- Scrollable commit list + canvas -->
     <div class="flex-1 overflow-y-auto relative">
       <div v-if="repoStore.commitNodes.length === 0" class="p-8 text-center text-muted-foreground">
-        No commits in this repository yet. Make your first commit below!
+        {{ t('No commits in this repository yet. Make your first commit below!') }}
       </div>
 
       <div v-else class="relative flex">

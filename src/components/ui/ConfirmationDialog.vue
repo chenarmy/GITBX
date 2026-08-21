@@ -2,9 +2,11 @@
 import { ref, watch } from 'vue';
 import { X, AlertTriangle } from 'lucide-vue-next';
 import { useConfirmationStore } from '@/stores/confirmation';
+import { useI18n } from '@/i18n';
 
 const store = useConfirmationStore();
 const inputValue = ref('');
+const { t } = useI18n();
 
 watch(() => store.pending, (request) => {
   inputValue.value = request?.options.defaultValue || '';
@@ -47,14 +49,14 @@ function accept() {
       </div>
       <div class="h-12 px-4 flex items-center justify-end gap-2 border-t border-border bg-muted/20">
         <button class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground" @click="cancel">
-          {{ store.pending.options.cancelText || 'Cancel' }}
+          {{ store.pending.options.cancelText || t('Cancel') }}
         </button>
         <button
           class="px-4 py-1.5 rounded font-semibold text-white"
           :class="store.pending.options.danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-primary hover:bg-primary/90'"
           @click="accept"
         >
-          {{ store.pending.options.confirmText || 'Confirm' }}
+          {{ store.pending.options.confirmText || t('Confirm') }}
         </button>
       </div>
     </div>

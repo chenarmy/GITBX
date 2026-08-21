@@ -5,11 +5,13 @@ import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
 import { Sparkles, Send } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
+const { t } = useI18n();
 
 const isSubmitting = ref(false);
 // Keep the AI result and the editable Summary on one reactive source.
@@ -66,21 +68,21 @@ async function handleCommit() {
         class="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
       >
         <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-        <span>AI Msg</span>
+        <span>{{ t('AI Msg') }}</span>
       </button>
     </div>
 
     <!-- Commit message input -->
     <textarea
       v-model="commitMessage"
-      placeholder="Commit summary (e.g. feat: add Canvas graph view)..."
+      :placeholder="t('Commit summary (e.g. feat: add Canvas graph view)...')"
       class="flex-1 w-full bg-background border border-border rounded-sm p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground min-h-[60px]"
     ></textarea>
 
     <!-- Bottom Actions: Author info & Commit Button -->
     <div class="flex items-center justify-between mt-2 pt-1 border-t border-border gap-2">
       <div class="text-[11px] text-muted-foreground truncate flex-1">
-        Committer: <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
+        {{ t('Committer:') }} <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
       </div>
 
       <button
@@ -89,7 +91,7 @@ async function handleCommit() {
         class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
       >
         <Send class="w-3.5 h-3.5" />
-        <span>Commit to {{ repoStore.repoInfo?.head_branch || 'main' }}</span>
+        <span>{{ t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' }) }}</span>
       </button>
     </div>
   </div>

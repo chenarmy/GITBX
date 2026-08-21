@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { locale, setLocale } from '@/i18n';
+import type { Locale } from '@/i18n/config';
 
 const THEME_KEY = 'gitbx_theme';
 
@@ -17,6 +19,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const authorName = ref<string>('Developer');
   const authorEmail = ref<string>('dev@gitbx.io');
   const isSettingsModalOpen = ref<boolean>(false);
+
+  const language = locale;
 
   const applyTheme = () => {
     if (isDark.value) {
@@ -36,6 +40,10 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme();
   };
 
+  const changeLanguage = (nextLocale: Locale) => {
+    setLocale(nextLocale);
+  };
+
   // Apply on startup
   applyTheme();
 
@@ -44,7 +52,9 @@ export const useSettingsStore = defineStore('settings', () => {
     authorName,
     authorEmail,
     isSettingsModalOpen,
+    language,
     toggleTheme,
     applyTheme,
+    changeLanguage,
   };
 });

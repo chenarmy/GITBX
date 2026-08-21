@@ -5,20 +5,23 @@ import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { Settings, X, User, Cpu } from 'lucide-vue-next';
+import { SUPPORTED_LOCALES } from '@/i18n/config';
+import { useI18n } from '@/i18n';
 
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
+const { t } = useI18n();
 
 async function saveSettings() {
   if (aiStore.llmConfig.api_key) {
     try {
       await gitApi.saveCredential(aiStore.llmConfig.provider, aiStore.llmConfig.api_key);
       aiStore.llmConfig.api_key = '';
-      notification.success('Settings Saved', 'The AI credential was stored in the system keyring.');
+      notification.success(t('Settings Saved'), t('The AI credential was stored in the system keyring.'));
     } catch (error: any) {
-      notification.warning('Settings Saved', error?.message || 'The key remains in memory only.');
+      notification.warning(t('Settings Saved'), error?.message || t('The key remains in memory only.'));
     }
   }
   aiStore.persistConfig();
@@ -48,7 +51,7 @@ function providerModels() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <Settings class="w-4 h-4 text-primary" />
-          <span class="font-bold text-sm text-foreground">GITBX Settings</span>
+          <span class="font-bold text-sm text-foreground">{{ t('GITBX Settings') }}</span>
         </div>
         <button
           @click="saveSettings"
@@ -60,22 +63,37 @@ function providerModels() {
 
       <!-- Settings Body -->
       <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div class="space-y-2">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <span>{{ t('Language') }}</span>
+          </div>
+          <select
+            :value="settingsStore.language"
+            @change="settingsStore.changeLanguage(($event.target as HTMLSelectElement).value as any)"
+            class="w-full bg-background border border-border rounded px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option v-for="item in SUPPORTED_LOCALES" :key="item.code" :value="item.code">
+              {{ item.nativeLabel }} · {{ item.label }}
+            </option>
+          </select>
+        </div>
+
         <!-- Git Signature -->
         <div class="space-y-2">
           <div class="flex items-center space-x-1.5 font-semibold text-foreground">
             <User class="w-3.5 h-3.5 text-blue-400" />
-            <span>Git User Signature</span>
+            <span>{{ t('Git User Signature') }}</span>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="text-[11px] text-muted-foreground">Author Name</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Author Name') }}</label>
               <input
                 v-model="settingsStore.authorName"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">Author Email</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Author Email') }}</label>
               <input
                 v-model="settingsStore.authorEmail"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -88,11 +106,11 @@ function providerModels() {
         <div class="space-y-2 border-t border-border pt-3">
           <div class="flex items-center space-x-1.5 font-semibold text-foreground">
             <Cpu class="w-3.5 h-3.5 text-purple-400" />
-            <span>AI Copilot & LLM Provider</span>
+            <span>{{ t('AI Copilot & LLM Provider') }}</span>
           </div>
           <div class="space-y-2">
             <div>
-              <label class="text-[11px] text-muted-foreground">Provider</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Provider') }}</label>
               <select
                 :value="aiStore.llmConfig.provider"
                 @change="handleProviderChange"
@@ -106,7 +124,7 @@ function providerModels() {
               </select>
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">Model</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Model') }}</label>
               <select
                 v-if="aiStore.llmConfig.provider !== 'custom'"
                 v-model="aiStore.llmConfig.model"
@@ -122,14 +140,14 @@ function providerModels() {
               />
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">API Base URL</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('API Base URL') }}</label>
               <input
                 v-model="aiStore.llmConfig.api_base"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">API Key</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('API Key') }}</label>
               <input
                 v-model="aiStore.llmConfig.api_key"
                 type="password"
@@ -147,7 +165,7 @@ function providerModels() {
           @click="saveSettings"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
         >
-          Save & Close
+          {{ t('Save & Close') }}
         </button>
       </div>
     </div>

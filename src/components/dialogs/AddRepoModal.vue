@@ -10,9 +10,11 @@ import {
   AlertCircle,
   FolderSearch,
 } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
+const { t } = useI18n();
 
 const activeTab = ref<'local' | 'clone' | 'init'>('local');
 
@@ -34,7 +36,7 @@ async function handleAddLocal() {
     localPath.value = '';
     repoStore.isAddRepoModalOpen = false;
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to add repository';
+    errorMsg.value = err?.message || t('Failed to add repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -53,7 +55,7 @@ async function handleClone() {
       repoStore.isAddRepoModalOpen = false;
     }
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to clone repository';
+    errorMsg.value = err?.message || t('Failed to clone repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -71,7 +73,7 @@ async function handleInit() {
       repoStore.isAddRepoModalOpen = false;
     }
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to initialize repository';
+    errorMsg.value = err?.message || t('Failed to initialize repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -90,7 +92,7 @@ async function handleInit() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <FolderGit2 class="w-4 h-4 text-primary" />
-          <span class="font-bold text-sm text-foreground">Add Repository</span>
+          <span class="font-bold text-sm text-foreground">{{ t('Add Repository') }}</span>
         </div>
         <button
           @click="repoStore.isAddRepoModalOpen = false"
@@ -108,7 +110,7 @@ async function handleInit() {
           :class="activeTab === 'local' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderSearch class="w-3.5 h-3.5" />
-          <span>Add Existing Local Repo</span>
+          <span>{{ t('Add Existing Local Repo') }}</span>
         </button>
         <button
           @click="activeTab = 'clone'"
@@ -116,7 +118,7 @@ async function handleInit() {
           :class="activeTab === 'clone' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <Download class="w-3.5 h-3.5" />
-          <span>Clone from Remote</span>
+          <span>{{ t('Clone from Remote') }}</span>
         </button>
         <button
           @click="activeTab = 'init'"
@@ -124,7 +126,7 @@ async function handleInit() {
           :class="activeTab === 'init' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderPlus class="w-3.5 h-3.5" />
-          <span>Create New Repo</span>
+          <span>{{ t('Create New Repo') }}</span>
         </button>
       </div>
 
@@ -142,7 +144,7 @@ async function handleInit() {
         <!-- 1. Tab: Local -->
         <div v-if="activeTab === 'local'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Local Repository Path</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Local Repository Path') }}</label>
             <input
               v-model="localPath"
               type="text"
@@ -159,7 +161,7 @@ async function handleInit() {
         <!-- 2. Tab: Clone -->
         <div v-else-if="activeTab === 'clone'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Remote URL (HTTPS / SSH)</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Remote URL (HTTPS / SSH)') }}</label>
             <input
               v-model="cloneUrl"
               type="text"
@@ -168,7 +170,7 @@ async function handleInit() {
             />
           </div>
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Destination Folder</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Destination Folder') }}</label>
             <input
               v-model="cloneDestination"
               type="text"
@@ -182,7 +184,7 @@ async function handleInit() {
         <!-- 3. Tab: Init -->
         <div v-else-if="activeTab === 'init'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">New Repository Directory</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('New Repository Directory') }}</label>
             <input
               v-model="initPath"
               type="text"
@@ -203,7 +205,7 @@ async function handleInit() {
           @click="repoStore.isAddRepoModalOpen = false"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
-          Cancel
+          {{ t('Cancel') }}
         </button>
 
         <button
@@ -212,7 +214,7 @@ async function handleInit() {
           :disabled="!localPath.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Verifying...' : 'Add Repository' }}
+          {{ isSubmitting ? 'Verifying...' : t('Add Repository') }}
         </button>
 
         <button
@@ -221,7 +223,7 @@ async function handleInit() {
           :disabled="!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Cloning...' : 'Clone Repository' }}
+          {{ isSubmitting ? 'Cloning...' : t('Clone') }}
         </button>
 
         <button
@@ -230,7 +232,7 @@ async function handleInit() {
           :disabled="!initPath.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Initializing...' : 'Create & Open' }}
+          {{ isSubmitting ? 'Initializing...' : t('Create New Repo') }}
         </button>
       </div>
     </div>

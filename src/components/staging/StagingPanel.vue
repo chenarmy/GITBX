@@ -11,10 +11,12 @@ import {
   FileEdit,
   RotateCcw,
 } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
 const confirmation = useConfirmationStore();
+const { t } = useI18n();
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -56,7 +58,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
     <div class="flex-1 flex flex-col min-h-0 border-b border-border">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
-          <span>Staged Changes</span>
+          <span>{{ t('Staged Changes') }}</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
             {{ repoStore.statusSummary.staged_files.length }}
           </span>
@@ -65,10 +67,10 @@ async function handleDiscardFile(e: Event, filePath: string) {
           v-if="repoStore.statusSummary.staged_files.length > 0"
           @click="repoStore.unstageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
-          title="Unstage All"
+          :title="t('Unstage All')"
         >
           <Minus class="w-3 h-3" />
-          <span>Unstage All</span>
+          <span>{{ t('Unstage All') }}</span>
         </button>
       </div>
 
@@ -87,7 +89,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           <button
             @click.stop="repoStore.unstageFile(file.path)"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-            title="Unstage File"
+            :title="t('Unstage File')"
           >
             <Minus class="w-3 h-3" />
           </button>
@@ -99,7 +101,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
     <div class="flex-1 flex flex-col min-h-0">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
-          <span>Changes</span>
+          <span>{{ t('Changes') }}</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
             {{ repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length }}
           </span>
@@ -108,10 +110,10 @@ async function handleDiscardFile(e: Event, filePath: string) {
           v-if="repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length > 0"
           @click="repoStore.stageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
-          title="Stage All"
+          :title="t('Stage All')"
         >
           <Plus class="w-3 h-3" />
-          <span>Stage All</span>
+          <span>{{ t('Stage All') }}</span>
         </button>
       </div>
 
@@ -132,14 +134,14 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <button
               @click="handleDiscardFile($event, file.path)"
               class="p-0.5 rounded hover:bg-rose-100 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 opacity-0 group-hover:opacity-100 transition"
-              title="Discard changes"
+              :title="t('Discard changes')"
             >
               <RotateCcw class="w-3 h-3" />
             </button>
             <button
               @click.stop="repoStore.stageFile(file.path)"
               class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-              title="Stage File"
+              :title="t('Stage File')"
             >
               <Plus class="w-3 h-3" />
             </button>
@@ -162,14 +164,14 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <button
               @click="handleDiscardFile($event, file.path)"
               class="p-0.5 rounded hover:bg-rose-100 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 opacity-0 group-hover:opacity-100 transition"
-              title="Delete untracked file"
+              :title="t('Delete untracked file')"
             >
               <RotateCcw class="w-3 h-3" />
             </button>
             <button
               @click.stop="repoStore.stageFile(file.path)"
               class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-              title="Stage File"
+              :title="t('Stage File')"
             >
               <Plus class="w-3 h-3" />
             </button>
