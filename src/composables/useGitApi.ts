@@ -16,6 +16,29 @@ import { useConsoleStore } from '@/stores/console';
 
 const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+export function formatGitError(error: unknown, fallback = 'Git operation failed'): string {
+  if (typeof error === 'string' && error.trim()) return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>;
+    for (const key of ['message', 'detail', 'error', 'description']) {
+      const nested = value[key];
+      if (typeof nested === 'string' && nested.trim()) return nested;
+      if (nested && nested !== error) {
+        const formatted = formatGitError(nested, '');
+        if (formatted) return formatted;
+      }
+    }
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') return serialized;
+    } catch {
+      // Fall through to the stable fallback.
+    }
+  }
+  return fallback;
+}
+
 export function useGitApi() {
   const getConsole = () => useConsoleStore();
 
@@ -715,10 +738,12 @@ export function useGitApi() {
       body: JSON.stringify({ repo_path: repoPath }),
     });
     const data = await res.json();
-    if (data.success) {
+    if (res.ok && data.success) {
       getConsole().logSuccess(`Pull completed: ${data.output || 'Already up to date.'}`);
     } else {
-      getConsole().logError(`Pull error: ${data.error}`, undefined, cmd);
+      const message = formatGitError(data.error, `Pull failed (HTTP ${res.status})`);
+      getConsole().logError(`Pull error: ${message}`, undefined, cmd);
+      throw new Error(message);
     }
   };
 

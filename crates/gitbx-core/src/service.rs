@@ -273,10 +273,25 @@ impl GitService {
 
     pub fn pull(path: &str, remote: &str) -> Result<()> {
         Self::fetch_all(path)?;
-        let branch = Self::info(path)?
-            .head_branch
-            .ok_or_else(|| GitbxError::General("HEAD is detached".into()))?;
-        Self::merge(path, &format!("{remote}/{branch}"), false)
+        let target = Self::with_write_lock(path, |repo| {
+            let branch_name = repo
+                .inner()
+                .head()?
+                .shorthand()
+                .ok_or_else(|| GitbxError::General("HEAD is detached".into()))?
+                .to_string();
+            let branch = repo.inner().find_branch(&branch_name, BranchType::Local)?;
+            if let Ok(upstream) = branch.upstream() {
+                if let Some(name) = upstream.name()? {
+                    return Ok(name
+                        .strip_prefix("refs/remotes/")
+                        .unwrap_or(name)
+                        .to_string());
+                }
+            }
+            Ok(format!("{remote}/{branch_name}"))
+        })?;
+        Self::merge(path, &target, false)
     }
 
     pub fn rebase(path: &str, upstream: &str) -> Result<()> {
