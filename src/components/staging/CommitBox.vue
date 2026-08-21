@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
@@ -11,19 +11,15 @@ const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
 
-const commitMessage = ref('');
 const isSubmitting = ref(false);
-
-// AI Copilot writes the generated message into the shared draft channel.
-// Keep the textarea local for normal editing, but consume that draft here.
-watch(
-  () => aiStore.draftCommitMessage,
-  (draft) => {
-    if (!draft.trim()) return;
-    commitMessage.value = draft;
-    aiStore.draftCommitMessage = '';
-  }
-);
+// Keep the AI result and the editable Summary on one reactive source.
+// This makes Apply deterministic even while the AI modal is closing.
+const commitMessage = computed({
+  get: () => aiStore.draftCommitMessage,
+  set: (value: string) => {
+    aiStore.draftCommitMessage = value;
+  },
+});
 
 const CONVENTIONAL_TAGS = ['feat', 'fix', 'refactor', 'docs', 'chore', 'perf'];
 
@@ -41,7 +37,7 @@ async function handleCommit() {
       settingsStore.authorEmail
     );
     notification.success('Commit Created', commitMessage.value);
-    commitMessage.value = '';
+    aiStore.draftCommitMessage = '';
   } catch (err: any) {
     notification.error('Commit Failed', err?.message);
   } finally {
