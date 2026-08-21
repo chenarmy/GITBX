@@ -21,6 +21,8 @@ const notification = useNotificationStore();
 const naturalCommand = ref('');
 const isCopied = ref(false);
 
+const hasGeneratedMessage = computed(() => Boolean(aiStore.generatedMessage?.summary?.trim()));
+
 const displayedCommit = computed(() => {
   if (aiStore.generatedMessage) {
     return {
@@ -96,11 +98,16 @@ function getFullMessage(): string {
 }
 
 function applyToCommitBox() {
+  if (!hasGeneratedMessage.value) {
+    notification.warning('Nothing to apply', 'Generate a commit message from staged changes first.');
+    return;
+  }
   aiStore.applyCommitMessage(getFullMessage());
   aiStore.closeAiModal();
 }
 
 function copyMessage() {
+  if (!hasGeneratedMessage.value) return;
   navigator.clipboard.writeText(getFullMessage());
   isCopied.value = true;
   setTimeout(() => {
@@ -136,15 +143,25 @@ function copyMessage() {
       <!-- Modal Body -->
       <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
         <!-- 1. Pre-commit Secret Scanner Status -->
-        <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+        <div
+          class="p-3 rounded-lg border flex items-center justify-between"
+          :class="hasGeneratedMessage ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-secondary border-border'"
+        >
           <div class="flex items-center space-x-2.5">
-            <ShieldCheck class="w-5 h-5 text-emerald-400 shrink-0" />
+            <ShieldCheck class="w-5 h-5 shrink-0" :class="hasGeneratedMessage ? 'text-emerald-400' : 'text-muted-foreground'" />
             <div>
-              <div class="font-semibold text-emerald-300">{{ aiStore.detectedSecrets.length ? 'Potential secrets detected' : 'Security & Secret Check Passed' }}</div>
-              <div class="text-[11px] text-emerald-400/80">{{ aiStore.detectedSecrets.length ? 'Review detected secrets before committing.' : 'The staged diff has been checked for common credential patterns.' }}</div>
+              <div class="font-semibold" :class="hasGeneratedMessage ? 'text-emerald-300' : 'text-muted-foreground'">
+                {{ aiStore.detectedSecrets.length ? 'Potential secrets detected' : hasGeneratedMessage ? 'Security & Secret Check Passed' : 'Waiting for staged changes' }}
+              </div>
+              <div class="text-[11px]" :class="hasGeneratedMessage ? 'text-emerald-400/80' : 'text-muted-foreground'">
+                {{ aiStore.detectedSecrets.length ? 'Review detected secrets before committing.' : hasGeneratedMessage ? 'The staged diff has been checked for common credential patterns.' : 'Stage at least one file to run the security scan.' }}
+              </div>
             </div>
           </div>
-          <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">CLEAN</span>
+          <span
+            class="px-2 py-0.5 rounded text-[10px] font-bold"
+            :class="hasGeneratedMessage ? 'bg-emerald-500/20 text-emerald-300' : 'bg-secondary text-muted-foreground'"
+          >{{ hasGeneratedMessage ? 'CLEAN' : 'WAITING' }}</span>
         </div>
 
         <!-- 2. AI Commit Message Generator Result -->
@@ -164,14 +181,16 @@ function copyMessage() {
           <div class="flex items-center justify-end space-x-2 pt-1">
             <button
               @click="copyMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition"
+              :disabled="!hasGeneratedMessage"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-blue-400" />
               <span>{{ isCopied ? 'Copied' : 'Copy Message' }}</span>
             </button>
             <button
               @click="applyToCommitBox"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
+              :disabled="!hasGeneratedMessage"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check class="w-3.5 h-3.5" />
               <span>Apply to Commit Box</span>
