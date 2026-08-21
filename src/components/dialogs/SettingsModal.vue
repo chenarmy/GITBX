@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/stores/settings';
-import { useAiStore } from '@/stores/ai';
+import { AI_PROVIDER_PRESETS, useAiStore } from '@/stores/ai';
+import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { Settings, X, User, Cpu } from 'lucide-vue-next';
@@ -20,7 +21,18 @@ async function saveSettings() {
       notification.warning('Settings Saved', error?.message || 'The key remains in memory only.');
     }
   }
+  aiStore.persistConfig();
   settingsStore.isSettingsModalOpen = false;
+}
+
+function handleProviderChange(event: Event) {
+  const provider = (event.target as HTMLSelectElement).value as LlmProvider;
+  aiStore.setProvider(provider);
+}
+
+function providerModels() {
+  if (aiStore.llmConfig.provider === 'custom') return [];
+  return AI_PROVIDER_PRESETS[aiStore.llmConfig.provider].models;
 }
 </script>
 
@@ -82,7 +94,8 @@ async function saveSettings() {
             <div>
               <label class="text-[11px] text-muted-foreground">Provider</label>
               <select
-                v-model="aiStore.llmConfig.provider"
+                :value="aiStore.llmConfig.provider"
+                @change="handleProviderChange"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
@@ -91,6 +104,22 @@ async function saveSettings() {
                 <option value="ollama">Ollama (Local / Offline)</option>
                 <option value="custom">Custom OpenAI-Compatible API</option>
               </select>
+            </div>
+            <div>
+              <label class="text-[11px] text-muted-foreground">Model</label>
+              <select
+                v-if="aiStore.llmConfig.provider !== 'custom'"
+                v-model="aiStore.llmConfig.model"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option v-for="model in providerModels()" :key="model" :value="model">{{ model }}</option>
+              </select>
+              <input
+                v-else
+                v-model="aiStore.llmConfig.model"
+                placeholder="e.g. my-custom-model"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
             </div>
             <div>
               <label class="text-[11px] text-muted-foreground">API Base URL</label>
