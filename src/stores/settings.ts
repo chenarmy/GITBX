@@ -9,7 +9,7 @@ function getInitialTheme(): boolean {
     if (saved === 'dark') return true;
     if (saved === 'light') return false;
   } catch {}
-  return false; // Default: Light mode
+  return true; // DBX defaults to its dark desktop workbench
 }
 
 export const useSettingsStore = defineStore('settings', () => {

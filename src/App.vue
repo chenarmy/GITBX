@@ -49,7 +49,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans">
+  <div class="dbx-shell h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans">
     <!-- Top Header -->
     <NavbarHeader />
 
@@ -62,7 +62,7 @@ onUnmounted(() => {
       <SidebarWorkspace />
 
       <!-- 2. Central & Right Workspace Layout -->
-      <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div class="flex-1 flex flex-col overflow-hidden min-h-0 dbx-workspace">
         <!-- Top Half: Commit Graph Tree View (45% height) -->
         <div class="h-[45%] flex flex-col overflow-hidden min-h-[160px]">
           <CommitGraphCanvas />

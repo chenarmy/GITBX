@@ -68,10 +68,10 @@ watch(
 <template>
   <div
     v-if="consoleStore.isOpen"
-    class="h-60 bg-card border-t border-border flex flex-col select-none text-xs shadow-2xl z-20"
+    class="dbx-console h-60 bg-card border-t border-border flex flex-col select-none text-xs z-20"
   >
     <!-- Console Toolbar Header -->
-    <div class="h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
+    <div class="dbx-pane-header h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
       <div class="flex items-center space-x-2">
         <div class="flex items-center space-x-1.5 font-bold text-foreground">
           <Terminal class="w-3.5 h-3.5 text-primary" />

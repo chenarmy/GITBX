@@ -13,7 +13,7 @@ const consoleStore = useConsoleStore();
 </script>
 
 <template>
-  <footer class="h-6 bg-card border-t border-border flex items-center justify-between px-3 text-[11px] select-none text-muted-foreground z-30 shadow-2xs">
+  <footer class="dbx-footer h-6 bg-card border-t border-border flex items-center justify-between px-3 text-[11px] select-none text-muted-foreground z-30">
     <!-- Left: Repo & Branch Status -->
     <div class="flex items-center space-x-3">
       <div class="flex items-center space-x-1 font-medium text-foreground truncate max-w-xs">

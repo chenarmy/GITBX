@@ -64,12 +64,12 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30 shadow-sm"
+    class="dbx-header h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30"
   >
     <!-- Left: App Logo & Repo Dropdown Selector -->
     <div class="flex items-center space-x-2">
       <div class="flex items-center space-x-1.5 font-bold tracking-tight cursor-pointer hover:opacity-85 transition">
-        <div class="w-5 h-5 rounded bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
+        <div class="w-5 h-5 rounded-sm bg-primary flex items-center justify-center text-primary-foreground">
           <FolderGit2 class="w-3.5 h-3.5" />
         </div>
         <span class="text-sm font-black tracking-wider text-foreground">GITBX</span>
@@ -81,7 +81,7 @@ onUnmounted(() => {
       <div id="repo-dropdown-container" class="relative">
         <button
           @click.stop="isRepoDropdownOpen = !isRepoDropdownOpen"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-secondary hover:bg-accent border border-border text-foreground font-medium transition active:scale-95 max-w-[260px] shadow-sm"
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-secondary hover:bg-accent border border-border text-foreground font-medium transition active:scale-95 max-w-[260px]"
         >
           <FolderOpen class="w-3.5 h-3.5 text-primary shrink-0" />
           <span class="truncate">{{ repoStore.repoInfo?.name || 'Select Repository' }}</span>
@@ -159,7 +159,7 @@ onUnmounted(() => {
     <div class="flex items-center space-x-1.5">
       <button
         @click="aiStore.openAiModal()"
-        class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 dark:border-indigo-800 active:scale-95 transition shadow-sm font-medium"
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 active:scale-95 transition font-medium"
         title="Open AI Commit & Assistant Modal"
       >
         <Sparkles class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />

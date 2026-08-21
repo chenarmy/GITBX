@@ -115,7 +115,7 @@ async function handleCherryPick() {
 </script>
 
 <template>
-  <div class="flex flex-col bg-card border-b border-border">
+  <div class="dbx-toolbar flex flex-col bg-card border-b border-border">
     <!-- In-progress Operation Banner (Merge / Rebase / Cherry-pick) -->
     <div
       v-if="repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
@@ -186,7 +186,7 @@ async function handleCherryPick() {
     </div>
 
     <!-- Main Toolbar Row -->
-    <div class="h-10 flex items-center justify-between px-3 text-xs select-none">
+    <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3 text-xs select-none">
       <div class="flex items-center space-x-1">
         <!-- Fetch Button -->
         <button

@@ -42,12 +42,12 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
 </script>
 
 <template>
-  <aside class="w-60 bg-muted/30 dark:bg-card border-r border-border flex flex-col select-none overflow-y-auto text-xs shadow-sm">
+  <aside class="dbx-sidebar w-60 bg-muted/30 dark:bg-card border-r border-border flex flex-col select-none overflow-y-auto text-xs">
     <!-- Repositories Section (SourceTree style) -->
     <div class="p-2 border-b border-border">
       <div
         @click="isReposOpen = !isReposOpen"
-        class="flex items-center justify-between text-muted-foreground font-bold px-1.5 mb-1 text-[10px] tracking-wider uppercase cursor-pointer hover:text-foreground"
+        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 mb-1 text-[10px] tracking-wider uppercase cursor-pointer hover:text-foreground"
       >
         <div class="flex items-center space-x-1">
           <component :is="isReposOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
@@ -91,7 +91,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
     <div class="p-2 border-b border-border">
       <div
         @click="isBranchesOpen = !isBranchesOpen"
-        class="flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
       >
         <div class="flex items-center space-x-1">
           <component :is="isBranchesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
@@ -139,7 +139,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
     <div class="p-2 border-b border-border">
       <div
         @click="isRemotesOpen = !isRemotesOpen"
-        class="flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
       >
         <div class="flex items-center space-x-1">
           <component :is="isRemotesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
@@ -165,7 +165,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
     <div class="p-2 border-b border-border">
       <div
         @click="isTagsOpen = !isTagsOpen"
-        class="flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
       >
         <div class="flex items-center space-x-1">
           <component :is="isTagsOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
@@ -196,7 +196,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
     <div class="p-2">
       <div
         @click="isStashesOpen = !isStashesOpen"
-        class="flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
       >
         <div class="flex items-center space-x-1">
           <component :is="isStashesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />

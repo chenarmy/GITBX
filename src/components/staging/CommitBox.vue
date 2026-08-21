@@ -40,7 +40,7 @@ async function handleCommit() {
 </script>
 
 <template>
-  <div class="h-44 bg-card border-t border-border flex flex-col p-2.5 text-xs select-none shrink-0">
+  <div class="dbx-commit-box h-44 bg-card border-t border-border flex flex-col p-2.5 text-xs select-none shrink-0">
     <!-- Conventional Commit shortcuts & AI Trigger -->
     <div class="flex items-center justify-between mb-1.5 gap-1">
       <div class="flex items-center flex-wrap gap-1 overflow-hidden">
@@ -56,7 +56,7 @@ async function handleCommit() {
 
       <button
         @click="aiStore.openAiModal()"
-        class="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
+        class="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
       >
         <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
         <span>AI Msg</span>
@@ -67,7 +67,7 @@ async function handleCommit() {
     <textarea
       v-model="commitMessage"
       placeholder="Commit summary (e.g. feat: add Canvas graph view)..."
-      class="flex-1 w-full bg-background border border-border rounded-md p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground shadow-xs min-h-[60px]"
+      class="flex-1 w-full bg-background border border-border rounded-sm p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground min-h-[60px]"
     ></textarea>
 
     <!-- Bottom Actions: Author info & Commit Button -->

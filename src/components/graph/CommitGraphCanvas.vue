@@ -135,9 +135,9 @@ function formatTime(timestamp: number) {
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
+  <div class="dbx-graph flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
     <!-- Header row -->
-    <div class="h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
+    <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
       <div class="w-20 pl-2">Graph</div>
       <div class="flex-1 pl-2">Description</div>
       <div class="w-32">Author</div>

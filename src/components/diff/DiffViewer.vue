@@ -12,9 +12,9 @@ const viewMode = ref<'unified' | 'split'>('unified');
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-card overflow-hidden text-xs">
+  <div class="dbx-diff h-full flex flex-col bg-card overflow-hidden text-xs">
     <!-- Diff Header -->
-    <div class="h-8 bg-muted/40 border-b border-border flex items-center justify-between px-3 select-none">
+    <div class="dbx-pane-header h-8 bg-muted/40 border-b border-border flex items-center justify-between px-3 select-none">
       <div class="flex items-center space-x-2 truncate">
         <FileCode class="w-4 h-4 text-primary shrink-0" />
         <span class="font-bold text-foreground truncate">{{ diffStore.selectedFile || 'No file selected' }}</span>

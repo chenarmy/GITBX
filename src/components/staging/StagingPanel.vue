@@ -51,10 +51,10 @@ async function handleDiscardFile(e: Event, filePath: string) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-card border-r border-border text-xs select-none overflow-hidden">
+  <div class="dbx-staging h-full flex flex-col bg-card border-r border-border text-xs select-none overflow-hidden">
     <!-- Staged Changes Section -->
     <div class="flex-1 flex flex-col min-h-0 border-b border-border">
-      <div class="h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
+      <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>Staged Changes</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
@@ -97,7 +97,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
     <!-- Unstaged Changes & Untracked Files Section -->
     <div class="flex-1 flex flex-col min-h-0">
-      <div class="h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
+      <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>Changes</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
