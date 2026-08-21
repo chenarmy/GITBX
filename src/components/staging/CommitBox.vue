@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
@@ -13,6 +13,17 @@ const notification = useNotificationStore();
 
 const commitMessage = ref('');
 const isSubmitting = ref(false);
+
+// AI Copilot writes the generated message into the shared draft channel.
+// Keep the textarea local for normal editing, but consume that draft here.
+watch(
+  () => aiStore.draftCommitMessage,
+  (draft) => {
+    if (!draft.trim()) return;
+    commitMessage.value = draft;
+    aiStore.draftCommitMessage = '';
+  }
+);
 
 const CONVENTIONAL_TAGS = ['feat', 'fix', 'refactor', 'docs', 'chore', 'perf'];
 
