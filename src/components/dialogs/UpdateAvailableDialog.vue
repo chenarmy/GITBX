@@ -22,7 +22,7 @@ const renderedNotes = computed(() => renderReleaseMarkdown(
         <button
           class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
           :disabled="updates.status === 'downloading'"
-          @click="updates.closeDialog()"
+          @click="updates.cancelUpdate()"
         >
           <X class="h-4 w-4" />
         </button>
@@ -57,7 +57,7 @@ const renderedNotes = computed(() => renderReleaseMarkdown(
         <button
           class="rounded border border-border bg-card px-3 py-1.5 hover:bg-accent disabled:opacity-50"
           :disabled="updates.status === 'downloading'"
-          @click="updates.closeDialog()"
+          @click="updates.cancelUpdate()"
         >
           {{ t('Cancel') }}
         </button>

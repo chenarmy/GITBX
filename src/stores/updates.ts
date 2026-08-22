@@ -192,6 +192,10 @@ export const useUpdatesStore = defineStore('updates', () => {
         return;
       }
 
+      if (settings.skippedVersion && settings.skippedVersion !== latestVersion.value) {
+        await settings.setSkippedVersion(null);
+      }
+
       pendingUpdate = candidate;
       status.value = 'available';
       isDialogOpen.value = true;
@@ -328,8 +332,16 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   const loadMoreReleaseHistory = () => loadReleaseHistory(releasePage.value + 1);
   const refreshReleaseHistory = () => loadReleaseHistory(1, true);
-  const closeDialog = () => {
-    if (status.value !== 'downloading') isDialogOpen.value = false;
+  const cancelUpdate = async () => {
+    if (status.value === 'downloading' || status.value === 'ready') return;
+    isDialogOpen.value = false;
+    status.value = 'idle';
+    error.value = null;
+    progress.value = 0;
+    if (pendingUpdate) {
+      await pendingUpdate.close();
+      pendingUpdate = null;
+    }
   };
 
   return {
@@ -357,6 +369,6 @@ export const useUpdatesStore = defineStore('updates', () => {
     loadReleaseHistory,
     loadMoreReleaseHistory,
     refreshReleaseHistory,
-    closeDialog,
+    cancelUpdate,
   };
 });
