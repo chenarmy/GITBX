@@ -75,3 +75,27 @@ pnpm dev
 ```powershell
 node scripts/verify_all.cjs
 ```
+
+## 桌面版本发布与更新
+
+桌面端使用 Tauri 签名更新，正式更新元数据从
+`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取。普通开发构建保留占位公钥并禁用自动检查；发布工作流会在构建前注入正式公钥。
+
+首次发布前，在 GitHub 仓库中配置：
+
+- Actions Variable `TAURI_UPDATER_PUBLIC_KEY`
+- Actions Secret `TAURI_SIGNING_PRIVATE_KEY`
+- Actions Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
+
+```powershell
+pnpm version:set 0.1.1
+pnpm install
+cargo check --workspace
+pnpm version:check
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+推送 `vX.Y.Z` Tag 后，Release 工作流会构建 Windows、macOS 和 Linux 安装包，上传签名文件及 `latest.json`，并使用对应版本的 Changelog 作为 GitHub Release 正文。

@@ -9,6 +9,8 @@
     "typecheck": "vue-tsc --noEmit",
     "test:rust": "cargo test --workspace",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "version:check": "node scripts/sync-version.mjs --check",
+    "version:set": "node scripts/sync-version.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -23,12 +25,16 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.0.0",
     "@vueuse/core": "^10.9.0",
     "clsx": "^2.1.1",
     "codemirror": "^6.0.1",
     "date-fns": "^3.6.0",
+    "dompurify": "^3.2.6",
     "lucide-vue-next": "^0.378.0",
+    "marked": "^16.2.1",
     "pinia": "^2.1.7",
     "radix-vue": "^1.8.1",
     "tailwind-merge": "^2.3.0",
@@ -46,5 +52,6 @@
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
     "vue-tsc": "^2.0.19"
-  }
+  },
+  "packageManager": "pnpm@9.15.9"
 }

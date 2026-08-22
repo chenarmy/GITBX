@@ -11,6 +11,7 @@ import ConsolePanel from '@/components/layout/ConsolePanel.vue';
 import FooterBar from '@/components/layout/FooterBar.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
 import SettingsModal from '@/components/dialogs/SettingsModal.vue';
+import UpdateAvailableDialog from '@/components/dialogs/UpdateAvailableDialog.vue';
 import AddRepoModal from '@/components/dialogs/AddRepoModal.vue';
 import BranchModal from '@/components/dialogs/BranchModal.vue';
 import TagModal from '@/components/dialogs/TagModal.vue';
@@ -24,9 +25,12 @@ import ToastContainer from '@/components/ui/ToastContainer.vue';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConsoleStore } from '@/stores/console';
+import { useUpdatesStore } from '@/stores/updates';
 
 const repoStore = useRepoStore();
 const consoleStore = useConsoleStore();
+const updatesStore = useUpdatesStore();
+let updateCheckTimer: number | undefined;
 
 function handleKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === 'j')) {
@@ -37,6 +41,10 @@ function handleKeyDown(e: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
+  void updatesStore.initialize();
+  updateCheckTimer = window.setTimeout(() => {
+    void updatesStore.checkForUpdates(false);
+  }, 3500);
   if (repoStore.activeRepoPath) {
     await repoStore.loadRepo();
   } else {
@@ -46,6 +54,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  if (updateCheckTimer !== undefined) window.clearTimeout(updateCheckTimer);
 });
 </script>
 
@@ -105,6 +114,7 @@ onUnmounted(() => {
     <RemoteManagerModal />
     <AiAssistantModal />
     <SettingsModal />
+    <UpdateAvailableDialog />
 
     <!-- Global Toast Container -->
     <ToastContainer />

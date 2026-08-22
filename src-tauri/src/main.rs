@@ -3,13 +3,16 @@
 
 mod commands;
 
-use commands::{ai, auth, config, diff, graph, repo};
+use commands::{ai, auth, config, diff, graph, repo, update};
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             auth::save_credential,
             auth::get_credential,
@@ -17,6 +20,7 @@ fn main() {
             config::load_app_config,
             config::save_app_config,
             config::get_app_config_path,
+            update::open_release_url,
             repo::get_repo_info,
             repo::init_repo,
             repo::clone_repo,

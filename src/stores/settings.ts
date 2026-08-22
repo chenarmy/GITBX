@@ -18,6 +18,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const authorName = ref<string>(localStorage.getItem(CONFIG_KEYS.authorName) || 'Developer');
   const authorEmail = ref<string>(localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io');
   const isSettingsModalOpen = ref<boolean>(false);
+  const skippedVersion = ref<string | null>(localStorage.getItem(CONFIG_KEYS.skippedVersion));
+  const savedLastUpdateCheckAt = Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt));
+  const lastUpdateCheckAt = ref<number | null>(
+    Number.isFinite(savedLastUpdateCheckAt) && savedLastUpdateCheckAt > 0
+      ? savedLastUpdateCheckAt
+      : null,
+  );
 
   const language = locale;
 
@@ -50,7 +57,25 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.setItem(CONFIG_KEYS.authorEmail, authorEmail.value.trim() || 'dev@gitbx.io');
     localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
     localStorage.setItem(CONFIG_KEYS.locale, language.value);
+    if (skippedVersion.value) {
+      localStorage.setItem(CONFIG_KEYS.skippedVersion, skippedVersion.value);
+    } else {
+      localStorage.removeItem(CONFIG_KEYS.skippedVersion);
+    }
+    if (lastUpdateCheckAt.value !== null) {
+      localStorage.setItem(CONFIG_KEYS.lastUpdateCheckAt, String(lastUpdateCheckAt.value));
+    }
     await persistAppConfig();
+  };
+
+  const setSkippedVersion = async (version: string | null) => {
+    skippedVersion.value = version;
+    await persistSettings();
+  };
+
+  const setLastUpdateCheckAt = async (timestamp: number) => {
+    lastUpdateCheckAt.value = timestamp;
+    await persistSettings();
   };
 
   // Apply on startup
@@ -61,10 +86,14 @@ export const useSettingsStore = defineStore('settings', () => {
     authorName,
     authorEmail,
     isSettingsModalOpen,
+    skippedVersion,
+    lastUpdateCheckAt,
     language,
     toggleTheme,
     applyTheme,
     changeLanguage,
     persistSettings,
+    setSkippedVersion,
+    setLastUpdateCheckAt,
   };
 });

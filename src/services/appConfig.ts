@@ -9,6 +9,8 @@ export const CONFIG_KEYS = {
   locale: 'gitbx_locale',
   authorName: 'gitbx_author_name',
   authorEmail: 'gitbx_author_email',
+  skippedVersion: 'gitbx_update_skipped_version',
+  lastUpdateCheckAt: 'gitbx_update_last_check_at',
   ai: 'gitbx_ai_config',
 } as const;
 
@@ -21,7 +23,7 @@ interface PersistedRepository {
 type PersistedAiConfig = Omit<LlmConfig, 'api_key'>;
 
 export interface AppConfig {
-  version: 1;
+  version: 2;
   repositories: {
     items: PersistedRepository[];
     active: string;
@@ -33,6 +35,10 @@ export interface AppConfig {
     authorEmail: string;
   };
   ai: Partial<PersistedAiConfig>;
+  updates: {
+    skippedVersion: string | null;
+    lastCheckAt: number | null;
+  };
 }
 
 const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -72,7 +78,7 @@ function readLocalConfig(): AppConfig {
   const savedLocale = localStorage.getItem(CONFIG_KEYS.locale) as Locale | null;
 
   return {
-    version: 1,
+    version: 2,
     repositories: {
       items: repositories,
       active: localStorage.getItem(CONFIG_KEYS.activeRepository) || '',
@@ -84,6 +90,13 @@ function readLocalConfig(): AppConfig {
       authorEmail: localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io',
     },
     ai,
+    updates: {
+      skippedVersion: localStorage.getItem(CONFIG_KEYS.skippedVersion) || null,
+      lastCheckAt: Number.isFinite(Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt)))
+        && localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt) !== null
+        ? Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt))
+        : null,
+    },
   };
 }
 
@@ -92,6 +105,7 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
   const input = value as Partial<AppConfig>;
   const repositoryInput = input.repositories;
   const settingsInput = input.settings;
+  const updatesInput = input.updates;
   const items = Array.isArray(repositoryInput?.items)
     ? repositoryInput.items.filter(
         (item) => item && typeof item.path === 'string' && typeof item.name === 'string',
@@ -100,7 +114,7 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
   const language = settingsInput?.language;
 
   return {
-    version: 1,
+    version: 2,
     repositories: {
       items,
       active: typeof repositoryInput?.active === 'string'
@@ -120,6 +134,15 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
         : fallback.settings.authorEmail,
     },
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAiConfig(input.ai) : fallback.ai,
+    updates: {
+      skippedVersion: typeof updatesInput?.skippedVersion === 'string'
+        ? updatesInput.skippedVersion
+        : fallback.updates.skippedVersion,
+      lastCheckAt: typeof updatesInput?.lastCheckAt === 'number'
+        && Number.isFinite(updatesInput.lastCheckAt)
+        ? updatesInput.lastCheckAt
+        : fallback.updates.lastCheckAt,
+    },
   };
 }
 
@@ -131,6 +154,16 @@ function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.authorName, config.settings.authorName);
   localStorage.setItem(CONFIG_KEYS.authorEmail, config.settings.authorEmail);
   localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(config.ai));
+  if (config.updates.skippedVersion) {
+    localStorage.setItem(CONFIG_KEYS.skippedVersion, config.updates.skippedVersion);
+  } else {
+    localStorage.removeItem(CONFIG_KEYS.skippedVersion);
+  }
+  if (config.updates.lastCheckAt !== null) {
+    localStorage.setItem(CONFIG_KEYS.lastUpdateCheckAt, String(config.updates.lastCheckAt));
+  } else {
+    localStorage.removeItem(CONFIG_KEYS.lastUpdateCheckAt);
+  }
 }
 
 let writeQueue: Promise<unknown> = Promise.resolve();

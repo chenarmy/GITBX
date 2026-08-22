@@ -26,6 +26,11 @@ export const AI_PROVIDER_PRESETS: Record<Exclude<LlmProvider, 'custom'>, { api_b
   },
 };
 
+const CUSTOM_PROVIDER_DEFAULTS = {
+  api_base: '',
+  model: '',
+} as const;
+
 const defaultConfig: LlmConfig = {
   provider: 'openai',
   api_base: AI_PROVIDER_PRESETS.openai.api_base,
@@ -61,10 +66,14 @@ export const useAiStore = defineStore('ai', () => {
   };
 
   const setProvider = (provider: LlmProvider) => {
+    const previousProvider = llmConfig.value.provider;
     llmConfig.value.provider = provider;
     // Never reuse a credential entered for a different provider.
     llmConfig.value.api_key = '';
-    if (provider !== 'custom') {
+    if (provider === 'custom' && previousProvider !== 'custom') {
+      llmConfig.value.api_base = CUSTOM_PROVIDER_DEFAULTS.api_base;
+      llmConfig.value.model = CUSTOM_PROVIDER_DEFAULTS.model;
+    } else if (provider !== 'custom') {
       const preset = AI_PROVIDER_PRESETS[provider];
       llmConfig.value.api_base = preset.api_base;
       llmConfig.value.model = preset.model;

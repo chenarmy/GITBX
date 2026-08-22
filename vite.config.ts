@@ -1,10 +1,22 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "path";
+import fs from "fs";
+
+const tauriConfig = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "./src-tauri/tauri.conf.json"), "utf8"),
+);
+const updaterPublicKey = tauriConfig.plugins?.updater?.pubkey as string | undefined;
+const updaterConfigured = Boolean(
+  updaterPublicKey && !updaterPublicKey.startsWith("__TAURI_UPDATER_"),
+);
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __GITBX_UPDATER_CONFIGURED__: JSON.stringify(updaterConfigured),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
