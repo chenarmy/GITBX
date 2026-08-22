@@ -4,6 +4,7 @@ import { useAiStore } from '@/stores/ai';
 import { useRepoStore } from '@/stores/repo';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
+import { useI18n } from '@/i18n';
 import {
   Sparkles,
   ShieldCheck,
@@ -17,11 +18,13 @@ const aiStore = useAiStore();
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
+const { t } = useI18n();
 
 const naturalCommand = ref('');
 const isCopied = ref(false);
 
 const hasGeneratedMessage = computed(() => Boolean(aiStore.generatedMessage?.summary?.trim()));
+const naturalCommandPlaceholder = computed(() => t("e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."));
 
 const displayedCommit = computed(() => {
   if (aiStore.generatedMessage) {
@@ -40,7 +43,7 @@ async function generate() {
     const files = repoStore.statusSummary.staged_files;
     if (files.length === 0) {
       aiStore.generatedMessage = null;
-      notification.warning('No staged changes', 'Stage at least one file before generating a commit message.');
+      notification.warning(t('No staged changes'), t('Stage at least one file before generating a commit message.'));
       return;
     }
 
@@ -51,7 +54,7 @@ async function generate() {
       .join('\n');
     if (!diffText.trim()) {
       aiStore.generatedMessage = null;
-      notification.warning('Empty staged diff', 'The staged files have no readable changes to analyze.');
+      notification.warning(t('Empty staged diff'), t('The staged files have no readable changes to analyze.'));
       return;
     }
     aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
@@ -99,7 +102,7 @@ function getFullMessage(): string {
 
 function applyToCommitBox() {
   if (!hasGeneratedMessage.value) {
-    notification.warning('Nothing to apply', 'Generate a commit message from staged changes first.');
+    notification.warning(t('Nothing to apply'), t('Generate a commit message from staged changes first.'));
     return;
   }
   aiStore.applyCommitMessage(getFullMessage());
@@ -151,30 +154,30 @@ function copyMessage() {
             <ShieldCheck class="w-5 h-5 shrink-0" :class="hasGeneratedMessage ? 'text-emerald-400' : 'text-muted-foreground'" />
             <div>
               <div class="font-semibold" :class="hasGeneratedMessage ? 'text-emerald-300' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? 'Potential secrets detected' : hasGeneratedMessage ? 'Security & Secret Check Passed' : 'Waiting for staged changes' }}
+                {{ aiStore.detectedSecrets.length ? t('Potential secrets detected') : hasGeneratedMessage ? t('Security & Secret Check Passed') : t('Waiting for staged changes') }}
               </div>
               <div class="text-[11px]" :class="hasGeneratedMessage ? 'text-emerald-400/80' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? 'Review detected secrets before committing.' : hasGeneratedMessage ? 'The staged diff has been checked for common credential patterns.' : 'Stage at least one file to run the security scan.' }}
+                {{ aiStore.detectedSecrets.length ? t('Review detected secrets before committing.') : hasGeneratedMessage ? t('The staged diff has been checked for common credential patterns.') : t('Stage at least one file to run the security scan.') }}
               </div>
             </div>
           </div>
           <span
             class="px-2 py-0.5 rounded text-[10px] font-bold"
             :class="hasGeneratedMessage ? 'bg-emerald-500/20 text-emerald-300' : 'bg-secondary text-muted-foreground'"
-          >{{ hasGeneratedMessage ? 'CLEAN' : 'WAITING' }}</span>
+          >{{ hasGeneratedMessage ? t('CLEAN') : t('WAITING') }}</span>
         </div>
 
         <!-- 2. AI Commit Message Generator Result -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="font-semibold text-foreground">AI Generated Commit Message (Conventional Commits)</span>
-            <span class="text-[10px] text-muted-foreground">Model: {{ aiStore.llmConfig.model }}</span>
+            <span class="font-semibold text-foreground">{{ t('AI Generated Commit Message (Conventional Commits)') }}</span>
+            <span class="text-[10px] text-muted-foreground">{{ t('Model') }}: {{ aiStore.llmConfig.model }}</span>
           </div>
 
           <div class="p-3 rounded-lg bg-background border border-border space-y-2 font-mono text-[11px]">
-            <div v-if="aiStore.isGenerating" class="text-muted-foreground">Generating from staged changes…</div>
+            <div v-if="aiStore.isGenerating" class="text-muted-foreground">{{ t('Generating from staged changes…') }}</div>
             <div v-else-if="displayedCommit.summary" class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
-            <div v-else class="text-muted-foreground">Stage at least one file to generate a real commit message.</div>
+            <div v-else class="text-muted-foreground">{{ t('Stage at least one file to generate a real commit message.') }}</div>
             <div v-if="displayedCommit.body" class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2">{{ displayedCommit.body }}</div>
           </div>
 
@@ -185,7 +188,7 @@ function copyMessage() {
               class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-blue-400" />
-              <span>{{ isCopied ? 'Copied' : 'Copy Message' }}</span>
+              <span>{{ isCopied ? t('Copied') : t('Copy Message') }}</span>
             </button>
             <button
               @click="applyToCommitBox"
@@ -193,24 +196,24 @@ function copyMessage() {
               class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check class="w-3.5 h-3.5" />
-              <span>Apply to Commit Box</span>
+              <span>{{ t('Apply to Commit Box') }}</span>
             </button>
           </div>
         </div>
 
         <!-- 3. Natural Language Git Assistant -->
         <div class="space-y-2 border-t border-border pt-3">
-          <span class="font-semibold text-foreground">Natural Language Git Assistant</span>
+          <span class="font-semibold text-foreground">{{ t('Natural Language Git Assistant') }}</span>
           <div class="flex items-center space-x-2">
             <input
               v-model="naturalCommand"
               type="text"
-              placeholder="e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."
+              :placeholder="naturalCommandPlaceholder"
               class="flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-xs"
             />
             <button @click="generate" :disabled="aiStore.isGenerating" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50">
               <Send class="w-3.5 h-3.5" />
-              <span>Run</span>
+              <span>{{ t('Run') }}</span>
             </button>
           </div>
         </div>
