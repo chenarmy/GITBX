@@ -33,15 +33,22 @@
     "vue-router": "^4.3.2"
   },
   "devDependencies": {
+    "@esbuild/win32-x64": "0.21.5",
     "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^20.12.12",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
+    "esbuild": "0.21.5",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
     "vue-tsc": "^2.0.19"
   },
-  "packageManager": "pnpm@10.33.4+sha512.1c67b3b359b2d408119ba1ed289f34b8fc3c6873412bec6fd264fbdc82489e510fcbecb9ce9d22dae7f3b76269d8441046014bdca53b9979cd7a561ad631b800"
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "vue-demi"
+    ]
+  }
 }
