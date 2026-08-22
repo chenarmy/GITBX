@@ -38,10 +38,10 @@ async function handleCommit() {
       settingsStore.authorName,
       settingsStore.authorEmail
     );
-    notification.success('Commit Created', commitMessage.value);
+    notification.success(t('Commit Created'), commitMessage.value);
     aiStore.draftCommitMessage = '';
   } catch (err: any) {
-    notification.error('Commit Failed', err?.message);
+    notification.error(t('Commit Failed'), err?.message);
   } finally {
     isSubmitting.value = false;
   }

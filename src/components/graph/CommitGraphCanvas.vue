@@ -6,10 +6,13 @@ import type { GraphCommitNode } from '@/types/graph';
 import CommitContextMenu from '@/components/menus/CommitContextMenu.vue';
 import { Tag } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
+import { arSA, de, enUS, es, fr, ja, zhCN, zhTW } from 'date-fns/locale';
+import type { Locale as DateFnsLocale } from 'date-fns';
+import type { Locale as AppLocale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 const diffStore = useDiffStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -27,6 +30,17 @@ const LANE_COLORS = [
 const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
 const NODE_RADIUS = 4.5;
+
+const DATE_LOCALES: Record<AppLocale, DateFnsLocale> = {
+  en: enUS,
+  ja,
+  de,
+  es,
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
+  fr,
+  ar: arSA,
+};
 
 function getLaneColor(lane: number) {
   return LANE_COLORS[lane % LANE_COLORS.length];
@@ -127,11 +141,14 @@ watch(
 );
 
 function formatTime(timestamp: number) {
-  if (!timestamp) return 'recently';
+  if (!timestamp) return t('recently');
   try {
-    return formatDistanceToNow(new Date(timestamp * 1000), { addSuffix: true });
+    return formatDistanceToNow(new Date(timestamp * 1000), {
+      addSuffix: true,
+      locale: DATE_LOCALES[locale.value],
+    });
   } catch {
-    return 'recently';
+    return t('recently');
   }
 }
 </script>

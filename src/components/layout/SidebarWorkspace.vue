@@ -54,12 +54,12 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isReposOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>Repositories ({{ repoStore.repoList.length }})</span>
+          <span>{{ t('Repositories') }} ({{ repoStore.repoList.length }})</span>
         </div>
         <button
           @click.stop="repoStore.isAddRepoModalOpen = true"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-          title="Add Repository"
+          :title="t('Add Repository')"
         >
           <Plus class="w-3.5 h-3.5" />
         </button>
@@ -90,7 +90,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             v-if="repoStore.repoList.length > 1"
             @click.stop="repoStore.removeRepo(repo.path)"
             class="p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 transition"
-            title="Remove from Workspace"
+            :title="t('Remove from Workspace')"
           >
             <Trash2 class="w-3 h-3" />
           </button>
@@ -106,12 +106,12 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isBranchesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>Local Branches ({{ repoStore.branches.filter(b => !b.is_remote).length }})</span>
+          <span>{{ t('Local Branches') }} ({{ repoStore.branches.filter(b => !b.is_remote).length }})</span>
         </div>
         <button
           @click.stop="repoStore.isBranchModalOpen = true"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-          title="Create Branch"
+          :title="t('Create Branch')"
         >
           <Plus class="w-3.5 h-3.5" />
         </button>
@@ -137,7 +137,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             <button
               @click.stop="openContextMenu($event, branch)"
               class="p-0.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 transition"
-              title="More actions"
+              :title="t('More actions')"
             >
               <MoreVertical class="w-3 h-3" />
             </button>
@@ -154,7 +154,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isRemotesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>Remote Branches ({{ repoStore.branches.filter(b => b.is_remote).length }})</span>
+          <span>{{ t('Remote Branches') }} ({{ repoStore.branches.filter(b => b.is_remote).length }})</span>
         </div>
       </div>
 
@@ -180,12 +180,12 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isTagsOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>Tags ({{ repoStore.tags.length }})</span>
+          <span>{{ t('Tags') }} ({{ repoStore.tags.length }})</span>
         </div>
         <button
           @click.stop="repoStore.isTagModalOpen = true"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-          title="Create Tag"
+          :title="t('Create Tag')"
         >
           <Plus class="w-3.5 h-3.5" />
         </button>
@@ -211,12 +211,12 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isStashesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>Stashes ({{ repoStore.stashes.length }})</span>
+          <span>{{ t('Stashes') }} ({{ repoStore.stashes.length }})</span>
         </div>
         <button
           @click.stop="repoStore.isStashModalOpen = true"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-          title="Save Stash"
+          :title="t('Save Stash')"
         >
           <Plus class="w-3.5 h-3.5" />
         </button>
@@ -233,7 +233,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 opacity-80 shrink-0" />
             <span class="truncate">{{ stash.message }}</span>
           </div>
-          <span class="text-[10px] text-primary font-bold opacity-0 group-hover:opacity-100">Pop</span>
+          <span class="text-[10px] text-primary font-bold opacity-0 group-hover:opacity-100">{{ t('Pop') }}</span>
         </div>
       </div>
     </div>

@@ -30,12 +30,12 @@ const isPushing = ref(false);
 
 async function handleFetch() {
   isFetching.value = true;
-  notification.info('Git Fetch', 'Fetching references from all remotes...');
+  notification.info(t('Git Fetch'), t('Fetching references from all remotes...'));
   try {
     await repoStore.fetchRemote();
-    notification.success('Fetch Completed', 'Remote branches and tags are up to date.');
+    notification.success(t('Fetch Completed'), t('Remote branches and tags are up to date.'));
   } catch (err: any) {
-    notification.error('Fetch Failed', err?.message || 'Remote fetch error');
+    notification.error(t('Fetch Failed'), err?.message || t('Remote fetch error'));
   } finally {
     isFetching.value = false;
   }
@@ -43,12 +43,12 @@ async function handleFetch() {
 
 async function handlePull() {
   isPulling.value = true;
-  notification.info('Git Pull', `Pulling latest changes for '${repoStore.repoInfo?.head_branch || 'main'}'...`);
+  notification.info(t('Git Pull'), t("Pulling latest changes for '{branch}'...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
     await repoStore.pullRemote();
-    notification.success('Pull Completed', 'Working branch updated with upstream commits.');
+    notification.success(t('Pull Completed'), t('Working branch updated with upstream commits.'));
   } catch (err: any) {
-    notification.error('Pull Failed', err?.message || 'Failed to pull from remote');
+    notification.error(t('Pull Failed'), err?.message || t('Failed to pull from remote'));
   } finally {
     isPulling.value = false;
   }
@@ -56,24 +56,24 @@ async function handlePull() {
 
 async function handlePush() {
   isPushing.value = true;
-  notification.info('Git Push', `Pushing commits on '${repoStore.repoInfo?.head_branch || 'main'}' to remote...`);
+  notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
     await repoStore.pushRemote();
-    notification.success('Push Completed', 'Local commits pushed successfully.');
+    notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
-    notification.error('Push Failed', err?.message || 'Failed to push to remote');
+    notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
   } finally {
     isPushing.value = false;
   }
 }
 
 async function handleDiscardAll() {
-  if (await confirmation.confirm({ title: 'Discard All Changes', message: 'Discard all uncommitted working tree changes? This cannot be undone.', danger: true, confirmText: 'Discard All' })) {
+  if (await confirmation.confirm({ title: t('Discard All Changes'), message: t('Discard all uncommitted working tree changes? This cannot be undone.'), danger: true, confirmText: t('Discard All') })) {
     try {
       await repoStore.discardFile();
-      notification.warning('Changes Discarded', 'Clean working tree restored.');
+      notification.warning(t('Changes Discarded'), t('Clean working tree restored.'));
     } catch (err: any) {
-      notification.error('Discard Failed', err?.message);
+      notification.error(t('Discard Failed'), err?.message);
     }
   }
 }
@@ -126,10 +126,10 @@ async function handleCherryPick() {
       <div class="flex items-center space-x-2">
         <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
         <span class="font-bold">
-          {{ repoStore.repoInfo?.is_merging ? 'Merge in progress' : repoStore.repoInfo?.is_rebasing ? 'Rebase in progress' : 'Cherry-pick in progress' }}
+          {{ repoStore.repoInfo?.is_merging ? t('Merge in progress') : repoStore.repoInfo?.is_rebasing ? t('Rebase in progress') : t('Cherry-pick in progress') }}
         </span>
         <span class="text-[11px] opacity-80">
-          (Resolve conflicted files in staging panel, then Continue or Abort)
+          ({{ t('Resolve conflicted files in staging panel, then Continue or Abort') }})
         </span>
       </div>
 
@@ -198,7 +198,7 @@ async function handleCherryPick() {
           :title="t('Fetch from all remotes')"
         >
           <RefreshCw class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" :class="{ 'animate-spin': isFetching }" />
-          <span>{{ isFetching ? 'Fetching...' : 'Fetch' }}</span>
+          <span>{{ isFetching ? t('Fetching...') : t('Fetch') }}</span>
         </button>
 
         <!-- Pull Button -->
@@ -209,7 +209,7 @@ async function handleCherryPick() {
           :title="t('Pull latest changes from upstream')"
         >
           <ArrowDownCircle class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" :class="{ 'animate-bounce': isPulling }" />
-          <span>{{ isPulling ? 'Pulling...' : 'Pull' }}</span>
+          <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
 
         <!-- Push Button -->
@@ -220,7 +220,7 @@ async function handleCherryPick() {
           :title="t('Push local commits to remote')"
         >
           <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
-          <span>{{ isPushing ? 'Pushing...' : 'Push' }}</span>
+          <span>{{ isPushing ? t('Pushing...') : t('Push') }}</span>
         </button>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>

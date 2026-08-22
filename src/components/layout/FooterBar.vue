@@ -20,7 +20,7 @@ const { t } = useI18n();
     <div class="flex items-center space-x-3">
       <div class="flex items-center space-x-1 font-medium text-foreground truncate max-w-xs">
         <FolderGit2 class="w-3 h-3 text-primary shrink-0" />
-        <span class="truncate">{{ repoStore.repoInfo?.path || 'No repository opened' }}</span>
+        <span class="truncate">{{ repoStore.repoInfo?.path || t('No repository opened') }}</span>
       </div>
 
       <div class="h-3 w-[1px] bg-border"></div>
