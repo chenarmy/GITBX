@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
+import { useI18n } from '@/i18n';
 import { Archive, X, AlertCircle } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
+const { t } = useI18n();
 
 const stashMessage = ref('');
 const isSubmitting = ref(false);
@@ -17,7 +19,7 @@ async function handleStash() {
     stashMessage.value = '';
     repoStore.isStashModalOpen = false;
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to stash changes';
+    errorMsg.value = err?.message || t('Failed to stash changes');
   } finally {
     isSubmitting.value = false;
   }
@@ -35,7 +37,7 @@ async function handleStash() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <Archive class="w-4 h-4 text-orange-400" />
-          <span class="font-bold text-sm text-foreground">Stash Changes</span>
+          <span class="font-bold text-sm text-foreground">{{ t('Stash Changes') }}</span>
         </div>
         <button
           @click="repoStore.isStashModalOpen = false"
@@ -55,16 +57,16 @@ async function handleStash() {
         </div>
 
         <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">Stash Message (Optional)</label>
+          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Stash Message (Optional)') }}</label>
           <input
             v-model="stashMessage"
             type="text"
-            placeholder="e.g. WIP: refactoring parser logic"
+            :placeholder="t('e.g. WIP: refactoring parser logic')"
             class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             @keydown.enter="handleStash"
           />
           <p class="text-[10px] text-muted-foreground mt-1">
-            Saves your uncommitted changes (both staged and unstaged) to stash and restores clean working tree.
+            {{ t('Saves your uncommitted changes (both staged and unstaged) to stash and restores clean working tree.') }}
           </p>
         </div>
       </div>
@@ -74,14 +76,14 @@ async function handleStash() {
           @click="repoStore.isStashModalOpen = false"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
-          Cancel
+          {{ t('Cancel') }}
         </button>
         <button
           @click="handleStash"
           :disabled="isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Stashing...' : 'Save Stash' }}
+          {{ isSubmitting ? t('Stashing...') : t('Save Stash') }}
         </button>
       </div>
     </div>
