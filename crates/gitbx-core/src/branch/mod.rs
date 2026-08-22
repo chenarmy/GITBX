@@ -131,7 +131,7 @@ impl Repository {
 
     pub fn list_stashes(&mut self) -> Result<Vec<StashItem>> {
         let mut stashes = Vec::new();
-        self.inner.stash_foreach(|index, message, oid| {
+        self.inner_mut().stash_foreach(|index, message, oid| {
             stashes.push(StashItem {
                 index,
                 message: message.to_string(),

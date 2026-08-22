@@ -68,6 +68,10 @@ impl Repository {
         &self.inner
     }
 
+    pub fn inner_mut(&mut self) -> &mut Git2Repo {
+        &mut self.inner
+    }
+
     pub fn info(&self) -> Result<RepositoryInfo> {
         let name = self
             .path

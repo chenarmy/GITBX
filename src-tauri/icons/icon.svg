@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="716" height="716" viewBox="0 0 716 716" fill="none">
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#111B78"/>
+      <stop offset="1" stop-color="#050B4D"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#11C8FF"/>
+      <stop offset="1" stop-color="#0799E6"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#5C2BFF"/>
+      <stop offset="1" stop-color="#3515D8"/>
+    </linearGradient>
+  </defs>
+  <path d="M62 173 290 42l132 76-228 132L62 173Z" fill="url(#navy)"/>
+  <path d="M39 221c0-13 14-21 25-15l118 68c9 5 14 14 14 24v144c0 14-15 22-27 15L52 389c-8-5-13-14-13-23V221Z" fill="url(#cyan)"/>
+  <path d="m252 240 65-38 65 38v137l-65 38-65-38V240Z" fill="url(#violet)"/>
+  <path d="m338 166 111-64 135 78-111 64-135-78Z" fill="url(#cyan)"/>
+  <path d="m81 492 132-76 132 77-132 76-132-77Z" fill="url(#navy)"/>
+  <path d="m389 428 132-76 135 78-132 76-135 78-70-40 70-116Z" fill="url(#violet)"/>
+</svg>
