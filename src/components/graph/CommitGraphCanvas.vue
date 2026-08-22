@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, nextTick, onMounted, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
 import type { GraphCommitNode } from '@/types/graph';
@@ -127,17 +127,20 @@ onMounted(() => {
 
 watch(
   () => repoStore.commitNodes,
-  () => {
+  async () => {
+    await nextTick();
     drawGraph();
   },
-  { deep: true }
+  { deep: true, flush: 'post' }
 );
 
 watch(
   () => repoStore.selectedCommit,
-  () => {
+  async () => {
+    await nextTick();
     drawGraph();
-  }
+  },
+  { flush: 'post' }
 );
 
 function formatTime(timestamp: number) {
