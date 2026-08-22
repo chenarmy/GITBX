@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { LlmConfig, GeneratedCommitMessage, SecretDetection, LlmProvider } from '@/types/ai';
-
-const AI_CONFIG_KEY = 'gitbx_ai_config';
+import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 export const AI_PROVIDER_PRESETS: Record<Exclude<LlmProvider, 'custom'>, { api_base: string; model: string; models: string[] }> = {
   openai: {
@@ -37,7 +36,7 @@ const defaultConfig: LlmConfig = {
 
 function loadConfig(): LlmConfig {
   try {
-    const saved = localStorage.getItem(AI_CONFIG_KEY);
+    const saved = localStorage.getItem(CONFIG_KEYS.ai);
     if (!saved) return { ...defaultConfig };
     const parsed = JSON.parse(saved) as Partial<LlmConfig>;
     return { ...defaultConfig, ...parsed, api_key: '' };
@@ -55,13 +54,10 @@ export const useAiStore = defineStore('ai', () => {
 
   const llmConfig = ref<LlmConfig>(loadConfig());
 
-  const persistConfig = () => {
-    try {
-      const { api_key: _apiKey, ...safeConfig } = llmConfig.value;
-      localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(safeConfig));
-    } catch {
-      // Settings persistence is best effort; credentials never enter localStorage.
-    }
+  const persistConfig = async () => {
+    const { api_key: _apiKey, ...safeConfig } = llmConfig.value;
+    localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(safeConfig));
+    await persistAppConfig();
   };
 
   const setProvider = (provider: LlmProvider) => {
@@ -73,7 +69,7 @@ export const useAiStore = defineStore('ai', () => {
       llmConfig.value.api_base = preset.api_base;
       llmConfig.value.model = preset.model;
     }
-    persistConfig();
+    void persistConfig().catch(() => undefined);
   };
 
   const openAiModal = () => {

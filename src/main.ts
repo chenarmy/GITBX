@@ -1,11 +1,17 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import App from './App.vue';
 import './assets/main.css';
-import './i18n';
+import { initializeAppConfig } from '@/services/appConfig';
 
-const app = createApp(App);
-const pinia = createPinia();
+async function bootstrap() {
+  await initializeAppConfig();
+  await import('./i18n');
+  const { default: App } = await import('./App.vue');
+  const app = createApp(App);
+  const pinia = createPinia();
 
-app.use(pinia);
-app.mount('#app');
+  app.use(pinia);
+  app.mount('#app');
+}
+
+void bootstrap();

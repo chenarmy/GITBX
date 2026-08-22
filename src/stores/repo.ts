@@ -4,15 +4,13 @@ import type { RepositoryInfo, RepoStatusSummary, BranchItem, RemoteItem, TagItem
 import type { GraphCommitNode } from '@/types/graph';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useConsoleStore } from '@/stores/console';
+import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 export interface ManagedRepo {
   path: string;
   name: string;
   lastOpened: number;
 }
-
-const STORAGE_KEY = 'gitbx_managed_repos';
-const ACTIVE_REPO_KEY = 'gitbx_active_repo';
 
 function emptyStatusSummary(): RepoStatusSummary {
   return {
@@ -26,7 +24,7 @@ function emptyStatusSummary(): RepoStatusSummary {
 
 function getInitialRepos(): ManagedRepo[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CONFIG_KEYS.repositories);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -37,7 +35,7 @@ function getInitialRepos(): ManagedRepo[] {
 
 function getInitialActiveRepo(): string {
   try {
-    const saved = localStorage.getItem(ACTIVE_REPO_KEY);
+    const saved = localStorage.getItem(CONFIG_KEYS.activeRepository);
     if (saved) return saved;
   } catch {}
   return '';
@@ -76,9 +74,12 @@ export const useRepoStore = defineStore('repo', () => {
 
   const saveReposToStorage = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(repoList.value));
-      localStorage.setItem(ACTIVE_REPO_KEY, activeRepoPath.value);
+      localStorage.setItem(CONFIG_KEYS.repositories, JSON.stringify(repoList.value));
+      localStorage.setItem(CONFIG_KEYS.activeRepository, activeRepoPath.value);
     } catch {}
+    void persistAppConfig().catch((error) => {
+      consoleStore.logWarning('Failed to save user configuration.', formatGitError(error));
+    });
   };
 
   const clearLoadedRepoData = () => {

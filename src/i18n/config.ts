@@ -241,3 +241,18 @@ const workspaceMessages: Record<Locale, MessageCatalog> = {
 for (const code of Object.keys(workspaceMessages) as Locale[]) {
   Object.assign(messages[code], workspaceMessages[code]);
 }
+
+const persistenceMessages: Record<Locale, MessageCatalog> = {
+  en: { 'Failed to save settings': 'Failed to save settings', 'Configuration was saved to the user directory.': 'Configuration was saved to the user directory.' },
+  ja: { 'Failed to save settings': '設定の保存に失敗しました', 'Configuration was saved to the user directory.': '設定をユーザーディレクトリに保存しました。' },
+  de: { 'Failed to save settings': 'Einstellungen konnten nicht gespeichert werden', 'Configuration was saved to the user directory.': 'Die Konfiguration wurde im Benutzerverzeichnis gespeichert.' },
+  es: { 'Failed to save settings': 'No se pudo guardar la configuración', 'Configuration was saved to the user directory.': 'La configuración se guardó en el directorio del usuario.' },
+  'zh-CN': { 'Failed to save settings': '保存设置失败', 'Configuration was saved to the user directory.': '配置已保存到用户目录。' },
+  'zh-TW': { 'Failed to save settings': '儲存設定失敗', 'Configuration was saved to the user directory.': '設定已儲存到使用者目錄。' },
+  fr: { 'Failed to save settings': "Échec de l'enregistrement des paramètres", 'Configuration was saved to the user directory.': 'La configuration a été enregistrée dans le répertoire utilisateur.' },
+  ar: { 'Failed to save settings': 'فشل حفظ الإعدادات', 'Configuration was saved to the user directory.': 'تم حفظ الإعدادات في دليل المستخدم.' },
+};
+
+for (const code of Object.keys(persistenceMessages) as Locale[]) {
+  Object.assign(messages[code], persistenceMessages[code]);
+}

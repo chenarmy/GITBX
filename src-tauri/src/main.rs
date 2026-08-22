@@ -3,7 +3,7 @@
 
 mod commands;
 
-use commands::{ai, auth, diff, graph, repo};
+use commands::{ai, auth, config, diff, graph, repo};
 
 fn main() {
     tauri::Builder::default()
@@ -14,6 +14,9 @@ fn main() {
             auth::save_credential,
             auth::get_credential,
             auth::delete_credential,
+            config::load_app_config,
+            config::save_app_config,
+            config::get_app_config_path,
             repo::get_repo_info,
             repo::init_repo,
             repo::clone_repo,

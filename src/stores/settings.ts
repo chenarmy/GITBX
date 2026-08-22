@@ -2,12 +2,11 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { locale, setLocale } from '@/i18n';
 import type { Locale } from '@/i18n/config';
-
-const THEME_KEY = 'gitbx_theme';
+import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 function getInitialTheme(): boolean {
   try {
-    const saved = localStorage.getItem(THEME_KEY);
+    const saved = localStorage.getItem(CONFIG_KEYS.theme);
     if (saved === 'dark') return true;
     if (saved === 'light') return false;
   } catch {}
@@ -16,8 +15,8 @@ function getInitialTheme(): boolean {
 
 export const useSettingsStore = defineStore('settings', () => {
   const isDark = ref<boolean>(getInitialTheme());
-  const authorName = ref<string>('Developer');
-  const authorEmail = ref<string>('dev@gitbx.io');
+  const authorName = ref<string>(localStorage.getItem(CONFIG_KEYS.authorName) || 'Developer');
+  const authorEmail = ref<string>(localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io');
   const isSettingsModalOpen = ref<boolean>(false);
 
   const language = locale;
@@ -31,8 +30,9 @@ export const useSettingsStore = defineStore('settings', () => {
       document.documentElement.classList.add('light');
     }
     try {
-      localStorage.setItem(THEME_KEY, isDark.value ? 'dark' : 'light');
+      localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
     } catch {}
+    void persistAppConfig().catch(() => undefined);
   };
 
   const toggleTheme = () => {
@@ -42,6 +42,15 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const changeLanguage = (nextLocale: Locale) => {
     setLocale(nextLocale);
+    void persistAppConfig().catch(() => undefined);
+  };
+
+  const persistSettings = async () => {
+    localStorage.setItem(CONFIG_KEYS.authorName, authorName.value.trim() || 'Developer');
+    localStorage.setItem(CONFIG_KEYS.authorEmail, authorEmail.value.trim() || 'dev@gitbx.io');
+    localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
+    localStorage.setItem(CONFIG_KEYS.locale, language.value);
+    await persistAppConfig();
   };
 
   // Apply on startup
@@ -56,5 +65,6 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleTheme,
     applyTheme,
     changeLanguage,
+    persistSettings,
   };
 });

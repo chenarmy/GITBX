@@ -24,8 +24,14 @@ async function saveSettings() {
       notification.warning(t('Settings Saved'), error?.message || t('The key remains in memory only.'));
     }
   }
-  aiStore.persistConfig();
-  settingsStore.isSettingsModalOpen = false;
+  try {
+    await aiStore.persistConfig();
+    await settingsStore.persistSettings();
+    notification.success(t('Settings Saved'), t('Configuration was saved to the user directory.'));
+    settingsStore.isSettingsModalOpen = false;
+  } catch (error: any) {
+    notification.error(t('Failed to save settings'), error?.message || String(error));
+  }
 }
 
 function handleProviderChange(event: Event) {
