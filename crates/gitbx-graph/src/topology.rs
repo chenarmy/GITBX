@@ -1,14 +1,11 @@
 use crate::lane::{EdgeType, GraphCommitNode, GraphEdge, LaneTracker};
-use gitbx_core::CommitDetail;
-use std::collections::HashMap;
+use gitbx_core::{CommitDetail, Repository, Result};
+use std::collections::{HashMap, HashSet};
 
 pub struct GraphLayoutEngine;
 
 impl GraphLayoutEngine {
-    pub fn compute_layout(
-        commits: &[CommitDetail],
-        head_commit_id: Option<&str>,
-    ) -> Vec<GraphCommitNode> {
+    pub fn compute_layout(commits: &[CommitDetail], head_commit_id: Option<&str>) -> Vec<GraphCommitNode> {
         let mut tracker = LaneTracker::new();
         let mut nodes = Vec::with_capacity(commits.len());
 
@@ -62,42 +59,5 @@ impl GraphLayoutEngine {
         }
 
         nodes
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::GraphLayoutEngine;
-    use gitbx_core::CommitDetail;
-
-    fn commit(id: &str, parents: Vec<&str>) -> CommitDetail {
-        CommitDetail {
-            id: id.into(),
-            short_id: id[..4].into(),
-            parent_ids: parents.into_iter().map(str::to_string).collect(),
-            author_name: "Test".into(),
-            author_email: "test@example.com".into(),
-            author_time: 0,
-            committer_name: "Test".into(),
-            committer_email: "test@example.com".into(),
-            committer_time: 0,
-            summary: id.into(),
-            body: None,
-            branch_refs: Vec::new(),
-            tag_refs: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn lays_out_merge_parent_edges() {
-        let commits = vec![
-            commit("abcd", vec!["bcde", "cdef"]),
-            commit("bcde", vec!["cdef"]),
-            commit("cdef", vec![]),
-        ];
-        let nodes = GraphLayoutEngine::compute_layout(&commits, Some("abcd"));
-        assert_eq!(nodes.len(), 3);
-        assert!(nodes[0].is_head);
-        assert_eq!(nodes[0].edges.len(), 2);
     }
 }

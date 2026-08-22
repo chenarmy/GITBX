@@ -13,12 +13,6 @@ pub struct SecretScanner {
     rules: Vec<(&'static str, Regex, &'static str)>,
 }
 
-impl Default for SecretScanner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SecretScanner {
     pub fn new() -> Self {
         let rules = vec![

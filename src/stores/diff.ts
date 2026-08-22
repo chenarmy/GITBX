@@ -1,10 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { FileDiff } from '@/types/diff';
-import { useGitApi } from '@/composables/useGitApi';
 
 export const useDiffStore = defineStore('diff', () => {
-  const gitApi = useGitApi();
   const selectedFile = ref<string | null>(null);
   const isStaged = ref<boolean>(false);
   const selectedCommitId = ref<string | null>(null);
@@ -23,11 +21,16 @@ export const useDiffStore = defineStore('diff', () => {
     selectedCommitId.value = commitId || null;
 
     try {
-      if (!repoPath) return;
-      const data = await gitApi.getFileDiff(repoPath, filePath, staged, commitId);
-      if (data.hunks) {
-        activeDiff.value = data as FileDiff;
-      } else if (data.raw_diff) {
+      const params = new URLSearchParams({
+        file: filePath,
+        staged: String(staged),
+      });
+      if (repoPath) params.append('path', repoPath);
+      if (commitId) params.append('commit', commitId);
+
+      const res = await fetch(`/api/repo/diff?${params.toString()}`);
+      const data = await res.json();
+      if (data.raw_diff) {
         parseUnifiedDiff(data.raw_diff, filePath);
       } else {
         // Fallback for untracked / new file
@@ -51,7 +54,6 @@ export const useDiffStore = defineStore('diff', () => {
       }
     } catch (err) {
       console.warn('Failed to fetch diff:', err);
-      activeDiff.value = { old_path: filePath, new_path: filePath, is_binary: false, additions: 0, deletions: 0, hunks: [] };
     }
   };
 

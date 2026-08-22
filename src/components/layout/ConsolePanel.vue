@@ -9,13 +9,11 @@ import {
   X,
   Search,
 } from 'lucide-vue-next';
-import { useI18n } from '@/i18n';
 
 const consoleStore = useConsoleStore();
 const searchQuery = ref('');
 const isCopied = ref(false);
 const scrollContainer = ref<HTMLElement | null>(null);
-const { t } = useI18n();
 
 const filteredLogs = computed(() => {
   let list = consoleStore.logs;
@@ -70,14 +68,14 @@ watch(
 <template>
   <div
     v-if="consoleStore.isOpen"
-    class="dbx-console h-60 bg-card border-t border-border flex flex-col select-none text-xs z-20"
+    class="h-60 bg-card border-t border-border flex flex-col select-none text-xs shadow-2xl z-20"
   >
     <!-- Console Toolbar Header -->
-    <div class="dbx-pane-header h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
+    <div class="h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
       <div class="flex items-center space-x-2">
         <div class="flex items-center space-x-1.5 font-bold text-foreground">
           <Terminal class="w-3.5 h-3.5 text-primary" />
-          <span>{{ t('Output & Operation Console') }}</span>
+          <span>Output & Operation Console</span>
         </div>
 
         <div class="h-3.5 w-[1px] bg-border mx-1"></div>
@@ -89,21 +87,21 @@ watch(
             class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
             :class="consoleStore.activeFilter === 'all' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'"
           >
-            {{ t('All') }} ({{ consoleStore.logs.length }})
+            All ({{ consoleStore.logs.length }})
           </button>
           <button
             @click="consoleStore.activeFilter = 'command'"
             class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
             :class="consoleStore.activeFilter === 'command' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'"
           >
-            {{ t('Git Commands') }} ({{ consoleStore.logs.filter(l => l.level === 'command').length }})
+            Git Commands ({{ consoleStore.logs.filter(l => l.level === 'command').length }})
           </button>
           <button
             @click="consoleStore.activeFilter = 'error'"
             class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
             :class="consoleStore.activeFilter === 'error' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'text-muted-foreground hover:text-foreground'"
           >
-            {{ t('Errors') }} ({{ consoleStore.logs.filter(l => l.level === 'error').length }})
+            Errors ({{ consoleStore.logs.filter(l => l.level === 'error').length }})
           </button>
         </div>
       </div>
@@ -116,7 +114,7 @@ watch(
           <input
             v-model="searchQuery"
             type="text"
-            :placeholder="t('Filter logs...')"
+            placeholder="Filter logs..."
             class="bg-background border border-border rounded-md pl-6 pr-2 py-0.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-36"
           />
         </div>
@@ -124,7 +122,7 @@ watch(
         <button
           @click="handleCopyAll"
           class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition flex items-center space-x-1"
-          :title="t('Copy Console Logs')"
+          title="Copy Console Logs"
         >
           <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5" :class="{ 'text-emerald-500': isCopied }" />
         </button>
@@ -132,7 +130,7 @@ watch(
         <button
           @click="consoleStore.clearLogs"
           class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
-          :title="t('Clear Console')"
+          title="Clear Console"
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>
@@ -140,7 +138,7 @@ watch(
         <button
           @click="consoleStore.isOpen = false"
           class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
-          :title="t('Close Console')"
+          title="Close Console"
         >
           <X class="w-3.5 h-3.5" />
         </button>
@@ -153,7 +151,7 @@ watch(
       class="flex-1 overflow-y-auto p-2 font-mono text-[11px] space-y-1 bg-card text-foreground select-text"
     >
       <div v-if="filteredLogs.length === 0" class="text-center py-6 text-muted-foreground">
-        {{ t('No log entries matching filter.') }}
+        No log entries matching filter.
       </div>
 
       <div

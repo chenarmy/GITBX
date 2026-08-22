@@ -4,7 +4,6 @@ import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
-import { useI18n } from '@/i18n';
 import {
   FolderGit2,
   Sparkles,
@@ -22,7 +21,6 @@ const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
-const { t } = useI18n();
 
 const isRepoDropdownOpen = ref(false);
 
@@ -66,12 +64,12 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="dbx-header h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30"
+    class="h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30 shadow-sm"
   >
     <!-- Left: App Logo & Repo Dropdown Selector -->
     <div class="flex items-center space-x-2">
       <div class="flex items-center space-x-1.5 font-bold tracking-tight cursor-pointer hover:opacity-85 transition">
-        <div class="w-5 h-5 rounded-sm bg-primary flex items-center justify-center text-primary-foreground">
+        <div class="w-5 h-5 rounded bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
           <FolderGit2 class="w-3.5 h-3.5" />
         </div>
         <span class="text-sm font-black tracking-wider text-foreground">GITBX</span>
@@ -83,10 +81,10 @@ onUnmounted(() => {
       <div id="repo-dropdown-container" class="relative">
         <button
           @click.stop="isRepoDropdownOpen = !isRepoDropdownOpen"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-secondary hover:bg-accent border border-border text-foreground font-medium transition active:scale-95 max-w-[260px]"
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-secondary hover:bg-accent border border-border text-foreground font-medium transition active:scale-95 max-w-[260px] shadow-sm"
         >
           <FolderOpen class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span class="truncate">{{ repoStore.repoInfo?.name || t('Select Repository') }}</span>
+          <span class="truncate">{{ repoStore.repoInfo?.name || 'Select Repository' }}</span>
           <ChevronDown class="w-3 h-3 text-muted-foreground shrink-0 transition-transform" :class="{ 'rotate-180': isRepoDropdownOpen }" />
         </button>
 
@@ -96,13 +94,13 @@ onUnmounted(() => {
           class="absolute left-0 top-full mt-1.5 w-72 bg-card border border-border rounded-lg shadow-xl py-1 z-50 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-border/60"
         >
           <div class="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-            <span>{{ t('Managed Repositories') }}</span>
+            <span>Managed Repositories</span>
             <button
               @click.stop="isRepoDropdownOpen = false; repoStore.isAddRepoModalOpen = true"
               class="text-primary hover:underline flex items-center space-x-0.5 font-semibold"
             >
               <Plus class="w-3 h-3" />
-              <span>{{ t('Add') }}</span>
+              <span>Add</span>
             </button>
           </div>
 
@@ -122,7 +120,7 @@ onUnmounted(() => {
                 v-if="repoStore.repoList.length > 1"
                 @click="handleRemoveRepo($event, repo.path)"
                 class="p-1 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 transition shrink-0"
-                :title="t('Remove from Workspace')"
+                title="Remove from Workspace"
               >
                 <Trash2 class="w-3.5 h-3.5" />
               </button>
@@ -135,7 +133,7 @@ onUnmounted(() => {
       <button
         @click="repoStore.isAddRepoModalOpen = true"
         class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
-        :title="t('Add or Clone Repository')"
+        title="Add or Clone Repository"
       >
         <Plus class="w-3.5 h-3.5" />
       </button>
@@ -147,13 +145,13 @@ onUnmounted(() => {
         v-if="repoStore.statusSummary.total_changes > 0"
         class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
       >
-        {{ t('{count} uncommitted changes', { count: repoStore.statusSummary.total_changes }) }}
+        ● {{ repoStore.statusSummary.total_changes }} uncommitted changes
       </span>
       <span
         v-else
         class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
       >
-        ✓ {{ t('Working tree clean') }}
+        ✓ Working tree clean
       </span>
     </div>
 
@@ -161,17 +159,17 @@ onUnmounted(() => {
     <div class="flex items-center space-x-1.5">
       <button
         @click="aiStore.openAiModal()"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 active:scale-95 transition font-medium"
-        :title="t('Open AI Commit & Assistant Modal')"
+        class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 dark:border-indigo-800 active:scale-95 transition shadow-sm font-medium"
+        title="Open AI Commit & Assistant Modal"
       >
         <Sparkles class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-        <span class="text-[11px] font-bold">{{ t('AI Copilot') }}</span>
+        <span class="text-[11px] font-bold">AI Copilot</span>
       </button>
 
       <button
         @click="handleRefresh"
         class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
-        :title="t('Refresh Repository')"
+        title="Refresh Repository"
       >
         <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': repoStore.isLoading }" />
       </button>
@@ -179,7 +177,7 @@ onUnmounted(() => {
       <button
         @click="handleToggleTheme"
         class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
-        :title="t('Toggle Light/Dark Theme')"
+        title="Toggle Light/Dark Theme"
       >
         <Sun v-if="settingsStore.isDark" class="w-3.5 h-3.5 text-amber-400" />
         <Moon v-else class="w-3.5 h-3.5 text-slate-600" />
@@ -188,7 +186,7 @@ onUnmounted(() => {
       <button
         @click="settingsStore.isSettingsModalOpen = true"
         class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
-        :title="t('Open Settings')"
+        title="Open Settings"
       >
         <Settings class="w-3.5 h-3.5" />
       </button>

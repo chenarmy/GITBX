@@ -24,11 +24,7 @@ impl Default for LlmConfig {
 
 #[async_trait]
 pub trait LlmClient: Send + Sync {
-    async fn chat_completion(
-        &self,
-        system_prompt: &str,
-        user_prompt: &str,
-    ) -> anyhow::Result<String>;
+    async fn chat_completion(&self, system_prompt: &str, user_prompt: &str) -> anyhow::Result<String>;
 }
 
 pub struct GenericOpenAiClient {
@@ -47,47 +43,14 @@ impl GenericOpenAiClient {
 
 #[async_trait]
 impl LlmClient for GenericOpenAiClient {
-    async fn chat_completion(
-        &self,
-        system_prompt: &str,
-        user_prompt: &str,
-    ) -> anyhow::Result<String> {
-        let base = self.config.api_base.trim_end_matches('/');
+    async fn chat_completion(&self, system_prompt: &str, user_prompt: &str) -> anyhow::Result<String> {
+        let url = format!("{}/chat/completions", self.config.api_base.trim_end_matches('/'));
+        let mut req = self.client.post(&url);
 
-        if self.config.provider.eq_ignore_ascii_case("claude") {
-            let url = format!("{base}/messages");
-            let mut req = self
-                .client
-                .post(url)
-                .header("anthropic-version", "2023-06-01");
-            if let Some(ref key) = self.config.api_key {
-                req = req.header("x-api-key", key);
-            }
-            let body = serde_json::json!({
-                "model": self.config.model,
-                "max_tokens": 1024,
-                "temperature": self.config.temperature.unwrap_or(0.3),
-                "system": system_prompt,
-                "messages": [{ "role": "user", "content": user_prompt }]
-            });
-            let json: serde_json::Value = req
-                .json(&body)
-                .send()
-                .await?
-                .error_for_status()?
-                .json()
-                .await?;
-            if let Some(content) = json["content"][0]["text"].as_str() {
-                return Ok(content.trim().to_string());
-            }
-            return Err(anyhow::anyhow!("Invalid Anthropic response: {:?}", json));
-        }
-
-        let url = format!("{base}/chat/completions");
-        let mut req = self.client.post(url);
         if let Some(ref key) = self.config.api_key {
             req = req.header("Authorization", format!("Bearer {}", key));
         }
+
         let body = serde_json::json!({
             "model": self.config.model,
             "temperature": self.config.temperature.unwrap_or(0.3),
@@ -96,20 +59,14 @@ impl LlmClient for GenericOpenAiClient {
                 { "role": "user", "content": user_prompt }
             ]
         });
-        let json: serde_json::Value = req
-            .json(&body)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+
+        let res = req.json(&body).send().await?;
+        let json: serde_json::Value = res.json().await?;
+
         if let Some(content) = json["choices"][0]["message"]["content"].as_str() {
             Ok(content.trim().to_string())
         } else {
-            Err(anyhow::anyhow!(
-                "Invalid OpenAI-compatible response: {:?}",
-                json
-            ))
+            Err(anyhow::anyhow!("Invalid response from LLM API: {:?}", json))
         }
     }
 }

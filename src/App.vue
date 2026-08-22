@@ -11,7 +11,6 @@ import ConsolePanel from '@/components/layout/ConsolePanel.vue';
 import FooterBar from '@/components/layout/FooterBar.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
 import SettingsModal from '@/components/dialogs/SettingsModal.vue';
-import UpdateAvailableDialog from '@/components/dialogs/UpdateAvailableDialog.vue';
 import AddRepoModal from '@/components/dialogs/AddRepoModal.vue';
 import BranchModal from '@/components/dialogs/BranchModal.vue';
 import TagModal from '@/components/dialogs/TagModal.vue';
@@ -20,17 +19,12 @@ import MergeModal from '@/components/dialogs/MergeModal.vue';
 import RebaseModal from '@/components/dialogs/RebaseModal.vue';
 import ResetModal from '@/components/dialogs/ResetModal.vue';
 import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
-import RemoteManagerModal from '@/components/dialogs/RemoteManagerModal.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
-import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConsoleStore } from '@/stores/console';
-import { useUpdatesStore } from '@/stores/updates';
 
 const repoStore = useRepoStore();
 const consoleStore = useConsoleStore();
-const updatesStore = useUpdatesStore();
-let updateCheckTimer: number | undefined;
 
 function handleKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.key === 'j')) {
@@ -41,25 +35,16 @@ function handleKeyDown(e: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
-  void updatesStore.initialize();
-  updateCheckTimer = window.setTimeout(() => {
-    void updatesStore.checkForUpdates(false);
-  }, 3500);
-  if (repoStore.activeRepoPath) {
-    await repoStore.loadRepo();
-  } else {
-    repoStore.isAddRepoModalOpen = true;
-  }
+  await repoStore.loadRepo();
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
-  if (updateCheckTimer !== undefined) window.clearTimeout(updateCheckTimer);
 });
 </script>
 
 <template>
-  <div class="dbx-shell h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans">
+  <div class="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans">
     <!-- Top Header -->
     <NavbarHeader />
 
@@ -72,7 +57,7 @@ onUnmounted(() => {
       <SidebarWorkspace />
 
       <!-- 2. Central & Right Workspace Layout -->
-      <div class="flex-1 flex flex-col overflow-hidden min-h-0 dbx-workspace">
+      <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <!-- Top Half: Commit Graph Tree View (45% height) -->
         <div class="h-[45%] flex flex-col overflow-hidden min-h-[160px]">
           <CommitGraphCanvas />
@@ -111,14 +96,11 @@ onUnmounted(() => {
     <RebaseModal />
     <ResetModal />
     <RenameBranchModal />
-    <RemoteManagerModal />
     <AiAssistantModal />
     <SettingsModal />
-    <UpdateAvailableDialog />
 
     <!-- Global Toast Container -->
     <ToastContainer />
-    <ConfirmationDialog />
   </div>
 </template>
 

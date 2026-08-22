@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EdgeType {
@@ -33,12 +34,6 @@ pub struct GraphCommitNode {
 pub struct LaneTracker {
     // lane_index -> expected next commit_id on this lane
     active_lanes: Vec<Option<String>>,
-}
-
-impl Default for LaneTracker {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LaneTracker {

@@ -1,139 +1,24 @@
-use gitbx_core::GitService;
-use gitbx_diff::{ConflictChunk, DiffEngine, FileDiff, Merge3Engine};
+use gitbx_diff::{DiffEngine, FileDiff, Merge3Engine, ConflictChunk};
 use std::fs;
+use std::path::Path;
 
 #[tauri::command]
 pub async fn get_file_diff(
     repo_path: String,
     file_path: String,
     staged: bool,
-    commit_id: Option<String>,
 ) -> Result<FileDiff, String> {
-    let repo = GitService::open(&repo_path).map_err(|e| e.to_string())?;
-    GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
-
-    let (old_bytes, new_bytes) = if let Some(commit_id) = commit_id {
-        let commit = repo
-            .inner()
-            .find_commit(git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        let old = commit
-            .parent(0)
-            .ok()
-            .and_then(|parent| {
-                parent
-                    .tree()
-                    .ok()?
-                    .get_path(std::path::Path::new(&file_path))
-                    .ok()
-                    .and_then(|entry| {
-                        repo.inner()
-                            .find_blob(entry.id())
-                            .ok()
-                            .map(|blob| blob.content().to_vec())
-                    })
-            })
-            .unwrap_or_default();
-        let new = commit
-            .tree()
-            .ok()
-            .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
-            .and_then(|entry| {
-                repo.inner()
-                    .find_blob(entry.id())
-                    .ok()
-                    .map(|blob| blob.content().to_vec())
-            })
-            .unwrap_or_default();
-        (old, new)
-    } else if staged {
-        let old = repo
-            .inner()
-            .head()
-            .ok()
-            .and_then(|head| head.peel_to_commit().ok())
-            .and_then(|commit| {
-                commit
-                    .tree()
-                    .ok()?
-                    .get_path(std::path::Path::new(&file_path))
-                    .ok()
-                    .and_then(|entry| {
-                        repo.inner()
-                            .find_blob(entry.id())
-                            .ok()
-                            .map(|blob| blob.content().to_vec())
-                    })
-            })
-            .unwrap_or_default();
-        let new = repo.index_file(&file_path).unwrap_or_default();
-        (old, new)
+    let full_path = Path::new(&repo_path).join(&file_path);
+    let new_content = if full_path.exists() {
+        fs::read_to_string(&full_path).unwrap_or_default()
     } else {
-        let old = repo
-            .index_file(&file_path)
-            .or_else(|_| {
-                repo.inner()
-                    .head()
-                    .ok()
-                    .and_then(|head| head.peel_to_commit().ok())
-                    .and_then(|commit| {
-                        commit
-                            .tree()
-                            .ok()?
-                            .get_path(std::path::Path::new(&file_path))
-                            .ok()
-                            .and_then(|entry| {
-                                repo.inner()
-                                    .find_blob(entry.id())
-                                    .ok()
-                                    .map(|blob| blob.content().to_vec())
-                            })
-                    })
-                    .ok_or_else(|| gitbx_core::GitbxError::General("No previous version".into()))
-            })
-            .unwrap_or_default();
-        let new = repo.workdir_file(&file_path).unwrap_or_default();
-        (old, new)
+        String::new()
     };
 
-    let is_binary =
-        std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err();
-    if is_binary {
-        return Ok(FileDiff {
-            old_path: Some(file_path.clone()),
-            new_path: Some(file_path),
-            is_binary: true,
-            hunks: Vec::new(),
-            additions: 0,
-            deletions: 0,
-        });
-    }
-    let old_content = String::from_utf8_lossy(&old_bytes);
-    let new_content = String::from_utf8_lossy(&new_bytes);
-    Ok(DiffEngine::diff_strings(
-        &old_content,
-        &new_content,
-        Some(&file_path),
-        Some(&file_path),
-    ))
-}
-
-#[tauri::command]
-pub async fn read_file(repo_path: String, file_path: String) -> Result<String, String> {
-    let repo = GitService::open(&repo_path).map_err(|e| e.to_string())?;
-    GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
-    let bytes = repo.workdir_file(&file_path).map_err(|e| e.to_string())?;
-    String::from_utf8(bytes).map_err(|_| "Binary files cannot be edited as text".to_string())
-}
-
-#[tauri::command]
-pub async fn write_file(
-    repo_path: String,
-    file_path: String,
-    content: String,
-) -> Result<(), String> {
-    let path = GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
-    fs::write(path, content).map_err(|e| e.to_string())
+    // For now we compute diff against empty or existing content
+    let old_content = String::new(); // will be read from Git object in gitbx-core
+    let diff = DiffEngine::diff_strings(&old_content, &new_content, Some(&file_path), Some(&file_path));
+    Ok(diff)
 }
 
 #[tauri::command]

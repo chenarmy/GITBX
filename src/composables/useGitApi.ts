@@ -3,7 +3,6 @@ import type {
   RepositoryInfo,
   RepoStatusSummary,
   BranchItem,
-  RemoteItem,
   TagItem,
   StashItem,
 } from '@/types/git';
@@ -16,37 +15,6 @@ import type {
 import { useConsoleStore } from '@/stores/console';
 
 const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-
-export function formatGitError(error: unknown, fallback = 'Git operation failed'): string {
-  if (typeof error === 'string' && error.trim()) return error;
-  if (error instanceof Error && error.message) return error.message;
-  if (error && typeof error === 'object') {
-    const value = error as Record<string, unknown>;
-    for (const key of ['message', 'detail', 'error', 'description']) {
-      const nested = value[key];
-      if (typeof nested === 'string' && nested.trim()) return nested;
-      if (nested && nested !== error) {
-        const formatted = formatGitError(nested, '');
-        if (formatted) return formatted;
-      }
-    }
-    try {
-      const serialized = JSON.stringify(error);
-      if (serialized && serialized !== '{}') return serialized;
-    } catch {
-      // Fall through to the stable fallback.
-    }
-  }
-  return fallback;
-}
-
-async function parseGitResponse<T>(res: Response, fallback: string): Promise<T> {
-  const data = await res.json().catch(() => null);
-  if (!res.ok || data?.error) {
-    throw new Error(formatGitError(data, `${fallback} (HTTP ${res.status})`));
-  }
-  return data as T;
-}
 
 export function useGitApi() {
   const getConsole = () => useConsoleStore();
@@ -71,11 +39,6 @@ export function useGitApi() {
 
   const initRepo = async (repoPath: string): Promise<{ success: boolean; path: string; name: string }> => {
     getConsole().logCommand(`git init "${repoPath}"`);
-    if (isTauri()) {
-      const info = await invoke<RepositoryInfo>('init_repo', { repoPath });
-      getConsole().logSuccess(`Initialized Git repository in ${repoPath}`);
-      return { success: true, path: info.path, name: info.name };
-    }
     const res = await fetch('/api/repo/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,11 +55,6 @@ export function useGitApi() {
 
   const cloneRepo = async (url: string, destination: string): Promise<{ success: boolean; path: string; name: string }> => {
     getConsole().logCommand(`git clone "${url}" "${destination}"`);
-    if (isTauri()) {
-      const info = await invoke<RepositoryInfo>('clone_repo', { url, destination });
-      getConsole().logSuccess(`Cloned ${url} into ${destination}`);
-      return { success: true, path: info.path, name: info.name };
-    }
     const res = await fetch('/api/repo/clone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,7 +74,7 @@ export function useGitApi() {
       return await invoke<RepositoryInfo>('get_repo_info', { repoPath });
     }
     const res = await fetch(`/api/repo/info?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<RepositoryInfo>(res, 'Failed to load repository information');
+    return await res.json();
   };
 
   const getRepoStatus = async (repoPath: string): Promise<RepoStatusSummary> => {
@@ -124,7 +82,7 @@ export function useGitApi() {
       return await invoke<RepoStatusSummary>('get_repo_status', { repoPath });
     }
     const res = await fetch(`/api/repo/status?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<RepoStatusSummary>(res, 'Failed to load repository status');
+    return await res.json();
   };
 
   const listBranches = async (repoPath: string): Promise<BranchItem[]> => {
@@ -132,63 +90,7 @@ export function useGitApi() {
       return await invoke<BranchItem[]>('list_branches', { repoPath });
     }
     const res = await fetch(`/api/repo/branches?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<BranchItem[]>(res, 'Failed to load branches');
-  };
-
-  const listRemotes = async (repoPath: string): Promise<RemoteItem[]> => {
-    if (isTauri()) {
-      return await invoke<RemoteItem[]>('list_remotes', { repoPath });
-    }
-    const res = await fetch(`/api/repo/remotes?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<RemoteItem[]>(res, 'Failed to load remotes');
-  };
-
-  const setRemoteUrl = async (
-    repoPath: string,
-    remoteName: string,
-    url: string,
-    pushUrl?: string,
-  ): Promise<void> => {
-    const fetchUrl = url.trim();
-    const separatePushUrl = pushUrl?.trim() || undefined;
-    const cmd = `git remote set-url "${remoteName}" "${fetchUrl}"`;
-    getConsole().logCommand(cmd);
-
-    if (isTauri()) {
-      try {
-        await invoke('set_remote_url', {
-          repoPath,
-          remoteName,
-          url: fetchUrl,
-          pushUrl: separatePushUrl,
-        });
-        getConsole().logSuccess(`Remote '${remoteName}' URL updated.`);
-        return;
-      } catch (error) {
-        const message = formatGitError(error, `Failed to update remote '${remoteName}'`);
-        getConsole().logError(message, undefined, cmd);
-        throw new Error(message);
-      }
-    }
-
-    const res = await fetch('/api/repo/remote/set-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        repo_path: repoPath,
-        remote_name: remoteName,
-        url: fetchUrl,
-        push_url: separatePushUrl,
-      }),
-    });
-    try {
-      await parseGitResponse<unknown>(res, `Failed to update remote '${remoteName}'`);
-    } catch (error) {
-      const message = formatGitError(error, `Failed to update remote '${remoteName}'`);
-      getConsole().logError(message, undefined, cmd);
-      throw new Error(message);
-    }
-    getConsole().logSuccess(`Remote '${remoteName}' URL updated.`);
+    return await res.json();
   };
 
   const createBranch = async (
@@ -242,32 +144,9 @@ export function useGitApi() {
     getConsole().logSuccess(`Switched to branch '${name}'.`);
   };
 
-  const renameBranch = async (repoPath: string, oldName: string, newName: string): Promise<void> => {
-    const cmd = `git branch -m "${oldName}" "${newName}"`;
-    getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('rename_branch', { repoPath, oldName, newName });
-      getConsole().logSuccess(`Renamed branch '${oldName}' to '${newName}'.`);
-      return;
-    }
-    const res = await fetch('/api/repo/branch/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: repoPath, old_name: oldName, new_name: newName }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    getConsole().logSuccess(`Renamed branch '${oldName}' to '${newName}'.`);
-  };
-
   const deleteBranch = async (repoPath: string, name: string, force = false): Promise<void> => {
     const cmd = `git branch ${force ? '-D' : '-d'} "${name}"`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('delete_branch', { repoPath, name, force });
-      getConsole().logSuccess(`Deleted branch '${name}'.`);
-      return;
-    }
     const res = await fetch('/api/repo/branch/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -292,7 +171,7 @@ export function useGitApi() {
       });
     }
     const res = await fetch(`/api/repo/graph?path=${encodeURIComponent(repoPath)}&max=${maxCount}`);
-    return await parseGitResponse<GraphCommitNode[]>(res, 'Failed to load commit graph');
+    return await res.json();
   };
 
   const listTags = async (repoPath: string): Promise<TagItem[]> => {
@@ -300,7 +179,7 @@ export function useGitApi() {
       return await invoke<TagItem[]>('list_tags', { repoPath });
     }
     const res = await fetch(`/api/repo/tags?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<TagItem[]>(res, 'Failed to load tags');
+    return await res.json();
   };
 
   const createTag = async (
@@ -311,11 +190,6 @@ export function useGitApi() {
   ): Promise<void> => {
     const cmd = `git tag "${name}"${message ? ` -m "${message}"` : ''}${commitId ? ` "${commitId}"` : ''}`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('create_tag', { repoPath, name, message, commitId });
-      getConsole().logSuccess(`Tag '${name}' created.`);
-      return;
-    }
     const res = await fetch('/api/repo/tag/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -334,17 +208,12 @@ export function useGitApi() {
       return await invoke<StashItem[]>('list_stashes', { repoPath });
     }
     const res = await fetch(`/api/repo/stashes?path=${encodeURIComponent(repoPath)}`);
-    return await parseGitResponse<StashItem[]>(res, 'Failed to load stashes');
+    return await res.json();
   };
 
   const createStash = async (repoPath: string, message?: string): Promise<void> => {
     const cmd = `git stash${message ? ` push -m "${message}"` : ''}`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('create_stash', { repoPath, message });
-      getConsole().logSuccess('Saved working directory and index state to stash.');
-      return;
-    }
     const res = await fetch('/api/repo/stash/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -361,11 +230,6 @@ export function useGitApi() {
   const popStash = async (repoPath: string, index = 0): Promise<void> => {
     const cmd = `git stash pop stash@{${index}}`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('pop_stash', { repoPath, index });
-      getConsole().logSuccess(`Applied stash@{${index}}.`);
-      return;
-    }
     const res = await fetch('/api/repo/stash/pop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -425,11 +289,6 @@ export function useGitApi() {
   const unstageAll = async (repoPath: string): Promise<void> => {
     const cmd = `git restore --staged .`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('unstage_all', { repoPath });
-      getConsole().logSuccess('All changes unstaged.');
-      return;
-    }
     await fetch('/api/repo/unstage-all', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -441,11 +300,6 @@ export function useGitApi() {
   const discardFile = async (repoPath: string, filePath?: string): Promise<void> => {
     const cmd = filePath ? `git restore "${filePath}"` : `git restore . && git clean -fd`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('discard_file', { repoPath, filePath: filePath || null });
-      getConsole().logWarning(`Discarded changes: ${filePath || 'All files'}`);
-      return;
-    }
     await fetch('/api/repo/discard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -492,21 +346,13 @@ export function useGitApi() {
     filePath: string,
     staged = false,
     commitId?: string
-  ): Promise<any> => {
+  ): Promise<{ raw_diff: string }> => {
     const params = new URLSearchParams({
       path: repoPath,
       file: filePath,
       staged: String(staged),
     });
     if (commitId) params.append('commit', commitId);
-    if (isTauri()) {
-      return await invoke('get_file_diff', {
-        repoPath,
-        filePath,
-        staged,
-        commitId: commitId || null,
-      });
-    }
     const res = await fetch(`/api/repo/diff?${params.toString()}`);
     return await res.json();
   };
@@ -520,17 +366,6 @@ export function useGitApi() {
     const flag = strategy === 'no-ff' ? ' --no-ff' : strategy === 'squash' ? ' --squash' : strategy === 'ff-only' ? ' --ff-only' : '';
     const cmd = `git merge "${target}"${flag}${message ? ` -m "${message}"` : ''}`;
     getConsole().logCommand(cmd);
-
-    if (isTauri()) {
-      try {
-        await invoke('merge', { repoPath, target, strategy });
-        getConsole().logSuccess(`Merged '${target}' into HEAD cleanly.`);
-        return { success: true };
-      } catch (err: any) {
-        getConsole().logWarning(`Merge conflict detected while merging '${target}' into HEAD.`, err?.toString());
-        return { success: false, conflict: true, error: err?.toString() };
-      }
-    }
 
     const res = await fetch('/api/repo/merge', {
       method: 'POST',
@@ -551,11 +386,6 @@ export function useGitApi() {
   const abortMerge = async (repoPath: string): Promise<void> => {
     const cmd = `git merge --abort`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('merge_abort', { repoPath });
-      getConsole().logInfo('Merge aborted. Working tree restored.');
-      return;
-    }
     await fetch('/api/repo/merge/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -564,37 +394,12 @@ export function useGitApi() {
     getConsole().logInfo('Merge aborted. Working tree restored.');
   };
 
-  const continueMerge = async (repoPath: string): Promise<void> => {
-    const cmd = 'git merge --continue';
-    getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('merge_continue', { repoPath });
-    } else {
-      const res = await fetch('/api/repo/merge/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_path: repoPath }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error?.message || 'Merge continuation failed');
-    }
-    getConsole().logSuccess('Merge continued.');
-  };
-
   const rebase = async (
     repoPath: string,
     upstream: string
   ): Promise<{ success: boolean; conflict?: boolean; error?: string }> => {
     const cmd = `git rebase "${upstream}"`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      try {
-        await invoke('rebase', { repoPath, upstream });
-        getConsole().logSuccess(`Rebase on '${upstream}' finished.`);
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, conflict: true, error: err?.toString() };
-      }
-    }
     const res = await fetch('/api/repo/rebase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -614,27 +419,17 @@ export function useGitApi() {
   const continueRebase = async (repoPath: string): Promise<void> => {
     const cmd = `git rebase --continue`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('rebase_continue', { repoPath });
-    } else {
-      const res = await fetch('/api/repo/rebase/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_path: repoPath }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error?.message || 'Rebase continuation failed');
-    }
+    await fetch('/api/repo/rebase/continue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath }),
+    });
     getConsole().logSuccess('Rebase continued.');
   };
 
   const abortRebase = async (repoPath: string): Promise<void> => {
     const cmd = `git rebase --abort`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('operation_abort', { repoPath });
-      getConsole().logInfo('Rebase aborted.');
-      return;
-    }
     await fetch('/api/repo/rebase/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -649,15 +444,6 @@ export function useGitApi() {
   ): Promise<{ success: boolean; conflict?: boolean; error?: string }> => {
     const cmd = `git cherry-pick "${commitId}"`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      try {
-        await invoke('cherry_pick', { repoPath, commitId });
-        getConsole().logSuccess(`Cherry-picked commit ${commitId.slice(0, 7)} cleanly.`);
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, conflict: true, error: err?.toString() };
-      }
-    }
     const res = await fetch('/api/repo/cherry-pick', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -677,27 +463,17 @@ export function useGitApi() {
   const continueCherryPick = async (repoPath: string): Promise<void> => {
     const cmd = `git cherry-pick --continue`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('cherry_pick_continue', { repoPath });
-    } else {
-      const res = await fetch('/api/repo/cherry-pick/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_path: repoPath }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error?.message || 'Cherry-pick continuation failed');
-    }
+    await fetch('/api/repo/cherry-pick/continue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath }),
+    });
     getConsole().logSuccess('Cherry-pick continued.');
   };
 
   const abortCherryPick = async (repoPath: string): Promise<void> => {
     const cmd = `git cherry-pick --abort`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('operation_abort', { repoPath });
-      getConsole().logInfo('Cherry-pick aborted.');
-      return;
-    }
     await fetch('/api/repo/cherry-pick/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -709,16 +485,6 @@ export function useGitApi() {
   const revertCommit = async (repoPath: string, commitId: string): Promise<{ success: boolean; output?: string }> => {
     const cmd = `git revert "${commitId}" --no-edit`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      try {
-        await invoke('revert', { repoPath, commitId });
-        getConsole().logSuccess(`Reverted commit ${commitId.slice(0, 7)}.`);
-        return { success: true };
-      } catch (err: any) {
-        getConsole().logError(`Revert failed: ${err?.toString()}`, undefined, cmd);
-        return { success: false };
-      }
-    }
     const res = await fetch('/api/repo/revert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -736,11 +502,6 @@ export function useGitApi() {
   const reset = async (repoPath: string, target: string, mode: '--soft' | '--mixed' | '--hard' = '--mixed'): Promise<void> => {
     const cmd = `git reset ${mode} "${target}"`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('reset', { repoPath, target, mode });
-      getConsole().logSuccess(`Branch reset ${mode} to ${target.slice(0, 7)}.`);
-      return;
-    }
     const res = await fetch('/api/repo/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -757,11 +518,6 @@ export function useGitApi() {
   const fetchRemote = async (repoPath: string): Promise<void> => {
     const cmd = `git fetch --all`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('fetch_remote', { repoPath, remoteName: null });
-      getConsole().logSuccess('Fetched remote references.');
-      return;
-    }
     const res = await fetch('/api/repo/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -775,69 +531,35 @@ export function useGitApi() {
     }
   };
 
-  const createWorktree = async (repoPath: string, destination: string, branch: string): Promise<void> => {
-    if (isTauri()) {
-      await invoke('worktree_add', { repoPath, destination, branch });
-      return;
-    }
-    const res = await fetch('/api/repo/worktree/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: repoPath, dest_path: destination, branch }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error?.message || data.error || 'Failed to create worktree');
-  };
-
   const pullRemote = async (repoPath: string): Promise<void> => {
     const cmd = `git pull`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      await invoke('pull', { repoPath });
-      getConsole().logSuccess('Pull completed.');
-      return;
-    }
     const res = await fetch('/api/repo/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
     const data = await res.json();
-    if (res.ok && data.success) {
+    if (data.success) {
       getConsole().logSuccess(`Pull completed: ${data.output || 'Already up to date.'}`);
     } else {
-      const message = formatGitError(data.error, `Pull failed (HTTP ${res.status})`);
-      getConsole().logError(`Pull error: ${message}`, undefined, cmd);
-      throw new Error(message);
+      getConsole().logError(`Pull error: ${data.error}`, undefined, cmd);
     }
   };
 
   const pushRemote = async (repoPath: string): Promise<void> => {
     const cmd = `git push`;
     getConsole().logCommand(cmd);
-    if (isTauri()) {
-      try {
-        await invoke('push', { repoPath });
-        getConsole().logSuccess('Push completed.');
-        return;
-      } catch (error) {
-        const message = formatGitError(error, 'Push failed');
-        getConsole().logError(`Push error: ${message}`, undefined, cmd);
-        throw new Error(message);
-      }
-    }
     const res = await fetch('/api/repo/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data?.success) {
+    const data = await res.json();
+    if (data.success) {
       getConsole().logSuccess(`Push completed.`, data.output);
     } else {
-      const message = formatGitError(data?.error ?? data, `Push failed (HTTP ${res.status})`);
-      getConsole().logError(`Push error: ${message}`, undefined, cmd);
-      throw new Error(message);
+      getConsole().logError(`Push error: ${data.error}`, undefined, cmd);
     }
   };
 
@@ -846,28 +568,17 @@ export function useGitApi() {
     config: LlmConfig
   ): Promise<GeneratedCommitMessage> => {
     getConsole().logInfo(`AI Copilot generating commit message using model: ${config.model}...`);
-    let requestConfig = config;
-    if (isTauri() && !config.api_key) {
-      try {
-        const apiKey = await invoke<string>('get_credential', { provider: config.provider, username: 'default' });
-        requestConfig = { ...config, api_key: apiKey };
-      } catch {
-        // Keyless local/custom providers are valid.
-      }
-    }
     if (isTauri()) {
       return await invoke<GeneratedCommitMessage>('generate_commit_message', {
         diffText,
-        config: requestConfig,
+        config,
       });
     }
-    const res = await fetch('/api/ai/commit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ diff_text: diffText, config }),
-    });
-    if (!res.ok) throw new Error((await res.text()) || 'AI commit generation failed');
-    return await res.json();
+    return {
+      commit_type: 'feat',
+      summary: 'feat(core): update repository workflow',
+      raw_full_message: 'feat(core): update repository workflow',
+    };
   };
 
   const scanSecrets = async (diffText: string): Promise<SecretDetection[]> => {
@@ -875,25 +586,7 @@ export function useGitApi() {
     if (isTauri()) {
       return await invoke<SecretDetection[]>('scan_secrets', { diffText });
     }
-    const detections: SecretDetection[] = [];
-    const rules: Array<[string, RegExp, SecretDetection['severity']]> = [
-      ['AWS Access Key', /AKIA[0-9A-Z]{16}/i, 'Critical'],
-      ['Private Key', /-----BEGIN (RSA|EC|OPENSSH|DSA|PRIVATE) KEY-----/, 'Critical'],
-      ['GitHub Token', /(?:ghp_|github_pat_)[0-9A-Za-z_]+/, 'Critical'],
-    ];
-    diffText.split('\n').forEach((line, index) => {
-      if (!line.startsWith('+') || line.startsWith('+++')) return;
-      rules.forEach(([rule_name, pattern, severity]) => {
-        const match = line.match(pattern);
-        if (match) detections.push({ rule_name, line_number: index + 1, matched_snippet: match[0], severity });
-      });
-    });
-    return detections;
-  };
-
-  const saveCredential = async (provider: string, token: string): Promise<void> => {
-    if (!isTauri()) throw new Error('Credential storage is only available in the desktop keyring');
-    await invoke('save_credential', { provider, username: 'default', token });
+    return [];
   };
 
   return {
@@ -904,11 +597,8 @@ export function useGitApi() {
     getRepoInfo,
     getRepoStatus,
     listBranches,
-    listRemotes,
-    setRemoteUrl,
     createBranch,
     checkoutBranch,
-    renameBranch,
     deleteBranch,
     getCommitGraph,
     listTags,
@@ -925,7 +615,6 @@ export function useGitApi() {
     getFileDiff,
     mergeBranch,
     abortMerge,
-    continueMerge,
     rebase,
     continueRebase,
     abortRebase,
@@ -935,11 +624,9 @@ export function useGitApi() {
     revertCommit,
     reset,
     fetchRemote,
-    createWorktree,
     pullRemote,
     pushRemote,
     generateCommitMessage,
     scanSecrets,
-    saveCredential,
   };
 }

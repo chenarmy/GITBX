@@ -2,10 +2,8 @@
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { Tag, X, AlertCircle } from 'lucide-vue-next';
-import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
-const { t } = useI18n();
 
 const tagName = ref('');
 const tagMessage = ref('');
@@ -44,7 +42,7 @@ async function handleCreate() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <Tag class="w-4 h-4 text-amber-400" />
-          <span class="font-bold text-sm text-foreground">{{ t('Create New Tag') }}</span>
+          <span class="font-bold text-sm text-foreground">Create New Tag</span>
         </div>
         <button
           @click="repoStore.isTagModalOpen = false"
@@ -64,7 +62,7 @@ async function handleCreate() {
         </div>
 
         <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Tag Name') }}</label>
+          <label class="text-[11px] font-semibold text-muted-foreground">Tag Name</label>
           <input
             v-model="tagName"
             type="text"
@@ -75,7 +73,7 @@ async function handleCreate() {
         </div>
 
         <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Message (Optional)') }}</label>
+          <label class="text-[11px] font-semibold text-muted-foreground">Message (Optional)</label>
           <textarea
             v-model="tagMessage"
             rows="2"
@@ -85,9 +83,9 @@ async function handleCreate() {
         </div>
 
         <div class="p-2.5 rounded bg-muted/40 border border-border space-y-1">
-          <div class="text-muted-foreground">{{ t('Target Commit:') }}</div>
+          <div class="text-muted-foreground">Target Commit:</div>
           <div class="font-mono text-foreground">
-            {{ repoStore.selectedCommit ? `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}` : t('Current HEAD') }}
+            {{ repoStore.selectedCommit ? `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}` : 'Current HEAD' }}
           </div>
         </div>
       </div>
@@ -97,14 +95,14 @@ async function handleCreate() {
           @click="repoStore.isTagModalOpen = false"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
-          {{ t('Cancel') }}
+          Cancel
         </button>
         <button
           @click="handleCreate"
           :disabled="!tagName.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Creating...' : t('Create Tag') }}
+          {{ isSubmitting ? 'Creating...' : 'Create Tag' }}
         </button>
       </div>
     </div>

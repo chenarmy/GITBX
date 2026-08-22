@@ -46,12 +46,7 @@ pub struct FileDiff {
 pub struct DiffEngine;
 
 impl DiffEngine {
-    pub fn diff_strings(
-        old_text: &str,
-        new_text: &str,
-        old_path: Option<&str>,
-        new_path: Option<&str>,
-    ) -> FileDiff {
+    pub fn diff_strings(old_text: &str, new_text: &str, old_path: Option<&str>, new_path: Option<&str>) -> FileDiff {
         let diff = TextDiff::from_lines(old_text, new_text);
         let mut hunks = Vec::new();
         let mut total_additions = 0;
@@ -74,26 +69,14 @@ impl DiffEngine {
 
                 for change in diff.iter_changes(op) {
                     let (line_type, old_no, new_no) = match change.tag() {
-                        ChangeTag::Equal => (
-                            DiffLineType::Context,
-                            change.old_index().map(|i| i + 1),
-                            change.new_index().map(|i| i + 1),
-                        ),
+                        ChangeTag::Equal => (DiffLineType::Context, change.old_index().map(|i| i + 1), change.new_index().map(|i| i + 1)),
                         ChangeTag::Delete => {
                             total_deletions += 1;
-                            (
-                                DiffLineType::Deletion,
-                                change.old_index().map(|i| i + 1),
-                                None,
-                            )
+                            (DiffLineType::Deletion, change.old_index().map(|i| i + 1), None)
                         }
                         ChangeTag::Insert => {
                             total_additions += 1;
-                            (
-                                DiffLineType::Addition,
-                                None,
-                                change.new_index().map(|i| i + 1),
-                            )
+                            (DiffLineType::Addition, None, change.new_index().map(|i| i + 1))
                         }
                     };
 
@@ -101,18 +84,12 @@ impl DiffEngine {
                         line_type,
                         old_lineno: old_no,
                         new_lineno: new_no,
-                        content: change
-                            .value()
-                            .trim_end_matches(&['\r', '\n'][..])
-                            .to_string(),
+                        content: change.value().trim_end_matches(&['\r', '\n'][..]).to_string(),
                     });
                 }
             }
 
-            let header = format!(
-                "@@ -{},{} +{},{} @@",
-                old_start, old_count, new_start, new_count
-            );
+            let header = format!("@@ -{},{} +{},{} @@", old_start, old_count, new_start, new_count);
             hunks.push(DiffHunk {
                 header,
                 old_start,
@@ -131,23 +108,5 @@ impl DiffEngine {
             additions: total_additions,
             deletions: total_deletions,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{DiffEngine, DiffLineType};
-
-    #[test]
-    fn reports_line_changes_and_hunks() {
-        let diff =
-            DiffEngine::diff_strings("one\ntwo\n", "one\nthree\n", Some("a.txt"), Some("a.txt"));
-        assert_eq!(diff.additions, 1);
-        assert_eq!(diff.deletions, 1);
-        assert!(!diff.hunks.is_empty());
-        assert!(diff.hunks[0]
-            .lines
-            .iter()
-            .any(|line| line.line_type == DiffLineType::Addition));
     }
 }

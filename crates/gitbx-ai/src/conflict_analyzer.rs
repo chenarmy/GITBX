@@ -29,17 +29,11 @@ impl ConflictAnalyzer {
         );
 
         let response = client.chat_completion(system_prompt, &user_prompt).await?;
-
+        
         // Attempt parsing JSON
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&response) {
-            let explanation = val["explanation"]
-                .as_str()
-                .unwrap_or("AI Merge suggestion")
-                .to_string();
-            let suggested_content = val["suggested_content"]
-                .as_str()
-                .unwrap_or(ours)
-                .to_string();
+            let explanation = val["explanation"].as_str().unwrap_or("AI Merge suggestion").to_string();
+            let suggested_content = val["suggested_content"].as_str().unwrap_or(&ours).to_string();
             return Ok(ConflictResolutionSuggestion {
                 explanation,
                 suggested_content,

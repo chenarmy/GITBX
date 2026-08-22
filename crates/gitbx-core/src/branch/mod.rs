@@ -1,6 +1,6 @@
-use crate::error::Result;
+use crate::error::{GitbxError, Result};
 use crate::repository::Repository;
-use git2::BranchType;
+use git2::{BranchType, Direction};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,17 +42,13 @@ impl Repository {
             let target_commit_id = branch.get().peel_to_commit()?.id().to_string();
 
             let upstream = branch.upstream().ok();
-            let upstream_name = upstream
-                .as_ref()
-                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+            let upstream_name = upstream.as_ref().and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
 
             let mut ahead = 0;
             let mut behind = 0;
 
             if let Some(ref up) = upstream {
-                if let (Ok(local_oid), Ok(up_oid)) =
-                    (branch.get().target().ok_or(()), up.get().target().ok_or(()))
-                {
+                if let (Ok(local_oid), Ok(up_oid)) = (branch.get().target().ok_or(()), up.get().target().ok_or(())) {
                     if let Ok((a, b)) = self.inner().graph_ahead_behind(local_oid, up_oid) {
                         ahead = a;
                         behind = b;
@@ -87,11 +83,7 @@ impl Repository {
     }
 
     pub fn delete_branch(&self, name: &str, is_remote: bool) -> Result<()> {
-        let b_type = if is_remote {
-            BranchType::Remote
-        } else {
-            BranchType::Local
-        };
+        let b_type = if is_remote { BranchType::Remote } else { BranchType::Local };
         let mut branch = self.inner().find_branch(name, b_type)?;
         branch.delete()?;
         Ok(())
@@ -118,18 +110,19 @@ impl Repository {
         let tag_names = self.inner().tag_names(None)?;
         let mut tags = Vec::new();
 
-        for name in tag_names.iter().flatten() {
-            if let Ok(obj) = self.inner().revparse_single(&format!("refs/tags/{}", name)) {
-                let commit_id = obj.peel_to_commit()?.id().to_string();
-                let tag_obj = obj.as_tag();
+        for name_opt in tag_names.iter() {
+            if let Some(name) = name_opt {
+                if let Ok(obj) = self.inner().revparse_single(&format!("refs/tags/{}", name)) {
+                    let commit_id = obj.peel_to_commit()?.id().to_string();
+                    let tag_obj = obj.as_tag();
 
-                tags.push(TagItem {
-                    name: name.to_string(),
-                    target_commit_id: commit_id,
-                    message: tag_obj.and_then(|t| t.message().map(|m| m.to_string())),
-                    tagger_name: tag_obj
-                        .and_then(|t| t.tagger().and_then(|sig| sig.name().map(|n| n.to_string()))),
-                });
+                    tags.push(TagItem {
+                        name: name.to_string(),
+                        target_commit_id: commit_id,
+                        message: tag_obj.and_then(|t| t.message().map(|m| m.to_string())),
+                        tagger_name: tag_obj.and_then(|t| t.tagger().and_then(|sig| sig.name().map(|n| n.to_string()))),
+                    });
+                }
             }
         }
 
@@ -138,7 +131,7 @@ impl Repository {
 
     pub fn list_stashes(&mut self) -> Result<Vec<StashItem>> {
         let mut stashes = Vec::new();
-        self.inner_mut().stash_foreach(|index, message, oid| {
+        self.inner.stash_foreach(|index, message, oid| {
             stashes.push(StashItem {
                 index,
                 message: message.to_string(),

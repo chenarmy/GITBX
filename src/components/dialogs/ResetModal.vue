@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
-import { useNotificationStore } from '@/stores/notification';
 import { RotateCcw, X, AlertTriangle } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
-const notification = useNotificationStore();
 
 const resetMode = ref<'--soft' | '--mixed' | '--hard'>('--mixed');
 const isSubmitting = ref(false);
@@ -17,7 +15,7 @@ async function handleReset() {
     await repoStore.reset(repoStore.selectedCommit.id, resetMode.value);
     repoStore.isResetModalOpen = false;
   } catch (err: any) {
-    notification.error('Reset Failed', err?.message || 'Failed to reset');
+    alert(err?.message || 'Failed to reset');
   } finally {
     isSubmitting.value = false;
   }

@@ -1,7 +1,5 @@
-export type LlmProvider = 'openai' | 'claude' | 'deepseek' | 'ollama' | 'custom';
-
 export interface LlmConfig {
-  provider: LlmProvider;
+  provider: 'openai' | 'claude' | 'deepseek' | 'ollama' | 'custom';
   api_base: string;
   api_key?: string;
   model: string;

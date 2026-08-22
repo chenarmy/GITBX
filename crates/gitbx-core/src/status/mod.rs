@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{GitbxError, Result};
 use crate::repository::Repository;
 use git2::{IndexAddOption, StatusOptions};
 use serde::{Deserialize, Serialize};
@@ -57,9 +57,7 @@ impl Repository {
 
             let mut item = FileStatusItem {
                 path: path.clone(),
-                old_path: entry
-                    .head_to_index()
-                    .and_then(|d| d.old_file().path().map(|p| p.to_string_lossy().to_string())),
+                old_path: entry.head_to_index().and_then(|d| d.old_file().path().map(|p| p.to_string_lossy().to_string())),
                 staged_status: FileDeltaStatus::Unmodified,
                 unstaged_status: FileDeltaStatus::Unmodified,
                 is_staged: false,
@@ -175,29 +173,24 @@ impl Repository {
         Ok(())
     }
 
-    pub fn create_commit(
-        &self,
-        message: &str,
-        author_name: &str,
-        author_email: &str,
-    ) -> Result<String> {
+    pub fn create_commit(&self, message: &str, author_name: &str, author_email: &str) -> Result<String> {
         let mut index = self.inner().index()?;
         let tree_oid = index.write_tree()?;
         let tree = self.inner().find_tree(tree_oid)?;
 
         let sig = git2::Signature::now(author_name, author_email)?;
-        let parent_commit = self
-            .inner()
-            .head()
-            .ok()
-            .and_then(|h| h.peel_to_commit().ok());
+        let parent_commit = self.inner().head().ok().and_then(|h| h.peel_to_commit().ok());
 
-        let parents: Vec<&git2::Commit> =
-            parent_commit.as_ref().map(|c| vec![c]).unwrap_or_default();
+        let parents: Vec<&git2::Commit> = parent_commit.as_ref().map(|c| vec![c]).unwrap_or_default();
 
-        let commit_oid = self
-            .inner()
-            .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
+        let commit_oid = self.inner().commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            message,
+            &tree,
+            &parents,
+        )?;
 
         Ok(commit_oid.to_string())
     }

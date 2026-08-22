@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/gitbx-contracts",
     "crates/gitbx-core",
     "crates/gitbx-graph",
     "crates/gitbx-diff",
@@ -12,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
 authors = ["GITBX Team"]
 license = "MIT OR Apache-2.0"
@@ -28,11 +27,9 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 git2 = { version = "0.19", default-features = false, features = ["https", "ssh"] }
+gix = { version = "0.66", default-features = false }
 keyring = "2.1"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 futures = "0.3"
 similar = { version = "2.6", features = ["inline"] }
 async-trait = "0.1"
-uuid = { version = "1.8", features = ["v4", "serde"] }
-regex = "1.10"
-notify = "6.1"

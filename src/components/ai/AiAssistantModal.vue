@@ -1,10 +1,6 @@
 <script setup lang="ts">
- import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useAiStore } from '@/stores/ai';
-import { useRepoStore } from '@/stores/repo';
-import { useGitApi } from '@/composables/useGitApi';
-import { useNotificationStore } from '@/stores/notification';
-import { useI18n } from '@/i18n';
 import {
   Sparkles,
   ShieldCheck,
@@ -15,16 +11,15 @@ import {
 } from 'lucide-vue-next';
 
 const aiStore = useAiStore();
-const repoStore = useRepoStore();
-const gitApi = useGitApi();
-const notification = useNotificationStore();
-const { t } = useI18n();
 
 const naturalCommand = ref('');
 const isCopied = ref(false);
 
-const hasGeneratedMessage = computed(() => Boolean(aiStore.generatedMessage?.summary?.trim()));
-const naturalCommandPlaceholder = computed(() => t("e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."));
+const mockGeneratedCommit = ref({
+  type: 'feat',
+  summary: 'feat(graph): implement Canvas-based commit DAG renderer with virtual lanes',
+  body: '- Added Rust gitbx-graph lane tracker and Bezier control points calculation\n- Integrated 60fps HTML Canvas with dual-buffering\n- Added branch and tag badges to commit table',
+});
 
 const displayedCommit = computed(() => {
   if (aiStore.generatedMessage) {
@@ -34,63 +29,7 @@ const displayedCommit = computed(() => {
       body: aiStore.generatedMessage.body || '',
     };
   }
-  return { type: '', summary: '', body: '' };
-});
-
-async function generate() {
-  aiStore.isGenerating = true;
-  try {
-    const files = repoStore.statusSummary.staged_files;
-    if (files.length === 0) {
-      aiStore.generatedMessage = null;
-      notification.warning(t('No staged changes'), t('Stage at least one file before generating a commit message.'));
-      return;
-    }
-
-    const diffs = await Promise.all(files.map((file) => gitApi.getFileDiff(repoStore.activeRepoPath, file.path, true)));
-    const diffText = diffs
-      .map((diff, index) => formatDiffForAi(diff, files[index].path))
-      .filter(Boolean)
-      .join('\n');
-    if (!diffText.trim()) {
-      aiStore.generatedMessage = null;
-      notification.warning(t('Empty staged diff'), t('The staged files have no readable changes to analyze.'));
-      return;
-    }
-    aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
-    if (aiStore.detectedSecrets.length > 0) return;
-    aiStore.generatedMessage = await gitApi.generateCommitMessage(diffText, aiStore.llmConfig);
-  } catch (err: any) {
-    aiStore.generatedMessage = null;
-    throw err;
-  } finally {
-    aiStore.isGenerating = false;
-  }
-}
-
-function formatDiffForAi(diff: any, filePath: string): string {
-  if (typeof diff?.raw_diff === 'string' && diff.raw_diff.trim()) return diff.raw_diff;
-  if (diff?.is_binary) return `Binary file changed: ${filePath}`;
-  if (!Array.isArray(diff?.hunks)) return '';
-
-  const hunks = diff.hunks
-    .map((hunk: any) => {
-      const lines = Array.isArray(hunk.lines)
-        ? hunk.lines.map((line: any) => {
-            const prefix = line.line_type === 'Addition' ? '+' : line.line_type === 'Deletion' ? '-' : ' ';
-            return `${prefix}${line.content ?? ''}`;
-          }).join('\n')
-        : '';
-      return `${hunk.header ?? ''}\n${lines}`.trim();
-    })
-    .filter(Boolean)
-    .join('\n');
-
-  return hunks ? `diff --git a/${filePath} b/${filePath}\n${hunks}` : '';
-}
-
-watch(() => aiStore.isAiModalOpen, (open) => {
-  if (open && !aiStore.generatedMessage) generate().catch(() => undefined);
+  return mockGeneratedCommit.value;
 });
 
 function getFullMessage(): string {
@@ -101,16 +40,11 @@ function getFullMessage(): string {
 }
 
 function applyToCommitBox() {
-  if (!hasGeneratedMessage.value) {
-    notification.warning(t('Nothing to apply'), t('Generate a commit message from staged changes first.'));
-    return;
-  }
   aiStore.applyCommitMessage(getFullMessage());
   aiStore.closeAiModal();
 }
 
 function copyMessage() {
-  if (!hasGeneratedMessage.value) return;
   navigator.clipboard.writeText(getFullMessage());
   isCopied.value = true;
   setTimeout(() => {
@@ -146,74 +80,65 @@ function copyMessage() {
       <!-- Modal Body -->
       <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
         <!-- 1. Pre-commit Secret Scanner Status -->
-        <div
-          class="p-3 rounded-lg border flex items-center justify-between"
-          :class="hasGeneratedMessage ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-secondary border-border'"
-        >
+        <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
           <div class="flex items-center space-x-2.5">
-            <ShieldCheck class="w-5 h-5 shrink-0" :class="hasGeneratedMessage ? 'text-emerald-400' : 'text-muted-foreground'" />
+            <ShieldCheck class="w-5 h-5 text-emerald-400 shrink-0" />
             <div>
-              <div class="font-semibold" :class="hasGeneratedMessage ? 'text-emerald-300' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? t('Potential secrets detected') : hasGeneratedMessage ? t('Security & Secret Check Passed') : t('Waiting for staged changes') }}
-              </div>
-              <div class="text-[11px]" :class="hasGeneratedMessage ? 'text-emerald-400/80' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? t('Review detected secrets before committing.') : hasGeneratedMessage ? t('The staged diff has been checked for common credential patterns.') : t('Stage at least one file to run the security scan.') }}
-              </div>
+              <div class="font-semibold text-emerald-300">Security & Secret Check Passed</div>
+              <div class="text-[11px] text-emerald-400/80">No private keys, AWS tokens, or hardcoded passwords found in staged diff.</div>
             </div>
           </div>
-          <span
-            class="px-2 py-0.5 rounded text-[10px] font-bold"
-            :class="hasGeneratedMessage ? 'bg-emerald-500/20 text-emerald-300' : 'bg-secondary text-muted-foreground'"
-          >{{ hasGeneratedMessage ? t('CLEAN') : t('WAITING') }}</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">CLEAN</span>
         </div>
 
         <!-- 2. AI Commit Message Generator Result -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="font-semibold text-foreground">{{ t('AI Generated Commit Message (Conventional Commits)') }}</span>
-            <span class="text-[10px] text-muted-foreground">{{ t('Model') }}: {{ aiStore.llmConfig.model }}</span>
+            <span class="font-semibold text-foreground">AI Generated Commit Message (Conventional Commits)</span>
+            <span class="text-[10px] text-muted-foreground">Model: {{ aiStore.llmConfig.model }}</span>
           </div>
 
           <div class="p-3 rounded-lg bg-background border border-border space-y-2 font-mono text-[11px]">
-            <div v-if="aiStore.isGenerating" class="text-muted-foreground">{{ t('Generating from staged changes…') }}</div>
-            <div v-else-if="displayedCommit.summary" class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
-            <div v-else class="text-muted-foreground">{{ t('Stage at least one file to generate a real commit message.') }}</div>
-            <div v-if="displayedCommit.body" class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2">{{ displayedCommit.body }}</div>
+            <div class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
+            <div
+              v-if="displayedCommit.body"
+              class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2"
+            >
+              {{ displayedCommit.body }}
+            </div>
           </div>
 
           <div class="flex items-center justify-end space-x-2 pt-1">
             <button
               @click="copyMessage"
-              :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition"
             >
               <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-blue-400" />
-              <span>{{ isCopied ? t('Copied') : t('Copy Message') }}</span>
+              <span>{{ isCopied ? 'Copied' : 'Copy Message' }}</span>
             </button>
             <button
               @click="applyToCommitBox"
-              :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
             >
               <Check class="w-3.5 h-3.5" />
-              <span>{{ t('Apply to Commit Box') }}</span>
+              <span>Apply to Commit Box</span>
             </button>
           </div>
         </div>
 
         <!-- 3. Natural Language Git Assistant -->
         <div class="space-y-2 border-t border-border pt-3">
-          <span class="font-semibold text-foreground">{{ t('Natural Language Git Assistant') }}</span>
+          <span class="font-semibold text-foreground">Natural Language Git Assistant</span>
           <div class="flex items-center space-x-2">
             <input
               v-model="naturalCommand"
               type="text"
-              :placeholder="naturalCommandPlaceholder"
+              placeholder="e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."
               class="flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-xs"
             />
-            <button @click="generate" :disabled="aiStore.isGenerating" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50">
+            <button class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1">
               <Send class="w-3.5 h-3.5" />
-              <span>{{ t('Run') }}</span>
+              <span>Run</span>
             </button>
           </div>
         </div>

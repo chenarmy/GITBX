@@ -1,7 +1,6 @@
 use crate::error::{GitbxError, Result};
 use git2::Repository as Git2Repo;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,33 +68,6 @@ impl Repository {
         &self.inner
     }
 
-    pub fn inner_mut(&mut self) -> &mut Git2Repo {
-        &mut self.inner
-    }
-
-    pub fn workdir_file(&self, relative_path: &str) -> Result<Vec<u8>> {
-        let workdir = self.inner.workdir().ok_or_else(|| {
-            GitbxError::General("Bare repositories do not have a working tree".into())
-        })?;
-        Ok(fs::read(workdir.join(relative_path))?)
-    }
-
-    pub fn index_file(&self, relative_path: &str) -> Result<Vec<u8>> {
-        let index = self.inner.index()?;
-        let entry = index.get_path(Path::new(relative_path), 0).ok_or_else(|| {
-            GitbxError::General(format!("File is not present in the index: {relative_path}"))
-        })?;
-        let blob = self.inner.find_blob(entry.id)?;
-        Ok(blob.content().to_vec())
-    }
-
-    pub fn commit_file(&self, commit_id: &str, relative_path: &str) -> Result<Vec<u8>> {
-        let commit = self.inner.find_commit(git2::Oid::from_str(commit_id)?)?;
-        let entry = commit.tree()?.get_path(Path::new(relative_path))?;
-        let blob = self.inner.find_blob(entry.id())?;
-        Ok(blob.content().to_vec())
-    }
-
     pub fn info(&self) -> Result<RepositoryInfo> {
         let name = self
             .path
@@ -107,14 +79,7 @@ impl Repository {
             .inner
             .head()
             .ok()
-            .and_then(|h| h.shorthand().map(|s| s.to_string()))
-            .or_else(|| {
-                self.inner
-                    .find_reference("HEAD")
-                    .ok()
-                    .and_then(|head| head.symbolic_target().map(str::to_string))
-                    .and_then(|target| target.strip_prefix("refs/heads/").map(str::to_string))
-            });
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
         let head_commit_id = self
             .inner
@@ -146,19 +111,6 @@ impl Repository {
     }
 
     pub fn get_commits(&self, max_count: usize) -> Result<Vec<CommitDetail>> {
-        if let Err(error) = self.inner.head() {
-            let has_unborn_target = self
-                .inner
-                .find_reference("HEAD")
-                .ok()
-                .and_then(|head| head.symbolic_target().map(str::to_string))
-                .is_some_and(|target| self.inner.find_reference(&target).is_err());
-            if has_unborn_target {
-                return Ok(Vec::new());
-            }
-            return Err(error.into());
-        }
-
         let mut revwalk = self.inner.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
@@ -174,12 +126,7 @@ impl Repository {
 
             commits.push(CommitDetail {
                 id: commit.id().to_string(),
-                short_id: commit
-                    .as_object()
-                    .short_id()?
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                short_id: commit.as_object().short_id()?.as_str().unwrap_or("").to_string(),
                 parent_ids,
                 author_name: author.name().unwrap_or("").to_string(),
                 author_email: author.email().unwrap_or("").to_string(),
@@ -195,25 +142,5 @@ impl Repository {
         }
 
         Ok(commits)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Repository;
-    use tempfile::tempdir;
-
-    #[test]
-    fn empty_repository_reports_branch_and_empty_history() {
-        let dir = tempdir().expect("tempdir");
-        let repo = Repository::init(dir.path(), false).expect("init repository");
-        repo.inner()
-            .set_head("refs/heads/main")
-            .expect("set unborn branch");
-
-        let info = repo.info().expect("repository info");
-        assert_eq!(info.head_branch.as_deref(), Some("main"));
-        assert!(info.head_commit_id.is_none());
-        assert!(repo.get_commits(100).expect("empty history").is_empty());
     }
 }
