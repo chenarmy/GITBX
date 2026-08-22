@@ -1,0 +1,114 @@
+name: Release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: --bundles nsis,msi
+          - platform: macos-latest
+            args: --bundles app,dmg
+          - platform: ubuntu-22.04
+            args: --bundles appimage,deb
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm version:check
+
+      - name: Verify tag version
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}".TrimStart('v')
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tagVersion -ne $packageVersion) { throw "Tag $tagVersion does not match package version $packageVersion" }
+
+      - name: Read release notes
+        id: release_notes
+        run: node scripts/release-notes.mjs "${{ github.ref_name }}"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: GITBX ${{ github.ref_name }}
+          releaseBody: ${{ steps.release_notes.outputs.body }}
+          # Keep partially uploaded releases out of /releases/latest.
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}
+
+  publish:
+    name: Verify and publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify updater assets and publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            const names = release.assets.map((asset) => asset.name);
+            const required = [
+              ['latest.json', (name) => name === 'latest.json'],
+              ['Windows NSIS installer', (name) => /_x64-setup\.exe$/.test(name)],
+              ['Windows updater signature', (name) => /_x64-setup\.exe\.sig$/.test(name)],
+              ['macOS updater signature', (name) => /\.app\.tar\.gz\.sig$/.test(name)],
+              ['Linux updater signature', (name) => /\.AppImage\.sig$/.test(name)],
+            ];
+            const missing = required.filter(([, matches]) => !names.some(matches)).map(([label]) => label);
+            if (missing.length) {
+              core.setFailed(`Release remains a draft because assets are missing: ${missing.join(', ')}`);
+              return;
+            }
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              draft: false,
+              prerelease: false,
+              make_latest: 'true',
+            });
+            core.notice(`Published ${tag} with ${names.length} verified assets.`);
