@@ -79,23 +79,24 @@ node scripts/verify_all.cjs
 ## 桌面版本发布与更新
 
 桌面端使用 Tauri 签名更新，正式更新元数据从
-`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取。普通开发构建保留占位公钥并禁用自动检查；发布工作流会在构建前注入正式公钥。
+`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取。updater 公钥随客户端发布，私钥仅用于 CI 签名且不得提交到仓库。配置中保留最后一个已验证版本的元数据地址作为回退，避免不完整 Release 中断更新检查。
 
 首次发布前，在 GitHub 仓库中配置：
 
-- Actions Variable `TAURI_UPDATER_PUBLIC_KEY`
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY`
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
 发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
 
 ```powershell
-pnpm version:set 0.1.1
+pnpm version:set 0.1.3
 pnpm install
 cargo check --workspace
 pnpm version:check
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
-推送 `vX.Y.Z` Tag 后，Release 工作流会构建 Windows、macOS 和 Linux 安装包，上传签名文件及 `latest.json`，并使用对应版本的 Changelog 作为 GitHub Release 正文。
+推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。
+
+`v0.1.0` 尚未包含 updater，必须手动安装一次 `v0.1.1` 或更高版本；之后可直接在应用内下载、签名校验、覆盖安装并重启。

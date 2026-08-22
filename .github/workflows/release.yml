@@ -1,5 +1,9 @@
 name: Release
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     tags:
@@ -52,11 +56,6 @@ jobs:
           $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($tagVersion -ne $packageVersion) { throw "Tag $tagVersion does not match package version $packageVersion" }
 
-      - name: Configure updater public key
-        run: node scripts/configure-updater-key.mjs
-        env:
-          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
-
       - name: Read release notes
         id: release_notes
         run: node scripts/release-notes.mjs "${{ github.ref_name }}"
@@ -70,8 +69,46 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: GITBX ${{ github.ref_name }}
           releaseBody: ${{ steps.release_notes.outputs.body }}
-          releaseDraft: false
+          # Keep partially uploaded releases out of /releases/latest.
+          releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  publish:
+    name: Verify and publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify updater assets and publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            const names = release.assets.map((asset) => asset.name);
+            const required = [
+              ['latest.json', (name) => name === 'latest.json'],
+              ['Windows NSIS installer', (name) => /_x64-setup\.exe$/.test(name)],
+              ['Windows updater signature', (name) => /_x64-setup\.exe\.sig$/.test(name)],
+              ['macOS updater signature', (name) => /\.app\.tar\.gz\.sig$/.test(name)],
+              ['Linux updater signature', (name) => /\.AppImage\.sig$/.test(name)],
+            ];
+            const missing = required.filter(([, matches]) => !names.some(matches)).map(([label]) => label);
+            if (missing.length) {
+              core.setFailed(`Release remains a draft because assets are missing: ${missing.join(', ')}`);
+              return;
+            }
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              draft: false,
+              prerelease: false,
+              make_latest: 'true',
+            });
+            core.notice(`Published ${tag} with ${names.length} verified assets.`);
