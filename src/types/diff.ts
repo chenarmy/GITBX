@@ -37,3 +37,13 @@ export interface ConflictChunk {
       };
   resolved_content?: string;
 }
+
+export interface ConflictFileContent {
+  file_path: string;
+  ancestor?: string;
+  ours?: string;
+  theirs?: string;
+  worktree?: string;
+  chunks: ConflictChunk[];
+  is_binary: boolean;
+}

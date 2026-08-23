@@ -2,6 +2,8 @@
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
+import { useDiffStore } from '@/stores/diff';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -16,9 +18,13 @@ import {
   Play,
   XCircle,
 } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
+const diffStore = useDiffStore();
+const { t } = useI18n();
 
 const isFetching = ref(false);
 const isPulling = ref(false);
@@ -26,12 +32,12 @@ const isPushing = ref(false);
 
 async function handleFetch() {
   isFetching.value = true;
-  notification.info('Git Fetch', 'Fetching references from all remotes...');
+  notification.info(t('Git Fetch'), t('Fetching references from all remotes...'));
   try {
     await repoStore.fetchRemote();
-    notification.success('Fetch Completed', 'Remote branches and tags are up to date.');
+    notification.success(t('Fetch Completed'), t('Remote branches and tags are up to date.'));
   } catch (err: any) {
-    notification.error('Fetch Failed', err?.message || 'Remote fetch error');
+    notification.error(t('Fetch Failed'), err?.message || t('Remote fetch error'));
   } finally {
     isFetching.value = false;
   }
@@ -39,12 +45,18 @@ async function handleFetch() {
 
 async function handlePull() {
   isPulling.value = true;
-  notification.info('Git Pull', `Pulling latest changes for '${repoStore.repoInfo?.head_branch || 'main'}'...`);
+  notification.info(t('Git Pull'), t("Pulling latest changes for '{branch}'...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
     await repoStore.pullRemote();
-    notification.success('Pull Completed', 'Working branch updated with upstream commits.');
+    notification.success(t('Pull Completed'), t('Working branch updated with upstream commits.'));
   } catch (err: any) {
-    notification.error('Pull Failed', err?.message || 'Failed to pull from remote');
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) {
+      diffStore.selectConflictFile(firstConflict);
+      notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    } else {
+      notification.error(t('Pull Failed'), err?.message || t('Failed to pull from remote'));
+    }
   } finally {
     isPulling.value = false;
   }
@@ -52,24 +64,24 @@ async function handlePull() {
 
 async function handlePush() {
   isPushing.value = true;
-  notification.info('Git Push', `Pushing commits on '${repoStore.repoInfo?.head_branch || 'main'}' to remote...`);
+  notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
     await repoStore.pushRemote();
-    notification.success('Push Completed', 'Local commits pushed successfully.');
+    notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
-    notification.error('Push Failed', err?.message || 'Failed to push to remote');
+    notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
   } finally {
     isPushing.value = false;
   }
 }
 
 async function handleDiscardAll() {
-  if (confirm('Discard all uncommitted working tree changes? This cannot be undone.')) {
+  if (await confirmation.confirm({ title: t('Discard All Changes'), message: t('Discard all uncommitted working tree changes? This cannot be undone.'), danger: true, confirmText: t('Discard All') })) {
     try {
       await repoStore.discardFile();
-      notification.warning('Changes Discarded', 'Clean working tree restored.');
+      notification.warning(t('Changes Discarded'), t('Clean working tree restored.'));
     } catch (err: any) {
-      notification.error('Discard Failed', err?.message);
+      notification.error(t('Discard Failed'), err?.message);
     }
   }
 }
@@ -94,11 +106,13 @@ function handleOpenStash() {
 
 async function handleCherryPick() {
   if (repoStore.selectedCommit) {
-    if (confirm(`Cherry-pick commit ${repoStore.selectedCommit.short_id} ("${repoStore.selectedCommit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`)) {
+    if (await confirmation.confirm({ title: 'Cherry-pick Commit', message: `Apply ${repoStore.selectedCommit.short_id} ("${repoStore.selectedCommit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`, danger: true })) {
       try {
         const res = await repoStore.cherryPick(repoStore.selectedCommit.id);
         if (res.conflict) {
           notification.warning('Cherry-pick Conflict', 'Conflicts encountered. Please resolve in the staging panel.');
+          const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+          if (firstConflict) diffStore.selectConflictFile(firstConflict);
         } else {
           notification.success('Cherry-pick Applied', `Commit ${repoStore.selectedCommit.short_id} applied cleanly.`);
         }
@@ -110,10 +124,45 @@ async function handleCherryPick() {
     notification.warning('Select Commit', 'Please click a commit node from the graph below to cherry-pick.');
   }
 }
+
+async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+  if (repoStore.statusSummary.conflicted_files.length > 0) {
+    notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    return;
+  }
+  try {
+    if (operation === 'merge') await repoStore.continueMerge();
+    else if (operation === 'rebase') await repoStore.continueRebase();
+    else await repoStore.continueCherryPick();
+    diffStore.clearSelection();
+    notification.success(t('Operation Continued'), t('The Git operation completed successfully.'));
+  } catch (error: any) {
+    notification.error(t('Continue Failed'), error?.message || String(error));
+  }
+}
+
+async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+  const confirmed = await confirmation.confirm({
+    title: t('Abort Operation'),
+    message: t('Abort the current Git operation and restore the previous working tree?'),
+    danger: true,
+    confirmText: t('Abort'),
+  });
+  if (!confirmed) return;
+  try {
+    if (operation === 'merge') await repoStore.abortMerge();
+    else if (operation === 'rebase') await repoStore.abortRebase();
+    else await repoStore.abortCherryPick();
+    diffStore.clearSelection();
+    notification.info(t('Operation Aborted'), t('The previous working tree was restored.'));
+  } catch (error: any) {
+    notification.error(t('Abort Failed'), error?.message || String(error));
+  }
+}
 </script>
 
 <template>
-  <div class="flex flex-col bg-card border-b border-border">
+  <div class="dbx-toolbar flex flex-col bg-card border-b border-border">
     <!-- In-progress Operation Banner (Merge / Rebase / Cherry-pick) -->
     <div
       v-if="repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
@@ -122,71 +171,82 @@ async function handleCherryPick() {
       <div class="flex items-center space-x-2">
         <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
         <span class="font-bold">
-          {{ repoStore.repoInfo?.is_merging ? 'Merge in progress' : repoStore.repoInfo?.is_rebasing ? 'Rebase in progress' : 'Cherry-pick in progress' }}
+          {{ repoStore.repoInfo?.is_merging ? t('Merge in progress') : repoStore.repoInfo?.is_rebasing ? t('Rebase in progress') : t('Cherry-pick in progress') }}
         </span>
         <span class="text-[11px] opacity-80">
-          (Resolve conflicted files in staging panel, then Continue or Abort)
+          ({{ t('Resolve conflicted files in staging panel, then Continue or Abort') }})
         </span>
       </div>
 
       <div class="flex items-center space-x-2">
         <button
           v-if="repoStore.repoInfo?.is_merging"
-          @click="repoStore.abortMerge()"
+          @click="handleAbortOperation('merge')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Merge</span>
+          <span>{{ t('Abort Merge') }}</span>
+        </button>
+        <button
+          v-if="repoStore.repoInfo?.is_merging"
+          @click="handleContinueOperation('merge')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Play class="w-3 h-3" />
+          <span>{{ t('Continue Merge') }}</span>
         </button>
 
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
-          @click="repoStore.abortRebase()"
+          @click="handleAbortOperation('rebase')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Rebase</span>
+          <span>{{ t('Abort Rebase') }}</span>
         </button>
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
-          @click="repoStore.continueRebase()"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+          @click="handleContinueOperation('rebase')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play class="w-3 h-3" />
-          <span>Continue Rebase</span>
+          <span>{{ t('Continue Rebase') }}</span>
         </button>
 
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
-          @click="repoStore.abortCherryPick()"
+          @click="handleAbortOperation('cherry-pick')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
-          <span>Abort Cherry-pick</span>
+          <span>{{ t('Abort Cherry-pick') }}</span>
         </button>
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
-          @click="repoStore.continueCherryPick()"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+          @click="handleContinueOperation('cherry-pick')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play class="w-3 h-3" />
-          <span>Continue Cherry-pick</span>
+          <span>{{ t('Continue Cherry-pick') }}</span>
         </button>
       </div>
     </div>
 
     <!-- Main Toolbar Row -->
-    <div class="h-10 flex items-center justify-between px-3 text-xs select-none">
+    <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3 text-xs select-none">
       <div class="flex items-center space-x-1">
         <!-- Fetch Button -->
         <button
           @click="handleFetch"
           :disabled="isFetching"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Fetch from all remotes"
+          :title="t('Fetch from all remotes')"
         >
           <RefreshCw class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" :class="{ 'animate-spin': isFetching }" />
-          <span>{{ isFetching ? 'Fetching...' : 'Fetch' }}</span>
+          <span>{{ isFetching ? t('Fetching...') : t('Fetch') }}</span>
         </button>
 
         <!-- Pull Button -->
@@ -194,10 +254,10 @@ async function handleCherryPick() {
           @click="handlePull"
           :disabled="isPulling"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Pull latest changes from upstream"
+          :title="t('Pull latest changes from upstream')"
         >
           <ArrowDownCircle class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" :class="{ 'animate-bounce': isPulling }" />
-          <span>{{ isPulling ? 'Pulling...' : 'Pull' }}</span>
+          <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
 
         <!-- Push Button -->
@@ -205,10 +265,10 @@ async function handleCherryPick() {
           @click="handlePush"
           :disabled="isPushing"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
-          title="Push local commits to remote"
+          :title="t('Push local commits to remote')"
         >
           <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
-          <span>{{ isPushing ? 'Pushing...' : 'Push' }}</span>
+          <span>{{ isPushing ? t('Pushing...') : t('Push') }}</span>
         </button>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>
@@ -217,40 +277,40 @@ async function handleCherryPick() {
         <button
           @click="handleOpenBranch"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Create new branch"
+          :title="t('Create new branch')"
         >
           <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-          <span>Branch</span>
+          <span>{{ t('Branch') }}</span>
         </button>
 
         <!-- Merge Button -->
         <button
           @click="handleOpenMerge"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Merge branch into current branch"
+          :title="t('Merge branch into current branch')"
         >
           <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-          <span>Merge</span>
+          <span>{{ t('Merge') }}</span>
         </button>
 
         <!-- Rebase Button -->
         <button
           @click="handleOpenRebase"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Rebase current branch onto another branch"
+          :title="t('Rebase current branch onto another branch')"
         >
           <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-          <span>Rebase</span>
+          <span>{{ t('Rebase') }}</span>
         </button>
 
         <!-- Cherry-pick Button -->
         <button
           @click="handleCherryPick"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Cherry-pick selected commit into current branch"
+          :title="t('Cherry-pick selected commit into current branch')"
         >
           <GitCommit class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Cherry-pick</span>
+          <span>{{ t('Cherry-pick') }}</span>
         </button>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>
@@ -259,21 +319,21 @@ async function handleCherryPick() {
         <button
           @click="handleOpenStash"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          title="Save uncommitted changes to stash"
+          :title="t('Save uncommitted changes to stash')"
         >
           <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
-          <span>Stash</span>
+          <span>{{ t('Stash') }}</span>
         </button>
 
         <!-- Discard All Button -->
         <button
           @click="handleDiscardAll"
-          :disabled="repoStore.statusSummary.total_changes === 0"
+          :disabled="repoStore.statusSummary.total_changes === 0 || repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 active:scale-95 text-foreground transition font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          title="Discard all uncommitted changes in working tree"
+          :title="t('Discard all uncommitted changes in working tree')"
         >
           <RotateCcw class="w-3.5 h-3.5 text-rose-500" />
-          <span>Discard All</span>
+          <span>{{ t('Discard All') }}</span>
         </button>
       </div>
 
@@ -282,7 +342,7 @@ async function handleCherryPick() {
         <div
           @click="handleOpenBranch"
           class="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-secondary/80 hover:bg-secondary border border-border font-mono text-[11px] cursor-pointer transition active:scale-95 shadow-sm"
-          title="Current checked out branch"
+          :title="t('Current checked out branch')"
         >
           <GitBranch class="w-3.5 h-3.5 text-primary" />
           <span class="font-bold text-foreground">{{ repoStore.repoInfo?.head_branch || 'main' }}</span>

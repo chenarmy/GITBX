@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
+import { useDiffStore } from '@/stores/diff';
 import { GitPullRequest, X, AlertCircle } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
+const diffStore = useDiffStore();
 
 const upstreamBranch = ref('');
 const isSubmitting = ref(false);
@@ -23,9 +25,13 @@ async function handleRebase() {
   try {
     const res = await repoStore.rebase(upstreamBranch.value.trim());
     if (res.conflict) {
-      errorMsg.value = 'Rebase conflicts encountered. Please resolve conflicts or abort.';
-    } else {
       repoStore.isRebaseModalOpen = false;
+      const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+      if (firstConflict) diffStore.selectConflictFile(firstConflict);
+    } else if (res.success) {
+      repoStore.isRebaseModalOpen = false;
+    } else {
+      errorMsg.value = res.error || 'Failed to rebase';
     }
   } catch (err: any) {
     errorMsg.value = err?.message || 'Failed to rebase';

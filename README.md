@@ -40,6 +40,8 @@
 
 AI 提交信息生成、敏感信息扫描和 MCP 工具已接入核心服务。高风险操作仍应在产品层增加确认弹窗和策略配置；跨平台发布包、完整 E2E、系统 Keyring 持久化和 MCP 工具权限 UI 属于后续发布阶段工作。
 
+桌面端设置支持系统代理、HTTP 自定义代理和直连模式。自定义代理可配置端口及认证信息，密码保存于系统密钥环；代理设置用于 HTTP(S) Git 克隆、Fetch、Pull 和 Push，SSH 远程不经过代理。
+
 ## 开发
 
 ```powershell
@@ -89,12 +91,12 @@ node scripts/verify_all.cjs
 发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
 
 ```powershell
-pnpm version:set 0.1.3
+pnpm version:set 0.1.4
 pnpm install
 cargo check --workspace
 pnpm version:check
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。

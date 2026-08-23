@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-ai"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1630,14 +1630,14 @@ dependencies = [
 
 [[package]]
 name = "gitbx-contracts"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "gitbx-core"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-desktop"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1685,20 +1685,22 @@ dependencies = [
 
 [[package]]
 name = "gitbx-diff"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
+ "git2",
  "gitbx-core",
  "serde",
  "serde_json",
  "similar",
+ "tempfile",
  "thiserror 1.0.69",
  "tracing",
 ]
 
 [[package]]
 name = "gitbx-graph"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1711,7 +1713,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-mcp"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "gitbx-core",
@@ -1727,7 +1729,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-web"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "axum",

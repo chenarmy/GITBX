@@ -1,8 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { RepositoryInfo, RepoStatusSummary, BranchItem, TagItem, StashItem } from '@/types/git';
+import type { RepositoryInfo, RepoStatusSummary, BranchItem, RemoteItem, TagItem, StashItem } from '@/types/git';
 import type { GraphCommitNode } from '@/types/graph';
-import { useGitApi } from '@/composables/useGitApi';
+import { formatGitError, useGitApi } from '@/composables/useGitApi';
+import { useConsoleStore } from '@/stores/console';
+import { useDiffStore } from '@/stores/diff';
+import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 export interface ManagedRepo {
   path: string;
@@ -10,41 +13,45 @@ export interface ManagedRepo {
   lastOpened: number;
 }
 
-const STORAGE_KEY = 'gitbx_managed_repos';
-const ACTIVE_REPO_KEY = 'gitbx_active_repo';
-
-function getInitialRepos(): ManagedRepo[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  return [{ path: 'i:/GITBX', name: 'GITBX', lastOpened: Date.now() }];
-}
-
-function getInitialActiveRepo(): string {
-  try {
-    const saved = localStorage.getItem(ACTIVE_REPO_KEY);
-    if (saved) return saved;
-  } catch {}
-  return 'i:/GITBX';
-}
-
-export const useRepoStore = defineStore('repo', () => {
-  const gitApi = useGitApi();
-  const repoList = ref<ManagedRepo[]>(getInitialRepos());
-  const activeRepoPath = ref<string>(getInitialActiveRepo());
-  const repoInfo = ref<RepositoryInfo | null>(null);
-  const statusSummary = ref<RepoStatusSummary>({
+function emptyStatusSummary(): RepoStatusSummary {
+  return {
     staged_files: [],
     unstaged_files: [],
     untracked_files: [],
     conflicted_files: [],
     total_changes: 0,
-  });
+  };
+}
+
+function getInitialRepos(): ManagedRepo[] {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEYS.repositories);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function getInitialActiveRepo(): string {
+  try {
+    const saved = localStorage.getItem(CONFIG_KEYS.activeRepository);
+    if (saved) return saved;
+  } catch {}
+  return '';
+}
+
+export const useRepoStore = defineStore('repo', () => {
+  const gitApi = useGitApi();
+  const consoleStore = useConsoleStore();
+  const diffStore = useDiffStore();
+  const repoList = ref<ManagedRepo[]>(getInitialRepos());
+  const activeRepoPath = ref<string>(getInitialActiveRepo());
+  const repoInfo = ref<RepositoryInfo | null>(null);
+  const statusSummary = ref<RepoStatusSummary>(emptyStatusSummary());
   const branches = ref<BranchItem[]>([]);
+  const remotes = ref<RemoteItem[]>([]);
   const tags = ref<TagItem[]>([]);
   const stashes = ref<StashItem[]>([]);
   const commitNodes = ref<GraphCommitNode[]>([]);
@@ -61,6 +68,7 @@ export const useRepoStore = defineStore('repo', () => {
   const isRebaseModalOpen = ref<boolean>(false);
   const isRenameBranchModalOpen = ref<boolean>(false);
   const isResetModalOpen = ref<boolean>(false);
+  const isRemoteModalOpen = ref<boolean>(false);
 
   // Context target data
   const targetBranchForAction = ref<string>('');
@@ -68,38 +76,43 @@ export const useRepoStore = defineStore('repo', () => {
 
   const saveReposToStorage = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(repoList.value));
-      localStorage.setItem(ACTIVE_REPO_KEY, activeRepoPath.value);
+      localStorage.setItem(CONFIG_KEYS.repositories, JSON.stringify(repoList.value));
+      localStorage.setItem(CONFIG_KEYS.activeRepository, activeRepoPath.value);
     } catch {}
+    void persistAppConfig().catch((error) => {
+      consoleStore.logWarning('Failed to save user configuration.', formatGitError(error));
+    });
+  };
+
+  const clearLoadedRepoData = () => {
+    repoInfo.value = null;
+    statusSummary.value = emptyStatusSummary();
+    branches.value = [];
+    remotes.value = [];
+    tags.value = [];
+    stashes.value = [];
+    commitNodes.value = [];
+    selectedCommit.value = null;
   };
 
   const loadRepo = async (targetPath?: string) => {
     const path = targetPath || activeRepoPath.value;
+    if (!path) {
+      clearLoadedRepoData();
+      return false;
+    }
+    if (path !== activeRepoPath.value) {
+      diffStore.clearSelection();
+    }
     isLoading.value = true;
     errorMessage.value = null;
     activeRepoPath.value = path;
     saveReposToStorage();
+    clearLoadedRepoData();
 
     try {
-      const [info, status, branchList, tagList, stashList, graph] = await Promise.all([
-        gitApi.getRepoInfo(path),
-        gitApi.getRepoStatus(path),
-        gitApi.listBranches(path),
-        gitApi.listTags(path),
-        gitApi.listStashes(path),
-        gitApi.getCommitGraph(path, 150),
-      ]);
-
+      const info = await gitApi.getRepoInfo(path);
       repoInfo.value = info;
-      statusSummary.value = status;
-      branches.value = branchList;
-      tags.value = tagList;
-      stashes.value = stashList;
-      commitNodes.value = graph;
-
-      if (graph.length > 0) {
-        selectedCommit.value = graph[0];
-      }
 
       const existing = repoList.value.find((r) => r.path === path);
       if (existing && info.name) {
@@ -107,9 +120,44 @@ export const useRepoStore = defineStore('repo', () => {
         existing.lastOpened = Date.now();
         saveReposToStorage();
       }
+
+      const [statusResult, branchResult, remoteResult, tagResult, stashResult, graphResult] = await Promise.allSettled([
+        gitApi.getRepoStatus(path),
+        gitApi.listBranches(path),
+        gitApi.listRemotes(path),
+        gitApi.listTags(path),
+        gitApi.listStashes(path),
+        gitApi.getCommitGraph(path, 150),
+      ]);
+
+      const failures: string[] = [];
+      if (statusResult.status === 'fulfilled') statusSummary.value = statusResult.value;
+      else failures.push(`status: ${formatGitError(statusResult.reason)}`);
+      if (branchResult.status === 'fulfilled') branches.value = branchResult.value;
+      else failures.push(`branches: ${formatGitError(branchResult.reason)}`);
+      if (remoteResult.status === 'fulfilled') remotes.value = remoteResult.value;
+      else failures.push(`remotes: ${formatGitError(remoteResult.reason)}`);
+      if (tagResult.status === 'fulfilled') tags.value = tagResult.value;
+      else failures.push(`tags: ${formatGitError(tagResult.reason)}`);
+      if (stashResult.status === 'fulfilled') stashes.value = stashResult.value;
+      else failures.push(`stashes: ${formatGitError(stashResult.reason)}`);
+      if (graphResult.status === 'fulfilled') {
+        commitNodes.value = graphResult.value;
+        selectedCommit.value = graphResult.value[0] || null;
+      } else {
+        failures.push(`commit graph: ${formatGitError(graphResult.reason)}`);
+      }
+
+      if (failures.length) {
+        errorMessage.value = failures.join('; ');
+        consoleStore.logWarning('Repository opened with partial data.', errorMessage.value);
+      }
+      return true;
     } catch (err: any) {
-      console.error('Failed to load repo:', err);
-      errorMessage.value = err?.message || String(err);
+      clearLoadedRepoData();
+      errorMessage.value = formatGitError(err, 'Failed to open repository');
+      consoleStore.logError('Failed to open repository.', errorMessage.value);
+      return false;
     } finally {
       isLoading.value = false;
     }
@@ -130,7 +178,8 @@ export const useRepoStore = defineStore('repo', () => {
       repoList.value[idx].lastOpened = Date.now();
     }
     saveReposToStorage();
-    await loadRepo(cleanPath);
+    const loaded = await loadRepo(cleanPath);
+    if (!loaded) throw new Error(errorMessage.value || 'Failed to open repository');
   };
 
   const removeRepo = (pathToRemove: string) => {
@@ -140,12 +189,7 @@ export const useRepoStore = defineStore('repo', () => {
         loadRepo(repoList.value[0].path);
       } else {
         activeRepoPath.value = '';
-        repoInfo.value = null;
-        statusSummary.value = { staged_files: [], unstaged_files: [], untracked_files: [], conflicted_files: [], total_changes: 0 };
-        branches.value = [];
-        tags.value = [];
-        stashes.value = [];
-        commitNodes.value = [];
+        clearLoadedRepoData();
       }
     }
     saveReposToStorage();
@@ -201,12 +245,14 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const renameBranch = async (oldName: string, newName: string) => {
-    await fetch('/api/repo/branch/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: activeRepoPath.value, old_name: oldName, new_name: newName }),
-    });
+    await gitApi.renameBranch(activeRepoPath.value, oldName, newName);
     await loadRepo(activeRepoPath.value);
+  };
+
+  const updateRemoteUrl = async (remoteName: string, url: string, pushUrl?: string) => {
+    await gitApi.setRemoteUrl(activeRepoPath.value, remoteName, url, pushUrl);
+    remotes.value = await gitApi.listRemotes(activeRepoPath.value);
+    repoInfo.value = await gitApi.getRepoInfo(activeRepoPath.value);
   };
 
   const createTag = async (name: string, message?: string, commitId?: string) => {
@@ -233,6 +279,11 @@ export const useRepoStore = defineStore('repo', () => {
 
   const abortMerge = async () => {
     await gitApi.abortMerge(activeRepoPath.value);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const continueMerge = async () => {
+    await gitApi.continueMerge(activeRepoPath.value);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -285,8 +336,11 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const pullRemote = async () => {
-    await gitApi.pullRemote(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.pullRemote(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const pushRemote = async () => {
@@ -300,6 +354,7 @@ export const useRepoStore = defineStore('repo', () => {
     repoInfo,
     statusSummary,
     branches,
+    remotes,
     tags,
     stashes,
     commitNodes,
@@ -314,6 +369,7 @@ export const useRepoStore = defineStore('repo', () => {
     isRebaseModalOpen,
     isRenameBranchModalOpen,
     isResetModalOpen,
+    isRemoteModalOpen,
     targetBranchForAction,
     targetCommitForAction,
     loadRepo,
@@ -330,11 +386,13 @@ export const useRepoStore = defineStore('repo', () => {
     createBranch,
     deleteBranch,
     renameBranch,
+    updateRemoteUrl,
     createTag,
     createStash,
     popStash,
     mergeBranch,
     abortMerge,
+    continueMerge,
     rebase,
     continueRebase,
     abortRebase,

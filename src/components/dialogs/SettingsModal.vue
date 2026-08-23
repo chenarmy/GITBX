@@ -1,10 +1,76 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/stores/settings';
-import { useAiStore } from '@/stores/ai';
-import { Settings, X, User, Cpu } from 'lucide-vue-next';
+import { AI_PROVIDER_PRESETS, useAiStore } from '@/stores/ai';
+import type { LlmProvider } from '@/types/ai';
+import { useGitApi } from '@/composables/useGitApi';
+import { useNotificationStore } from '@/stores/notification';
+import { Settings, X, User, Cpu, Info, Globe2 } from 'lucide-vue-next';
+import { SUPPORTED_LOCALES } from '@/i18n/config';
+import { useI18n } from '@/i18n';
+import { computed, ref } from 'vue';
+import AboutUpdates from '@/components/settings/AboutUpdates.vue';
 
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
+const gitApi = useGitApi();
+const notification = useNotificationStore();
+const { t } = useI18n();
+const isCustomProvider = computed(() => aiStore.llmConfig.provider === 'custom');
+const activeTab = ref<'settings' | 'about'>('settings');
+const proxyPassword = ref('');
+
+async function saveSettings() {
+  if (settingsStore.proxyMode === 'custom') {
+    const port = Number(settingsStore.proxyPort);
+    if (!settingsStore.proxyHost.trim() || !Number.isInteger(port) || port < 1 || port > 65535) {
+      notification.error(t('Invalid proxy settings'), t('Enter a proxy server and a port between 1 and 65535.'));
+      return;
+    }
+  }
+  if (aiStore.llmConfig.api_key) {
+    try {
+      await gitApi.saveCredential(aiStore.llmConfig.provider, aiStore.llmConfig.api_key);
+      aiStore.llmConfig.api_key = '';
+      notification.success(t('Settings Saved'), t('The AI credential was stored in the system keyring.'));
+    } catch (error: any) {
+      notification.warning(t('Settings Saved'), error?.message || t('The key remains in memory only.'));
+    }
+  }
+  if (settingsStore.proxyAuthEnabled && proxyPassword.value && gitApi.isTauri()) {
+    try {
+      await gitApi.saveCredential('proxy', proxyPassword.value);
+      proxyPassword.value = '';
+    } catch (error: any) {
+      notification.warning(t('Settings Saved'), error?.message || t('The proxy password remains in memory only.'));
+    }
+  }
+  try {
+    await aiStore.persistConfig();
+    await settingsStore.persistSettings();
+    notification.success(t('Settings Saved'), t('Configuration was saved to the user directory.'));
+    settingsStore.isSettingsModalOpen = false;
+  } catch (error: any) {
+    notification.error(t('Failed to save settings'), error?.message || String(error));
+  }
+}
+
+function handleProviderChange(event: Event) {
+  const provider = (event.target as HTMLSelectElement).value as LlmProvider;
+  aiStore.setProvider(provider);
+}
+
+function providerModels() {
+  if (aiStore.llmConfig.provider === 'custom') return [];
+  return AI_PROVIDER_PRESETS[aiStore.llmConfig.provider].models;
+}
+
+function closeSettings() {
+  if (activeTab.value === 'settings') {
+    void saveSettings();
+  } else {
+    settingsStore.isSettingsModalOpen = false;
+  }
+}
 </script>
 
 <template>
@@ -13,40 +79,144 @@ const aiStore = useAiStore();
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
   >
     <div
-      class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      class="w-full max-w-3xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
     >
       <!-- Modal Header -->
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <Settings class="w-4 h-4 text-primary" />
-          <span class="font-bold text-sm text-foreground">GITBX Settings</span>
+          <span class="font-bold text-sm text-foreground">{{ t('GITBX Settings') }}</span>
         </div>
         <button
-          @click="settingsStore.isSettingsModalOpen = false"
+          @click="closeSettings"
           class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           <X class="w-4 h-4" />
         </button>
       </div>
 
+      <div class="flex border-b border-border bg-muted/20 px-4">
+        <button
+          class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
+          :class="activeTab === 'settings' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'settings'"
+        >
+          <Settings class="h-3.5 w-3.5" />
+          {{ t('Settings') }}
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
+          :class="activeTab === 'about' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'about'"
+        >
+          <Info class="h-3.5 w-3.5" />
+          {{ t('About GITBX') }}
+        </button>
+      </div>
+
       <!-- Settings Body -->
-      <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+      <div v-show="activeTab === 'settings'" class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div class="space-y-2">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <span>{{ t('Language') }}</span>
+          </div>
+          <select
+            :value="settingsStore.language"
+            @change="settingsStore.changeLanguage(($event.target as HTMLSelectElement).value as any)"
+            class="w-full bg-background border border-border rounded px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option v-for="item in SUPPORTED_LOCALES" :key="item.code" :value="item.code">
+              {{ item.nativeLabel }} · {{ item.label }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Network Proxy -->
+        <div class="space-y-2 border-t border-border pt-3">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <Globe2 class="w-3.5 h-3.5 text-sky-400" />
+            <span>{{ t('Proxy Server') }}</span>
+          </div>
+          <div class="space-y-1.5 text-muted-foreground">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="system" />
+              <span>{{ t('Use system proxy settings') }}</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="custom" />
+              <span>{{ t('Use custom proxy') }}</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="none" />
+              <span>{{ t('Do not use a proxy') }}</span>
+            </label>
+          </div>
+          <div v-if="settingsStore.proxyMode === 'custom'" class="space-y-2 rounded border border-border bg-background/50 p-2">
+            <div class="grid grid-cols-[1fr_7rem] gap-2">
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Proxy server') }}</label>
+                <input
+                  v-model="settingsStore.proxyHost"
+                  placeholder="127.0.0.1"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Port') }}</label>
+                <input
+                  v-model.number="settingsStore.proxyPort"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  placeholder="8080"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <label class="flex items-center gap-2 text-muted-foreground cursor-pointer">
+              <input v-model="settingsStore.proxyAuthEnabled" type="checkbox" />
+              <span>{{ t('Proxy requires authentication') }}</span>
+            </label>
+            <div v-if="settingsStore.proxyAuthEnabled" class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Username') }}</label>
+                <input
+                  v-model="settingsStore.proxyUsername"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Password') }}</label>
+                <input
+                  v-model="proxyPassword"
+                  type="password"
+                  :placeholder="t('Leave blank to keep saved password')"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <p class="text-[10px] text-muted-foreground">
+              {{ t('Proxy settings apply to HTTP(S) Git operations. SSH remotes are not proxied.') }}
+            </p>
+          </div>
+        </div>
+
         <!-- Git Signature -->
         <div class="space-y-2">
           <div class="flex items-center space-x-1.5 font-semibold text-foreground">
             <User class="w-3.5 h-3.5 text-blue-400" />
-            <span>Git User Signature</span>
+            <span>{{ t('Git User Signature') }}</span>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="text-[11px] text-muted-foreground">Author Name</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Author Name') }}</label>
               <input
                 v-model="settingsStore.authorName"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">Author Email</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Author Email') }}</label>
               <input
                 v-model="settingsStore.authorEmail"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -59,13 +229,14 @@ const aiStore = useAiStore();
         <div class="space-y-2 border-t border-border pt-3">
           <div class="flex items-center space-x-1.5 font-semibold text-foreground">
             <Cpu class="w-3.5 h-3.5 text-purple-400" />
-            <span>AI Copilot & LLM Provider</span>
+            <span>{{ t('AI Copilot & LLM Provider') }}</span>
           </div>
-          <div class="space-y-2">
+          <div :key="aiStore.llmConfig.provider" class="space-y-2">
             <div>
-              <label class="text-[11px] text-muted-foreground">Provider</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Provider') }}</label>
               <select
-                v-model="aiStore.llmConfig.provider"
+                :value="aiStore.llmConfig.provider"
+                @change="handleProviderChange"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
@@ -76,14 +247,34 @@ const aiStore = useAiStore();
               </select>
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">API Base URL</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('Model') }}</label>
+              <select
+                v-if="!isCustomProvider"
+                v-model="aiStore.llmConfig.model"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option v-for="model in providerModels()" :key="model" :value="model">{{ model }}</option>
+              </select>
               <input
-                v-model="aiStore.llmConfig.api_base"
+                v-else
+                v-model="aiStore.llmConfig.model"
+                placeholder="Model ID"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
-              <label class="text-[11px] text-muted-foreground">API Key</label>
+              <label class="text-[11px] text-muted-foreground">{{ t('API Base URL') }}</label>
+              <input
+                v-model="aiStore.llmConfig.api_base"
+                :placeholder="isCustomProvider ? 'https://api.example.com/v1' : undefined"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <p v-if="isCustomProvider" class="mt-1 text-[10px] text-muted-foreground">
+                OpenAI-compatible APIs usually require the /v1 path prefix.
+              </p>
+            </div>
+            <div>
+              <label class="text-[11px] text-muted-foreground">{{ t('API Key') }}</label>
               <input
                 v-model="aiStore.llmConfig.api_key"
                 type="password"
@@ -95,13 +286,17 @@ const aiStore = useAiStore();
         </div>
       </div>
 
+      <div v-if="activeTab === 'about'" class="max-h-[70vh] overflow-y-auto p-4">
+        <AboutUpdates />
+      </div>
+
       <!-- Footer -->
       <div class="h-11 bg-muted/30 px-4 flex items-center justify-end border-t border-border">
         <button
-          @click="settingsStore.isSettingsModalOpen = false"
+          @click="activeTab === 'settings' ? saveSettings() : closeSettings()"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
         >
-          Save & Close
+          {{ activeTab === 'settings' ? t('Save & Close') : t('Close') }}
         </button>
       </div>
     </div>

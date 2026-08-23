@@ -57,7 +57,9 @@ impl Repository {
 
             let mut item = FileStatusItem {
                 path: path.clone(),
-                old_path: entry.head_to_index().and_then(|d| d.old_file().path().map(|p| p.to_string_lossy().to_string())),
+                old_path: entry
+                    .head_to_index()
+                    .and_then(|d| d.old_file().path().map(|p| p.to_string_lossy().to_string())),
                 staged_status: FileDeltaStatus::Unmodified,
                 unstaged_status: FileDeltaStatus::Unmodified,
                 is_staged: false,
@@ -98,7 +100,8 @@ impl Repository {
             if status.is_conflicted() {
                 item.staged_status = FileDeltaStatus::Conflicted;
                 item.unstaged_status = FileDeltaStatus::Conflicted;
-                conflicted.push(item.clone());
+                conflicted.push(item);
+                continue;
             }
 
             if item.is_staged {
@@ -125,6 +128,11 @@ impl Repository {
 
     pub fn stage_file(&self, path: &str) -> Result<()> {
         let mut index = self.inner().index()?;
+        if (1..=3).any(|stage| index.get_path(Path::new(path), stage).is_some()) {
+            return Err(GitbxError::MergeConflict(format!(
+                "Resolve conflicted file '{path}' in the merge editor before staging it"
+            )));
+        }
         let full_path = self.path().join(path);
         if full_path.exists() {
             index.add_path(Path::new(path))?;
@@ -136,6 +144,11 @@ impl Repository {
     }
 
     pub fn unstage_file(&self, path: &str) -> Result<()> {
+        if self.inner().state() != git2::RepositoryState::Clean {
+            return Err(GitbxError::General(
+                "Finish or abort the current Git operation before unstaging files".into(),
+            ));
+        }
         let head = self.inner().head()?.peel_to_commit()?;
         let head_tree = head.tree()?;
         let mut index = self.inner().index()?;
@@ -165,32 +178,63 @@ impl Repository {
         Ok(())
     }
 
+    pub fn unstage_all(&self) -> Result<()> {
+        if self.inner().state() != git2::RepositoryState::Clean {
+            return Err(GitbxError::General(
+                "Finish or abort the current Git operation before unstaging files".into(),
+            ));
+        }
+        let mut index = self.inner().index()?;
+        if let Ok(head) = self.inner().head() {
+            index.read_tree(&head.peel_to_tree()?)?;
+        } else {
+            index.clear()?;
+        }
+        index.write()?;
+        Ok(())
+    }
+
     pub fn stage_all(&self) -> Result<()> {
         let mut index = self.inner().index()?;
+        if index.has_conflicts() {
+            return Err(GitbxError::MergeConflict(
+                "Resolve conflicted files in the merge editor before staging all changes".into(),
+            ));
+        }
         index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
         index.update_all(["*"].iter(), None)?;
         index.write()?;
         Ok(())
     }
 
-    pub fn create_commit(&self, message: &str, author_name: &str, author_email: &str) -> Result<String> {
+    pub fn create_commit(
+        &self,
+        message: &str,
+        author_name: &str,
+        author_email: &str,
+    ) -> Result<String> {
+        if self.inner().state() != git2::RepositoryState::Clean {
+            return Err(GitbxError::General(
+                "Use Continue to finish the current Git operation".into(),
+            ));
+        }
         let mut index = self.inner().index()?;
         let tree_oid = index.write_tree()?;
         let tree = self.inner().find_tree(tree_oid)?;
 
         let sig = git2::Signature::now(author_name, author_email)?;
-        let parent_commit = self.inner().head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parent_commit = self
+            .inner()
+            .head()
+            .ok()
+            .and_then(|h| h.peel_to_commit().ok());
 
-        let parents: Vec<&git2::Commit> = parent_commit.as_ref().map(|c| vec![c]).unwrap_or_default();
+        let parents: Vec<&git2::Commit> =
+            parent_commit.as_ref().map(|c| vec![c]).unwrap_or_default();
 
-        let commit_oid = self.inner().commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            message,
-            &tree,
-            &parents,
-        )?;
+        let commit_oid = self
+            .inner()
+            .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
 
         Ok(commit_oid.to_string())
     }

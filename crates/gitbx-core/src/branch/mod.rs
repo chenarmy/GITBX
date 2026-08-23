@@ -1,6 +1,6 @@
-use crate::error::{GitbxError, Result};
+use crate::error::Result;
 use crate::repository::Repository;
-use git2::{BranchType, Direction};
+use git2::BranchType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +20,7 @@ pub struct TagItem {
     pub target_commit_id: String,
     pub message: Option<String>,
     pub tagger_name: Option<String>,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +28,15 @@ pub struct StashItem {
     pub index: usize,
     pub message: String,
     pub commit_id: String,
+}
+
+fn sort_tags_by_recency(tags: &mut [TagItem]) {
+    tags.sort_by(|left, right| {
+        right
+            .timestamp
+            .cmp(&left.timestamp)
+            .then_with(|| right.name.cmp(&left.name))
+    });
 }
 
 impl Repository {
@@ -42,13 +52,17 @@ impl Repository {
             let target_commit_id = branch.get().peel_to_commit()?.id().to_string();
 
             let upstream = branch.upstream().ok();
-            let upstream_name = upstream.as_ref().and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+            let upstream_name = upstream
+                .as_ref()
+                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
 
             let mut ahead = 0;
             let mut behind = 0;
 
             if let Some(ref up) = upstream {
-                if let (Ok(local_oid), Ok(up_oid)) = (branch.get().target().ok_or(()), up.get().target().ok_or(())) {
+                if let (Ok(local_oid), Ok(up_oid)) =
+                    (branch.get().target().ok_or(()), up.get().target().ok_or(()))
+                {
                     if let Ok((a, b)) = self.inner().graph_ahead_behind(local_oid, up_oid) {
                         ahead = a;
                         behind = b;
@@ -83,7 +97,11 @@ impl Repository {
     }
 
     pub fn delete_branch(&self, name: &str, is_remote: bool) -> Result<()> {
-        let b_type = if is_remote { BranchType::Remote } else { BranchType::Local };
+        let b_type = if is_remote {
+            BranchType::Remote
+        } else {
+            BranchType::Local
+        };
         let mut branch = self.inner().find_branch(name, b_type)?;
         branch.delete()?;
         Ok(())
@@ -110,21 +128,27 @@ impl Repository {
         let tag_names = self.inner().tag_names(None)?;
         let mut tags = Vec::new();
 
-        for name_opt in tag_names.iter() {
-            if let Some(name) = name_opt {
-                if let Ok(obj) = self.inner().revparse_single(&format!("refs/tags/{}", name)) {
-                    let commit_id = obj.peel_to_commit()?.id().to_string();
-                    let tag_obj = obj.as_tag();
+        for name in tag_names.iter().flatten() {
+            if let Ok(obj) = self.inner().revparse_single(&format!("refs/tags/{}", name)) {
+                let commit = obj.peel_to_commit()?;
+                let commit_id = commit.id().to_string();
+                let tag_obj = obj.as_tag();
+                let timestamp = tag_obj
+                    .and_then(|tag| tag.tagger().map(|signature| signature.when().seconds()))
+                    .unwrap_or_else(|| commit.time().seconds());
 
-                    tags.push(TagItem {
-                        name: name.to_string(),
-                        target_commit_id: commit_id,
-                        message: tag_obj.and_then(|t| t.message().map(|m| m.to_string())),
-                        tagger_name: tag_obj.and_then(|t| t.tagger().and_then(|sig| sig.name().map(|n| n.to_string()))),
-                    });
-                }
+                tags.push(TagItem {
+                    name: name.to_string(),
+                    target_commit_id: commit_id,
+                    message: tag_obj.and_then(|t| t.message().map(|m| m.to_string())),
+                    tagger_name: tag_obj
+                        .and_then(|t| t.tagger().and_then(|sig| sig.name().map(|n| n.to_string()))),
+                    timestamp,
+                });
             }
         }
+
+        sort_tags_by_recency(&mut tags);
 
         Ok(tags)
     }
@@ -140,5 +164,34 @@ impl Repository {
             true
         })?;
         Ok(stashes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sort_tags_by_recency, TagItem};
+
+    fn tag(name: &str, timestamp: i64) -> TagItem {
+        TagItem {
+            name: name.to_string(),
+            target_commit_id: String::new(),
+            message: None,
+            tagger_name: None,
+            timestamp,
+        }
+    }
+
+    #[test]
+    fn sorts_tags_by_timestamp_descending() {
+        let mut tags = vec![tag("v0.1.2", 200), tag("v0.1.1", 100), tag("v0.1.3", 300)];
+
+        sort_tags_by_recency(&mut tags);
+
+        assert_eq!(
+            tags.iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["v0.1.3", "v0.1.2", "v0.1.1"]
+        );
     }
 }
