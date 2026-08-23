@@ -2,6 +2,10 @@
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
+import { useGitApi } from '@/composables/useGitApi';
+import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
+import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { ChevronRight } from 'lucide-vue-next';
 
@@ -17,6 +21,10 @@ const emit = defineEmits<{
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
+const gitApi = useGitApi();
+const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
+const { t } = useI18n();
 
 const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
@@ -57,9 +65,7 @@ async function handleCheckoutAndUpdate() {
 
 function handleCompare() {
   diffStore.selectFile('', false, repoStore.activeRepoPath);
-  fetch(`/api/repo/diff?path=${encodeURIComponent(repoStore.activeRepoPath)}&compare=${encodeURIComponent(props.branch.name)}`)
-    .then(r => r.json())
-    .then(() => {});
+  notification.info(t('Branch comparison'), t("Selected '{branch}' for comparison.", { branch: props.branch.name }));
   emit('close');
 }
 
@@ -68,26 +74,15 @@ function handleShowDiffWithWorkingTree() {
   emit('close');
 }
 
-function handleNewWorktree() {
-  const destPath = prompt(`Enter destination directory for worktree from '${props.branch.name}':`);
+async function handleNewWorktree() {
+  const destPath = await confirmation.prompt({ title: t('Create Worktree'), message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }), inputLabel: t('Destination path') });
   if (destPath && destPath.trim()) {
-    fetch('/api/repo/worktree/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        repo_path: repoStore.activeRepoPath,
-        dest_path: destPath.trim(),
-        branch: props.branch.name,
-      }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          alert(`Worktree created at: ${destPath}`);
-        } else {
-          alert(`Failed to create worktree: ${data.error || 'Unknown error'}`);
-        }
-      });
+    try {
+      await gitApi.createWorktree(repoStore.activeRepoPath, destPath.trim(), props.branch.name);
+      notification.success(t('Worktree created'), destPath.trim());
+    } catch (err: any) {
+      notification.error(t('Worktree creation failed'), err?.message || String(err));
+    }
   }
   emit('close');
 }
@@ -120,8 +115,8 @@ function handleRename() {
   emit('close');
 }
 
-function handleDelete() {
-  if (confirm(`Are you sure you want to delete branch '${props.branch.name}'?`)) {
+async function handleDelete() {
+  if (await confirmation.confirm({ title: t('Delete Branch'), message: t("Delete branch '{branch}'?", { branch: props.branch.name }), danger: true, confirmText: t('Delete') })) {
     repoStore.deleteBranch(props.branch.name, true);
   }
   emit('close');
@@ -153,14 +148,14 @@ onUnmounted(() => {
           @click="handleNewBranchFrom"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
         >
-          <span>New Branch from '{{ branch.name }}'...</span>
+          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleShowDiffWithWorkingTree"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Show Diff with Working Tree
+          {{ t('Show Diff with Working Tree') }}
         </button>
       </div>
 
@@ -169,7 +164,7 @@ onUnmounted(() => {
           @click="handleNewWorktree"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          New Worktree from '{{ branch.name }}'...
+          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
         </button>
       </div>
 
@@ -178,20 +173,20 @@ onUnmounted(() => {
           @click="handleUpdate"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Update
+          {{ t('Update') }}
         </button>
 
         <button
           @click="handlePush"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Push...
+          {{ t('Push...') }}
         </button>
 
         <button
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
         >
-          <span>Tracked Branch 'origin/{{ branch.name }}'</span>
+          <span>{{ t("Tracked Branch 'origin/{branch}'", { branch: branch.name }) }}</span>
           <ChevronRight class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -201,7 +196,7 @@ onUnmounted(() => {
           @click="handleRename"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
         >
-          <span>Rename...</span>
+          <span>{{ t('Rename...') }}</span>
           <span class="text-[10px] text-muted-foreground font-mono">Alt+Shift+R</span>
         </button>
       </div>
@@ -214,28 +209,28 @@ onUnmounted(() => {
           @click="handleCheckout"
           class="w-full px-3 py-1.5 text-left hover:bg-primary/10 hover:text-primary flex items-center justify-between font-semibold transition"
         >
-          <span>Checkout</span>
+          <span>{{ t('Checkout') }}</span>
         </button>
 
         <button
           @click="handleNewBranchFrom"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
         >
-          <span>New Branch from '{{ branch.name }}'...</span>
+          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleCheckoutAndRebase"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Checkout and Rebase onto '{{ repoStore.repoInfo?.head_branch }}'
+          {{ t("Checkout and Rebase onto '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
         </button>
 
         <button
           @click="handleCheckoutAndUpdate"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Checkout and Update
+          {{ t('Checkout and Update') }}
         </button>
       </div>
 
@@ -244,13 +239,13 @@ onUnmounted(() => {
           @click="handleCompare"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Compare with '{{ repoStore.repoInfo?.head_branch }}'
+          {{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
         </button>
         <button
           @click="handleShowDiffWithWorkingTree"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Show Diff with Working Tree
+          {{ t('Show Diff with Working Tree') }}
         </button>
       </div>
 
@@ -259,14 +254,14 @@ onUnmounted(() => {
           @click="handleRebaseOnto"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
         >
-          <span>Rebase '{{ repoStore.repoInfo?.head_branch }}' onto '{{ branch.name }}'</span>
+          <span>{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleMergeInto"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
         >
-          <span>Merge '{{ branch.name }}' into '{{ repoStore.repoInfo?.head_branch }}'</span>
+          <span>{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
       </div>
 
@@ -275,7 +270,7 @@ onUnmounted(() => {
           @click="handleNewWorktree"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          New Worktree from '{{ branch.name }}'...
+          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
         </button>
       </div>
 
@@ -284,18 +279,18 @@ onUnmounted(() => {
           @click="handleUpdate"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Update
+          {{ t('Update') }}
         </button>
         <button
           @click="handlePush"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
-          Push...
+          {{ t('Push...') }}
         </button>
         <button
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
         >
-          <span>Tracked Branch 'origin/{{ branch.name }}'</span>
+          <span>{{ t("Tracked Branch 'origin/{branch}'", { branch: branch.name }) }}</span>
           <ChevronRight class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -305,7 +300,7 @@ onUnmounted(() => {
           @click="handleRename"
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
         >
-          <span>Rename...</span>
+          <span>{{ t('Rename...') }}</span>
           <span class="text-[10px] text-muted-foreground font-mono">Alt+Shift+R</span>
         </button>
 
@@ -313,7 +308,7 @@ onUnmounted(() => {
           @click="handleDelete"
           class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 flex items-center space-x-1.5 font-medium transition"
         >
-          <span>Delete</span>
+          <span>{{ t('Delete') }}</span>
         </button>
       </div>
     </template>

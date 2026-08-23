@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, nextTick, onMounted, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
 import type { GraphCommitNode } from '@/types/graph';
 import CommitContextMenu from '@/components/menus/CommitContextMenu.vue';
 import { Tag } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
+import { arSA, de, enUS, es, fr, ja, zhCN, zhTW } from 'date-fns/locale';
+import type { Locale as DateFnsLocale } from 'date-fns';
+import type { Locale as AppLocale } from '@/i18n/config';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
+const { locale, t } = useI18n();
 const diffStore = useDiffStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -25,6 +30,17 @@ const LANE_COLORS = [
 const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
 const NODE_RADIUS = 4.5;
+
+const DATE_LOCALES: Record<AppLocale, DateFnsLocale> = {
+  en: enUS,
+  ja,
+  de,
+  es,
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
+  fr,
+  ar: arSA,
+};
 
 function getLaneColor(lane: number) {
   return LANE_COLORS[lane % LANE_COLORS.length];
@@ -111,44 +127,50 @@ onMounted(() => {
 
 watch(
   () => repoStore.commitNodes,
-  () => {
+  async () => {
+    await nextTick();
     drawGraph();
   },
-  { deep: true }
+  { deep: true, flush: 'post' }
 );
 
 watch(
   () => repoStore.selectedCommit,
-  () => {
+  async () => {
+    await nextTick();
     drawGraph();
-  }
+  },
+  { flush: 'post' }
 );
 
 function formatTime(timestamp: number) {
-  if (!timestamp) return 'recently';
+  if (!timestamp) return t('recently');
   try {
-    return formatDistanceToNow(new Date(timestamp * 1000), { addSuffix: true });
+    return formatDistanceToNow(new Date(timestamp * 1000), {
+      addSuffix: true,
+      locale: DATE_LOCALES[locale.value],
+    });
   } catch {
-    return 'recently';
+    return t('recently');
   }
 }
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
+  <div class="dbx-graph flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
     <!-- Header row -->
-    <div class="h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
-      <div class="w-20 pl-2">Graph</div>
-      <div class="flex-1 pl-2">Description</div>
-      <div class="w-32">Author</div>
-      <div class="w-24">Date</div>
-      <div class="w-20 font-mono text-[11px]">Commit</div>
+    <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
+      <div class="w-20 pl-2">{{ t('Graph') }}</div>
+      <div class="flex-1 pl-2">{{ t('Description') }}</div>
+      <div class="w-32">{{ t('Author') }}</div>
+      <div class="w-24">{{ t('Date') }}</div>
+      <div class="w-20 font-mono text-[11px]">{{ t('Commit') }}</div>
     </div>
 
     <!-- Scrollable commit list + canvas -->
     <div class="flex-1 overflow-y-auto relative">
       <div v-if="repoStore.commitNodes.length === 0" class="p-8 text-center text-muted-foreground">
-        No commits in this repository yet. Make your first commit below!
+        {{ t('No commits in this repository yet. Make your first commit below!') }}
       </div>
 
       <div v-else class="relative flex">

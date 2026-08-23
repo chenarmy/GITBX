@@ -6,3 +6,5 @@ _ref_dbx/
 *.log
 .env
 .env.local
+powershell.bat
+src-tauri/gen/

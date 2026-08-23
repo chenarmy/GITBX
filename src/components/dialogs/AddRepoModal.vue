@@ -5,14 +5,18 @@ import { useGitApi } from '@/composables/useGitApi';
 import {
   FolderGit2,
   FolderPlus,
+  FolderOpen,
   Download,
   X,
   AlertCircle,
   FolderSearch,
 } from 'lucide-vue-next';
+import { open } from '@tauri-apps/plugin-dialog';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
+const { t } = useI18n();
 
 const activeTab = ref<'local' | 'clone' | 'init'>('local');
 
@@ -24,6 +28,37 @@ const initPath = ref('');
 
 const isSubmitting = ref(false);
 const errorMsg = ref<string | null>(null);
+const isWindows = typeof navigator !== 'undefined'
+  && (/Windows/i.test(navigator.userAgent) || navigator.platform === 'Win32');
+
+type DirectoryField = 'local' | 'clone' | 'init';
+
+function getDirectoryValue(field: DirectoryField) {
+  if (field === 'local') return localPath.value;
+  if (field === 'clone') return cloneDestination.value;
+  return initPath.value;
+}
+
+function setDirectoryValue(field: DirectoryField, value: string) {
+  if (field === 'local') localPath.value = value;
+  else if (field === 'clone') cloneDestination.value = value;
+  else initPath.value = value;
+}
+
+async function selectDirectory(field: DirectoryField) {
+  errorMsg.value = null;
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t('Select Folder'),
+      defaultPath: getDirectoryValue(field).trim() || undefined,
+    });
+    if (typeof selected === 'string' && selected) setDirectoryValue(field, selected);
+  } catch (err: any) {
+    errorMsg.value = err?.message || t('Failed to select folder');
+  }
+}
 
 async function handleAddLocal() {
   if (!localPath.value.trim()) return;
@@ -34,7 +69,7 @@ async function handleAddLocal() {
     localPath.value = '';
     repoStore.isAddRepoModalOpen = false;
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to add repository';
+    errorMsg.value = err?.message || t('Failed to add repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -53,7 +88,7 @@ async function handleClone() {
       repoStore.isAddRepoModalOpen = false;
     }
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to clone repository';
+    errorMsg.value = err?.message || t('Failed to clone repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -71,7 +106,7 @@ async function handleInit() {
       repoStore.isAddRepoModalOpen = false;
     }
   } catch (err: any) {
-    errorMsg.value = err?.message || 'Failed to initialize repository';
+    errorMsg.value = err?.message || t('Failed to initialize repository');
   } finally {
     isSubmitting.value = false;
   }
@@ -90,7 +125,7 @@ async function handleInit() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <FolderGit2 class="w-4 h-4 text-primary" />
-          <span class="font-bold text-sm text-foreground">Add Repository</span>
+          <span class="font-bold text-sm text-foreground">{{ t('Add Repository') }}</span>
         </div>
         <button
           @click="repoStore.isAddRepoModalOpen = false"
@@ -108,7 +143,7 @@ async function handleInit() {
           :class="activeTab === 'local' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderSearch class="w-3.5 h-3.5" />
-          <span>Add Existing Local Repo</span>
+          <span>{{ t('Add Existing Local Repo') }}</span>
         </button>
         <button
           @click="activeTab = 'clone'"
@@ -116,7 +151,7 @@ async function handleInit() {
           :class="activeTab === 'clone' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <Download class="w-3.5 h-3.5" />
-          <span>Clone from Remote</span>
+          <span>{{ t('Clone from Remote') }}</span>
         </button>
         <button
           @click="activeTab = 'init'"
@@ -124,7 +159,7 @@ async function handleInit() {
           :class="activeTab === 'init' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderPlus class="w-3.5 h-3.5" />
-          <span>Create New Repo</span>
+          <span>{{ t('Create New Repo') }}</span>
         </button>
       </div>
 
@@ -142,14 +177,26 @@ async function handleInit() {
         <!-- 1. Tab: Local -->
         <div v-if="activeTab === 'local'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Local Repository Path</label>
-            <input
-              v-model="localPath"
-              type="text"
-              placeholder="e.g. D:\Projects\my-app or /Users/username/repo"
-              class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              @keydown.enter="handleAddLocal"
-            />
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Local Repository Path') }}</label>
+            <div class="flex items-center space-x-2 mt-1">
+              <input
+                v-model="localPath"
+                type="text"
+                placeholder="e.g. D:\Projects\my-app or /Users/username/repo"
+                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                @keydown.enter="handleAddLocal"
+              />
+              <button
+                v-if="isWindows"
+                type="button"
+                :title="t('Select Folder')"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                @click="selectDirectory('local')"
+              >
+                <FolderOpen class="w-3.5 h-3.5" />
+                <span>{{ t('Browse') }}</span>
+              </button>
+            </div>
             <p class="text-[10px] text-muted-foreground mt-1">
               Select or paste the path to an existing Git repository directory on your computer.
             </p>
@@ -159,7 +206,7 @@ async function handleInit() {
         <!-- 2. Tab: Clone -->
         <div v-else-if="activeTab === 'clone'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Remote URL (HTTPS / SSH)</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Remote URL (HTTPS / SSH)') }}</label>
             <input
               v-model="cloneUrl"
               type="text"
@@ -168,28 +215,52 @@ async function handleInit() {
             />
           </div>
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">Destination Folder</label>
-            <input
-              v-model="cloneDestination"
-              type="text"
-              placeholder="e.g. D:\Projects\cloned-repo"
-              class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              @keydown.enter="handleClone"
-            />
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Destination Folder') }}</label>
+            <div class="flex items-center space-x-2 mt-1">
+              <input
+                v-model="cloneDestination"
+                type="text"
+                placeholder="e.g. D:\Projects\cloned-repo"
+                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                @keydown.enter="handleClone"
+              />
+              <button
+                v-if="isWindows"
+                type="button"
+                :title="t('Select Folder')"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                @click="selectDirectory('clone')"
+              >
+                <FolderOpen class="w-3.5 h-3.5" />
+                <span>{{ t('Browse') }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- 3. Tab: Init -->
         <div v-else-if="activeTab === 'init'" class="space-y-3">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">New Repository Directory</label>
-            <input
-              v-model="initPath"
-              type="text"
-              placeholder="e.g. D:\Projects\new-project"
-              class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              @keydown.enter="handleInit"
-            />
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('New Repository Directory') }}</label>
+            <div class="flex items-center space-x-2 mt-1">
+              <input
+                v-model="initPath"
+                type="text"
+                placeholder="e.g. D:\Projects\new-project"
+                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                @keydown.enter="handleInit"
+              />
+              <button
+                v-if="isWindows"
+                type="button"
+                :title="t('Select Folder')"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                @click="selectDirectory('init')"
+              >
+                <FolderOpen class="w-3.5 h-3.5" />
+                <span>{{ t('Browse') }}</span>
+              </button>
+            </div>
             <p class="text-[10px] text-muted-foreground mt-1">
               GITBX will create the folder if it doesn't exist and run `git init`.
             </p>
@@ -203,7 +274,7 @@ async function handleInit() {
           @click="repoStore.isAddRepoModalOpen = false"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
-          Cancel
+          {{ t('Cancel') }}
         </button>
 
         <button
@@ -212,7 +283,7 @@ async function handleInit() {
           :disabled="!localPath.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Verifying...' : 'Add Repository' }}
+          {{ isSubmitting ? 'Verifying...' : t('Add Repository') }}
         </button>
 
         <button
@@ -221,7 +292,7 @@ async function handleInit() {
           :disabled="!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Cloning...' : 'Clone Repository' }}
+          {{ isSubmitting ? 'Cloning...' : t('Clone') }}
         </button>
 
         <button
@@ -230,7 +301,7 @@ async function handleInit() {
           :disabled="!initPath.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Initializing...' : 'Create & Open' }}
+          {{ isSubmitting ? 'Initializing...' : t('Create New Repo') }}
         </button>
       </div>
     </div>

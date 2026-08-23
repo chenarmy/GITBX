@@ -2,8 +2,10 @@
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { GitBranch, X, AlertCircle } from 'lucide-vue-next';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
+const { t } = useI18n();
 
 const branchName = ref('');
 const checkoutOnCreate = ref(true);
@@ -41,7 +43,7 @@ async function handleCreate() {
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
           <GitBranch class="w-4 h-4 text-purple-400" />
-          <span class="font-bold text-sm text-foreground">Create New Branch</span>
+          <span class="font-bold text-sm text-foreground">{{ t('Create new branch') }}</span>
         </div>
         <button
           @click="repoStore.isBranchModalOpen = false"
@@ -61,7 +63,7 @@ async function handleCreate() {
         </div>
 
         <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">Branch Name</label>
+          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Branch Name') }}</label>
           <input
             v-model="branchName"
             type="text"
@@ -72,9 +74,9 @@ async function handleCreate() {
         </div>
 
         <div class="p-2.5 rounded bg-muted/40 border border-border space-y-1">
-          <div class="text-muted-foreground">Starting Point:</div>
+          <div class="text-muted-foreground">{{ t('Starting Point:') }}</div>
           <div class="font-mono text-foreground">
-            {{ repoStore.selectedCommit ? `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}` : 'Current HEAD' }}
+            {{ repoStore.selectedCommit ? `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}` : t('Current HEAD') }}
           </div>
         </div>
 
@@ -84,7 +86,7 @@ async function handleCreate() {
             type="checkbox"
             class="rounded border-border text-primary focus:ring-primary"
           />
-          <span class="text-foreground">Checkout branch after creation</span>
+          <span class="text-foreground">{{ t('Checkout branch after creation') }}</span>
         </label>
       </div>
 
@@ -93,14 +95,14 @@ async function handleCreate() {
           @click="repoStore.isBranchModalOpen = false"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
-          Cancel
+          {{ t('Cancel') }}
         </button>
         <button
           @click="handleCreate"
           :disabled="!branchName.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
         >
-          {{ isSubmitting ? 'Creating...' : 'Create Branch' }}
+          {{ isSubmitting ? 'Creating...' : t('Create Branch') }}
         </button>
       </div>
     </div>

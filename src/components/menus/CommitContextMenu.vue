@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
+import { useConfirmationStore } from '@/stores/confirmation';
+import { useI18n } from '@/i18n';
 import type { GraphCommitNode } from '@/types/graph';
 import {
   GitCommit,
@@ -23,6 +25,8 @@ const emit = defineEmits<{
 }>();
 
 const repoStore = useRepoStore();
+const confirmation = useConfirmationStore();
+const { t } = useI18n();
 
 const menuStyle = computed(() => {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
@@ -34,14 +38,14 @@ const menuStyle = computed(() => {
 });
 
 async function handleCherryPick() {
-  if (confirm(`Cherry-pick commit ${props.commit.short_id} ("${props.commit.summary}") into ${repoStore.repoInfo?.head_branch || 'HEAD'}?`)) {
+  if (await confirmation.confirm({ title: t('Cherry-pick Commit'), message: t('Apply {sha} ("{summary}") into {branch}?', { sha: props.commit.short_id, summary: props.commit.summary, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
     await repoStore.cherryPick(props.commit.id);
   }
   emit('close');
 }
 
 async function handleRevert() {
-  if (confirm(`Revert commit ${props.commit.short_id} ("${props.commit.summary}")?`)) {
+  if (await confirmation.confirm({ title: t('Revert Commit'), message: t('Revert {sha} ("{summary}")?', { sha: props.commit.short_id, summary: props.commit.summary }), danger: true })) {
     await repoStore.revertCommit(props.commit.id);
   }
   emit('close');
@@ -66,14 +70,14 @@ function handleNewTag() {
 }
 
 async function handleRebaseOnto() {
-  if (confirm(`Rebase branch '${repoStore.repoInfo?.head_branch}' onto commit ${props.commit.short_id}?`)) {
+  if (await confirmation.confirm({ title: t('Rebase Branch'), message: t("Rebase '{branch}' onto {sha}?", { branch: repoStore.repoInfo?.head_branch || 'HEAD', sha: props.commit.short_id }), danger: true })) {
     await repoStore.rebase(props.commit.id);
   }
   emit('close');
 }
 
 async function handleMergeInto() {
-  if (confirm(`Merge commit ${props.commit.short_id} into '${repoStore.repoInfo?.head_branch}'?`)) {
+  if (await confirmation.confirm({ title: t('Merge Commit'), message: t("Merge {sha} into '{branch}'?", { sha: props.commit.short_id, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
     await repoStore.mergeBranch(props.commit.id);
   }
   emit('close');
@@ -109,7 +113,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <GitCommit class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-        <span>Cherry-pick Commit...</span>
+        <span>{{ t('Cherry-pick Commit...') }}</span>
       </button>
 
       <button
@@ -117,7 +121,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <RotateCcw class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-        <span>Revert Commit...</span>
+        <span>{{ t('Revert Commit...') }}</span>
       </button>
 
       <button
@@ -125,7 +129,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 flex items-center space-x-2 font-medium transition"
       >
         <RotateCcw class="w-3.5 h-3.5 text-rose-500 shrink-0" />
-        <span>Reset '{{ repoStore.repoInfo?.head_branch }}' to this Commit...</span>
+        <span>{{ t("Reset '{branch}' to this Commit...", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
       </button>
     </div>
 
@@ -135,7 +139,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-        <span>New Branch at this Commit...</span>
+        <span>{{ t('New Branch at this Commit...') }}</span>
       </button>
 
       <button
@@ -143,7 +147,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <Tag class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-        <span>New Tag at this Commit...</span>
+        <span>{{ t('New Tag at this Commit...') }}</span>
       </button>
     </div>
 
@@ -153,7 +157,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-        <span>Rebase onto this Commit...</span>
+        <span>{{ t('Rebase onto this Commit...') }}</span>
       </button>
 
       <button
@@ -161,7 +165,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
       >
         <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-        <span>Merge this Commit into HEAD...</span>
+        <span>{{ t('Merge this Commit into HEAD...') }}</span>
       </button>
     </div>
 
@@ -171,7 +175,7 @@ onUnmounted(() => {
         class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 text-muted-foreground hover:text-foreground font-medium transition"
       >
         <Copy class="w-3.5 h-3.5 shrink-0" />
-        <span>Copy Commit SHA ({{ commit.short_id }})</span>
+        <span>{{ t('Copy Commit SHA ({sha})', { sha: commit.short_id }) }}</span>
       </button>
     </div>
   </div>
