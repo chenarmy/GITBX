@@ -72,7 +72,7 @@ jobs:
           # Keep partially uploaded releases out of /releases/latest.
           releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
@@ -89,7 +89,16 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const tag = context.ref.replace('refs/tags/', '');
-            const { data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            const release = releases.find((candidate) => candidate.tag_name === tag);
+            if (!release) {
+              core.setFailed(`Unable to find the draft release for ${tag}.`);
+              return;
+            }
             const names = release.assets.map((asset) => asset.name);
             const required = [
               ['latest.json', (name) => name === 'latest.json'],

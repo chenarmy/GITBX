@@ -89,12 +89,12 @@ node scripts/verify_all.cjs
 发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
 
 ```powershell
-pnpm version:set 0.1.3
+pnpm version:set 0.1.4
 pnpm install
 cargo check --workspace
 pnpm version:check
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。
