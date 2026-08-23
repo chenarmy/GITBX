@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, Check, FileWarning, LoaderCircle, X } from 'lucide-vue-next';
+import { AlertTriangle, Check, FileWarning, LoaderCircle, Sparkles, X } from 'lucide-vue-next';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useDiffStore } from '@/stores/diff';
 import { useNotificationStore } from '@/stores/notification';
 import { useRepoStore } from '@/stores/repo';
+import { useAiStore } from '@/stores/ai';
 import type { ConflictChunk, ConflictFileContent } from '@/types/diff';
 import { useI18n } from '@/i18n';
 
 const gitApi = useGitApi();
 const diffStore = useDiffStore();
 const repoStore = useRepoStore();
+const aiStore = useAiStore();
 const notification = useNotificationStore();
 const { t } = useI18n();
 
@@ -18,6 +20,7 @@ const conflict = ref<ConflictFileContent | null>(null);
 const resolutions = ref<Array<string | null>>([]);
 const isLoading = ref(false);
 const isSaving = ref(false);
+const isAiAnalyzing = ref(false);
 const errorMessage = ref('');
 
 function getConflictSection(chunk: ConflictChunk) {
@@ -112,6 +115,36 @@ async function saveTextResolution() {
   await finishResolution({ content: buildResolvedContent() });
 }
 
+async function handleAiAnalyze() {
+  const filePath = diffStore.selectedConflictFile;
+  if (!filePath || !conflict.value) return;
+  isAiAnalyzing.value = true;
+  errorMessage.value = '';
+  try {
+    const firstSection = conflictIndexes.value
+      .map((i) => getConflictSection(conflict.value!.chunks[i]))
+      .find((s) => s !== null);
+    if (!firstSection) return;
+    const res = await gitApi.analyzeConflict(
+      filePath,
+      firstSection.ours,
+      firstSection.theirs,
+      firstSection.base ?? undefined,
+      aiStore.llmConfig
+    );
+    if (res.suggested_content) {
+      conflictIndexes.value.forEach((idx) => {
+        resolutions.value[idx] = res.suggested_content;
+      });
+      notification.success(t('AI Suggestion Applied'), res.explanation);
+    }
+  } catch (error: any) {
+    errorMessage.value = formatGitError(error, t('AI Conflict Analysis failed'));
+  } finally {
+    isAiAnalyzing.value = false;
+  }
+}
+
 watch(
   () => [diffStore.selectedConflictFile, repoStore.activeRepoPath],
   () => void loadConflict(),
@@ -133,6 +166,16 @@ watch(
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         <template v-if="conflict && !conflict.is_binary && conflictIndexes.length > 0">
+          <button
+            @click="handleAiAnalyze"
+            :disabled="isAiAnalyzing || isLoading"
+            class="px-2 py-1 rounded border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            :title="t('Get AI merge conflict resolution suggestion')"
+          >
+            <LoaderCircle v-if="isAiAnalyzing" class="w-3.5 h-3.5 animate-spin" />
+            <Sparkles v-else class="w-3.5 h-3.5" />
+            <span>{{ t('AI Suggestion') }}</span>
+          </button>
           <button @click="chooseAll('ours')" class="px-2 py-1 rounded border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/10">
             {{ t('Use All Ours') }}
           </button>

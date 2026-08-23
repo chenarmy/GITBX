@@ -136,6 +136,19 @@ impl GitService {
         Ok(normalized)
     }
 
+    pub fn clone_repo(url: &str, destination: &str) -> Result<RepositoryInfo> {
+        let dest_path = Path::new(destination);
+        let mut fetch_options = git2::FetchOptions::new();
+        fetch_options.remote_callbacks(crate::remote::authenticated_remote_callbacks(
+            git2::Config::open_default().ok(),
+        ));
+        fetch_options.proxy_options(crate::proxy_options());
+        let mut builder = git2::build::RepoBuilder::new();
+        builder.fetch_options(fetch_options);
+        builder.clone(url, dest_path)?;
+        Self::info(destination)
+    }
+
     pub fn create_branch(
         path: &str,
         name: &str,
@@ -151,20 +164,15 @@ impl GitService {
         })
     }
 
-    pub fn delete_branch(path: &str, name: &str, force: bool) -> Result<()> {
+    pub fn delete_branch(path: &str, name: &str, _force: bool) -> Result<()> {
         Self::with_write_lock(path, |repo| {
             let mut branch = repo.inner().find_branch(name, BranchType::Local)?;
-            if !force && !branch.is_head() {
-                branch.delete()?;
-                return Ok(());
-            }
-            if force {
-                branch.delete()?;
-            } else {
+            if branch.is_head() {
                 return Err(GitbxError::General(
-                    "Cannot delete the current branch without force".into(),
+                    "Cannot delete the currently checked out branch".into(),
                 ));
             }
+            branch.delete()?;
             Ok(())
         })
     }
@@ -226,14 +234,35 @@ impl GitService {
     pub fn discard_file(path: &str, file_path: Option<&str>) -> Result<()> {
         Self::with_write_lock(path, |repo| {
             Self::ensure_no_operation(repo, "discarding changes")?;
-            let mut checkout = git2::build::CheckoutBuilder::new();
             if let Some(file_path) = file_path {
-                Self::validate_file_path(path, file_path)?;
-                checkout.path(file_path);
+                let validated = Self::validate_file_path(path, file_path)?;
+                let head_tree = repo.inner().head().ok().and_then(|h| h.peel_to_tree().ok());
+                let is_tracked_in_head = head_tree
+                    .as_ref()
+                    .is_some_and(|t| t.get_path(Path::new(file_path)).is_ok());
+                let is_tracked_in_index = repo
+                    .inner()
+                    .index()
+                    .ok()
+                    .is_some_and(|idx| idx.get_path(Path::new(file_path), 0).is_some());
+
+                if !is_tracked_in_head && !is_tracked_in_index {
+                    if validated.is_dir() {
+                        let _ = std::fs::remove_dir_all(&validated);
+                    } else if validated.exists() {
+                        let _ = std::fs::remove_file(&validated);
+                    }
+                    return Ok(());
+                }
+
+                let mut checkout = git2::build::CheckoutBuilder::new();
+                checkout.path(file_path).force();
+                repo.inner().checkout_head(Some(&mut checkout))?;
             } else {
+                let mut checkout = git2::build::CheckoutBuilder::new();
                 checkout.force();
+                repo.inner().checkout_head(Some(&mut checkout))?;
             }
-            repo.inner().checkout_head(Some(&mut checkout))?;
             Ok(())
         })
     }
@@ -293,6 +322,11 @@ impl GitService {
                 &tree,
                 &[&head, &theirs],
             )?;
+            drop(theirs);
+            drop(head);
+            drop(tree);
+            drop(annotated);
+            repo.inner_mut().cleanup_state()?;
             repo.inner().checkout_head(None)?;
             Ok(())
         })
@@ -308,12 +342,34 @@ impl GitService {
                     "Cherry-pick produced conflicts".into(),
                 ));
             }
+            let tree_id = repo.inner().index()?.write_tree()?;
+            let tree = repo.inner().find_tree(tree_id)?;
+            let head = repo.inner().head()?.peel_to_commit()?;
+            let signature = repo
+                .inner()
+                .signature()
+                .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+            let message = commit.message().unwrap_or("Cherry-pick commit").to_string();
+            repo.inner().commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &message,
+                &tree,
+                &[&head],
+            )?;
+            drop(head);
+            drop(tree);
+            drop(commit);
+            repo.inner_mut().cleanup_state()?;
+            repo.inner().checkout_head(None)?;
             Ok(())
         })
     }
 
     pub fn revert(path: &str, commit_id: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_clean_worktree(repo, "a revert")?;
             let commit = repo.inner().find_commit(git2::Oid::from_str(commit_id)?)?;
             repo.inner().revert(&commit, None)?;
             if repo.inner().index()?.has_conflicts() {
@@ -321,6 +377,31 @@ impl GitService {
                     "Revert produced conflicts".into(),
                 ));
             }
+            let tree_id = repo.inner().index()?.write_tree()?;
+            let tree = repo.inner().find_tree(tree_id)?;
+            let head = repo.inner().head()?.peel_to_commit()?;
+            let signature = repo
+                .inner()
+                .signature()
+                .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+            let summary = commit.summary().unwrap_or("commit");
+            let message = format!(
+                "Revert \"{}\"\n\nThis reverts commit {}.",
+                summary, commit_id
+            );
+            repo.inner().commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &message,
+                &tree,
+                &[&head],
+            )?;
+            drop(head);
+            drop(tree);
+            drop(commit);
+            repo.inner_mut().cleanup_state()?;
+            repo.inner().checkout_head(None)?;
             Ok(())
         })
     }
@@ -554,6 +635,56 @@ impl GitService {
         })
     }
 
+    pub fn continue_revert(path: &str) -> Result<String> {
+        Self::with_write_lock(path, |repo| {
+            if repo.inner().index()?.has_conflicts() {
+                return Err(GitbxError::MergeConflict(
+                    "Resolve all conflicts before continuing the revert".into(),
+                ));
+            }
+            Self::ensure_index_has_no_conflict_markers(repo)?;
+            let revert_id = repo
+                .inner()
+                .find_reference("REVERT_HEAD")?
+                .target()
+                .ok_or_else(|| GitbxError::General("No revert operation is in progress".into()))?;
+            let revert_commit = repo.inner().find_commit(revert_id)?;
+            let head = repo.inner().head()?.peel_to_commit()?;
+            let tree_id = repo.inner().index()?.write_tree()?;
+            let tree = repo.inner().find_tree(tree_id)?;
+            let signature = repo
+                .inner()
+                .signature()
+                .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+            let summary = revert_commit.summary().unwrap_or("commit");
+            let message = format!(
+                "Revert \"{}\"\n\nThis reverts commit {}.",
+                summary, revert_id
+            );
+            let id = repo.inner().commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &message,
+                &tree,
+                &[&head],
+            )?;
+            drop(revert_commit);
+            drop(head);
+            drop(tree);
+            repo.inner_mut().cleanup_state()?;
+            repo.inner().checkout_head(None)?;
+            Ok(id.to_string())
+        })
+    }
+
+    pub fn get_commit_changes(
+        path: &str,
+        commit_id: &str,
+    ) -> Result<Vec<crate::status::FileStatusItem>> {
+        Self::open(path)?.get_commit_changes(commit_id)
+    }
+
     pub fn worktree(path: &str, destination: &str, branch_name: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
             let branch = repo.inner().find_branch(branch_name, BranchType::Local)?;
@@ -612,5 +743,101 @@ mod tests {
                 .as_deref(),
             Some("feature/test")
         );
+    }
+
+    #[test]
+    fn protects_current_branch_from_deletion() {
+        let dir = tempdir().expect("tempdir");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).expect("repo dir");
+        let repo = Repository::init(&repo_path).expect("init");
+        fs::write(repo_path.join("README.md"), "hello\n").expect("write");
+        let mut index = repo.index().expect("index");
+        index
+            .add_path(std::path::Path::new("README.md"))
+            .expect("stage");
+        let tree_id = index.write_tree().expect("tree");
+        index.write().expect("write index");
+        let tree = repo.find_tree(tree_id).expect("tree object");
+        let signature = git2::Signature::now("Test", "test@example.com").expect("signature");
+        repo.commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .expect("commit");
+        drop(tree);
+        drop(index);
+
+        let path_str = repo_path.to_str().unwrap();
+        let head_branch = GitService::info(path_str)
+            .expect("info")
+            .head_branch
+            .unwrap();
+        assert!(GitService::delete_branch(path_str, &head_branch, true).is_err());
+    }
+
+    #[test]
+    fn discards_untracked_file_by_removing_from_disk() {
+        let dir = tempdir().expect("tempdir");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).expect("repo dir");
+        Repository::init(&repo_path).expect("init");
+        let new_file = repo_path.join("untracked.txt");
+        fs::write(&new_file, "content").expect("write");
+        assert!(new_file.exists());
+
+        let path_str = repo_path.to_str().unwrap();
+        GitService::discard_file(path_str, Some("untracked.txt")).expect("discard");
+        assert!(!new_file.exists());
+    }
+
+    #[test]
+    fn revert_and_merge_cleanup_repository_state() {
+        let dir = tempdir().expect("tempdir");
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).expect("repo dir");
+        let repo = Repository::init(&repo_path).expect("init");
+        fs::write(repo_path.join("file.txt"), "v1\n").expect("write");
+        let mut index = repo.index().expect("index");
+        index
+            .add_path(std::path::Path::new("file.txt"))
+            .expect("stage");
+        let tree_id = index.write_tree().expect("tree");
+        index.write().expect("write index");
+        let tree = repo.find_tree(tree_id).expect("tree object");
+        let signature = git2::Signature::now("Test", "test@example.com").expect("signature");
+        let c1 = repo
+            .commit(Some("HEAD"), &signature, &signature, "first", &tree, &[])
+            .expect("commit");
+
+        fs::write(repo_path.join("file.txt"), "v2\n").expect("write");
+        index
+            .add_path(std::path::Path::new("file.txt"))
+            .expect("stage");
+        let tree_id2 = index.write_tree().expect("tree");
+        index.write().expect("write index");
+        let tree2 = repo.find_tree(tree_id2).expect("tree object");
+        let c1_obj = repo.find_commit(c1).expect("find c1");
+        let c2 = repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "second",
+                &tree2,
+                &[&c1_obj],
+            )
+            .expect("commit");
+        drop(c1_obj);
+        drop(tree);
+        drop(tree2);
+        drop(index);
+
+        let path_str = repo_path.to_str().unwrap();
+        GitService::revert(path_str, &c2.to_string()).expect("revert");
+        let info = GitService::info(path_str).expect("info");
+        assert!(!info.is_reverting);
+        assert!(!info.is_dirty);
+        let changes = GitService::get_commit_changes(path_str, &info.head_commit_id.unwrap())
+            .expect("commit changes");
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "file.txt");
     }
 }

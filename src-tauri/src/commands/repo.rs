@@ -18,14 +18,7 @@ pub async fn init_repo(repo_path: String) -> CommandResult<RepositoryInfo> {
 
 #[tauri::command]
 pub async fn clone_repo(url: String, destination: String) -> CommandResult<RepositoryInfo> {
-    let mut fetch_options = git2::FetchOptions::new();
-    fetch_options.proxy_options(gitbx_core::proxy_options());
-    let mut builder = git2::build::RepoBuilder::new();
-    builder.fetch_options(fetch_options);
-    builder
-        .clone(&url, std::path::Path::new(&destination))
-        .map_err(|e| e.to_string())?;
-    GitService::info(&destination).map_err(|e| e.to_string())
+    GitService::clone_repo(&url, &destination).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -225,6 +218,19 @@ pub async fn cherry_pick_continue(repo_path: String) -> CommandResult<String> {
 #[tauri::command]
 pub async fn revert(repo_path: String, commit_id: String) -> CommandResult<()> {
     GitService::revert(&repo_path, &commit_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn revert_continue(repo_path: String) -> CommandResult<String> {
+    GitService::continue_revert(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_commit_changes(
+    repo_path: String,
+    commit_id: String,
+) -> CommandResult<Vec<gitbx_core::FileStatusItem>> {
+    GitService::get_commit_changes(&repo_path, &commit_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

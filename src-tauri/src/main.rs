@@ -50,6 +50,8 @@ fn main() {
             repo::cherry_pick,
             repo::cherry_pick_continue,
             repo::revert,
+            repo::revert_continue,
+            repo::get_commit_changes,
             repo::fetch_remote,
             repo::pull,
             repo::push,

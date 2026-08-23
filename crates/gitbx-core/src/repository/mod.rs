@@ -16,6 +16,7 @@ pub struct RepositoryInfo {
     pub is_merging: bool,
     pub is_rebasing: bool,
     pub is_cherry_picking: bool,
+    pub is_reverting: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +140,11 @@ impl Repository {
 
         let state = self.inner.state();
 
+        let is_reverting = matches!(
+            state,
+            git2::RepositoryState::Revert | git2::RepositoryState::RevertSequence
+        );
+
         Ok(RepositoryInfo {
             name,
             path: self.path.to_string_lossy().to_string(),
@@ -159,6 +165,7 @@ impl Repository {
                 state,
                 git2::RepositoryState::CherryPick | git2::RepositoryState::CherryPickSequence
             ),
+            is_reverting,
         })
     }
 
@@ -174,6 +181,34 @@ impl Repository {
                 return Ok(Vec::new());
             }
             return Err(error.into());
+        }
+
+        let mut branch_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        if let Ok(branches) = self.inner.branches(None) {
+            for item in branches.flatten() {
+                if let Ok(target) = item.0.get().peel_to_commit() {
+                    let name = item.0.name().ok().flatten().unwrap_or("").to_string();
+                    if !name.is_empty() {
+                        branch_map.entry(target.id()).or_default().push(name);
+                    }
+                }
+            }
+        }
+
+        let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        if let Ok(tags) = self.inner.tag_names(None) {
+            for name in tags.iter().flatten() {
+                if let Ok(obj) = self.inner.revparse_single(&format!("refs/tags/{}", name)) {
+                    if let Ok(commit) = obj.peel_to_commit() {
+                        tag_map
+                            .entry(commit.id())
+                            .or_default()
+                            .push(name.to_string());
+                    }
+                }
+            }
         }
 
         let mut revwalk = self.inner.revwalk()?;
@@ -206,12 +241,56 @@ impl Repository {
                 committer_time: committer.when().seconds(),
                 summary: commit.summary().unwrap_or("").to_string(),
                 body: commit.body().map(|s| s.to_string()),
-                branch_refs: Vec::new(),
-                tag_refs: Vec::new(),
+                branch_refs: branch_map.get(&commit.id()).cloned().unwrap_or_default(),
+                tag_refs: tag_map.get(&commit.id()).cloned().unwrap_or_default(),
             });
         }
 
         Ok(commits)
+    }
+
+    pub fn get_commit_changes(
+        &self,
+        commit_id: &str,
+    ) -> Result<Vec<crate::status::FileStatusItem>> {
+        let commit = self.inner.find_commit(git2::Oid::from_str(commit_id)?)?;
+        let tree = commit.tree()?;
+        let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+        let mut diff_opts = git2::DiffOptions::new();
+        let diff = self.inner.diff_tree_to_tree(
+            parent_tree.as_ref(),
+            Some(&tree),
+            Some(&mut diff_opts),
+        )?;
+
+        let mut items = Vec::new();
+        for delta in diff.deltas() {
+            let old_file = delta.old_file();
+            let new_file = delta.new_file();
+            let path = new_file
+                .path()
+                .or_else(|| old_file.path())
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let old_path = old_file.path().map(|p| p.to_string_lossy().to_string());
+            let status = match delta.status() {
+                git2::Delta::Added => crate::status::FileDeltaStatus::Added,
+                git2::Delta::Deleted => crate::status::FileDeltaStatus::Deleted,
+                git2::Delta::Modified => crate::status::FileDeltaStatus::Modified,
+                git2::Delta::Renamed => crate::status::FileDeltaStatus::Renamed,
+                git2::Delta::Typechange => crate::status::FileDeltaStatus::Typechange,
+                _ => crate::status::FileDeltaStatus::Modified,
+            };
+            items.push(crate::status::FileStatusItem {
+                path,
+                old_path,
+                staged_status: status,
+                unstaged_status: crate::status::FileDeltaStatus::Unmodified,
+                is_staged: true,
+                is_conflicted: false,
+            });
+        }
+        Ok(items)
     }
 }
 

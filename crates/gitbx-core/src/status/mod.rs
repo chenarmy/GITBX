@@ -149,28 +149,30 @@ impl Repository {
                 "Finish or abort the current Git operation before unstaging files".into(),
             ));
         }
-        let head = self.inner().head()?.peel_to_commit()?;
-        let head_tree = head.tree()?;
         let mut index = self.inner().index()?;
-
-        if let Ok(entry) = head_tree.get_path(Path::new(path)) {
-            index.add_frombuffer(
-                &git2::IndexEntry {
-                    ctime: git2::IndexTime::new(0, 0),
-                    mtime: git2::IndexTime::new(0, 0),
-                    dev: 0,
-                    ino: 0,
-                    mode: entry.filemode() as u32,
-                    uid: 0,
-                    gid: 0,
-                    file_size: 0,
-                    id: entry.id(),
-                    flags: 0,
-                    flags_extended: 0,
-                    path: path.as_bytes().to_vec(),
-                },
-                &[],
-            )?;
+        if let Ok(head) = self.inner().head().and_then(|h| h.peel_to_commit()) {
+            let head_tree = head.tree()?;
+            if let Ok(entry) = head_tree.get_path(Path::new(path)) {
+                index.add_frombuffer(
+                    &git2::IndexEntry {
+                        ctime: git2::IndexTime::new(0, 0),
+                        mtime: git2::IndexTime::new(0, 0),
+                        dev: 0,
+                        ino: 0,
+                        mode: entry.filemode() as u32,
+                        uid: 0,
+                        gid: 0,
+                        file_size: 0,
+                        id: entry.id(),
+                        flags: 0,
+                        flags_extended: 0,
+                        path: path.as_bytes().to_vec(),
+                    },
+                    &[],
+                )?;
+            } else {
+                index.remove_path(Path::new(path))?;
+            }
         } else {
             index.remove_path(Path::new(path))?;
         }

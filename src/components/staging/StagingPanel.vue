@@ -11,6 +11,7 @@ import {
   FileEdit,
   RotateCcw,
   AlertTriangle,
+  GitCommit,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
@@ -88,8 +89,51 @@ async function handleDiscardFile(e: Event, filePath: string) {
       </div>
     </div>
 
-    <!-- Staged Changes Section -->
-    <div class="flex-1 flex flex-col min-h-0 border-b border-border">
+    <!-- Selected Commit Changes Section (when inspecting a historical commit) -->
+    <div
+      v-if="repoStore.selectedCommit && diffStore.commitId"
+      class="flex-1 flex flex-col min-h-0 bg-muted/10"
+    >
+      <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
+        <div class="flex items-center space-x-1.5 min-w-0">
+          <GitCommit class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="font-mono text-[11px] text-primary">{{ repoStore.selectedCommit.short_id }}</span>
+          <span class="text-[10px] text-muted-foreground truncate font-normal">({{ repoStore.selectedCommitFiles.length }} {{ t('files') }})</span>
+        </div>
+        <button
+          @click="diffStore.clearSelection(); repoStore.selectedCommit = null;"
+          class="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+        >
+          {{ t('Working Tree') }}
+        </button>
+      </div>
+
+      <div class="p-2 border-b border-border bg-card/60">
+        <div class="font-medium text-foreground truncate text-[11px]">{{ repoStore.selectedCommit.summary }}</div>
+        <div class="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-between">
+          <span>{{ repoStore.selectedCommit.author_name }}</span>
+          <span>{{ new Date(repoStore.selectedCommit.author_time * 1000).toLocaleDateString() }}</span>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+        <div
+          v-for="file in repoStore.selectedCommitFiles"
+          :key="file.path"
+          @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath, repoStore.selectedCommit?.id)"
+          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs"
+          :class="diffStore.selectedFile === file.path ? 'bg-primary/15 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+        >
+          <div class="flex items-center space-x-1.5 truncate">
+            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
+            <span class="truncate">{{ file.path }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staged Changes Section (Normal Working Tree) -->
+    <div v-else class="flex-1 flex flex-col min-h-0 border-b border-border">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>{{ t('Staged Changes') }}</span>
@@ -98,7 +142,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </span>
         </div>
         <button
-          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
+          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
           @click="repoStore.unstageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
           :title="t('Unstage All')"
@@ -121,7 +165,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <span class="truncate">{{ file.path }}</span>
           </div>
           <button
-            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
+            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
             @click.stop="repoStore.unstageFile(file.path)"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
             :title="t('Unstage File')"
@@ -133,7 +177,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
     </div>
 
     <!-- Unstaged Changes & Untracked Files Section -->
-    <div class="flex-1 flex flex-col min-h-0">
+    <div v-if="!diffStore.commitId" class="flex-1 flex flex-col min-h-0">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>{{ t('Changes') }}</span>

@@ -142,6 +142,7 @@ export const useDiffStore = defineStore('diff', () => {
     selectedFile,
     isStaged,
     selectedCommitId,
+    commitId: selectedCommitId,
     selectedConflictFile,
     activeDiff,
     selectFile,

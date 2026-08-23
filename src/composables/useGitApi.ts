@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   RepositoryInfo,
   RepoStatusSummary,
+  FileStatusItem,
   BranchItem,
   RemoteItem,
   TagItem,
@@ -13,6 +14,7 @@ import type {
   LlmConfig,
   GeneratedCommitMessage,
   SecretDetection,
+  ConflictResolutionSuggestion,
 } from '@/types/ai';
 import { useConsoleStore } from '@/stores/console';
 
@@ -961,6 +963,73 @@ export function useGitApi() {
     return detections;
   };
 
+  const continueRevert = async (repoPath: string): Promise<string> => {
+    const cmd = `git revert --continue`;
+    getConsole().logCommand(cmd);
+    if (isTauri()) {
+      const commitId = await invoke<string>('revert_continue', { repoPath });
+      getConsole().logSuccess(`Revert continued. Created commit ${commitId.slice(0, 7)}.`);
+      return commitId;
+    }
+    const res = await fetch('/api/repo/revert/continue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath }),
+    });
+    const data = await parseGitResponse<{ success: boolean; commit_id: string }>(res, 'Failed to continue revert');
+    getConsole().logSuccess(`Revert continued. Created commit ${data.commit_id.slice(0, 7)}.`);
+    return data.commit_id;
+  };
+
+  const getCommitChanges = async (repoPath: string, commitId: string): Promise<FileStatusItem[]> => {
+    if (isTauri()) {
+      return await invoke<FileStatusItem[]>('get_commit_changes', { repoPath, commitId });
+    }
+    const res = await fetch(`/api/repo/commit-changes?path=${encodeURIComponent(repoPath)}&commit_id=${encodeURIComponent(commitId)}`);
+    return await parseGitResponse<FileStatusItem[]>(res, 'Failed to fetch commit changes');
+  };
+
+  const analyzeConflict = async (
+    filePath: string,
+    ours: string,
+    theirs: string,
+    base?: string,
+    config?: LlmConfig
+  ): Promise<ConflictResolutionSuggestion> => {
+    getConsole().logInfo(`AI analyzing merge conflict in ${filePath}...`);
+    const finalConfig: LlmConfig = config || { provider: 'openai', api_base: 'https://api.openai.com/v1', model: 'gpt-4o' };
+    let requestConfig: LlmConfig = finalConfig;
+    if (isTauri() && !finalConfig.api_key) {
+      try {
+        const apiKey = await invoke<string>('get_credential', { provider: finalConfig.provider, username: 'default' });
+        requestConfig = { ...finalConfig, api_key: apiKey };
+      } catch {
+        // Keyless provider
+      }
+    }
+    if (isTauri()) {
+      return await invoke<ConflictResolutionSuggestion>('analyze_conflict', {
+        filePath,
+        ours,
+        theirs,
+        base,
+        config: requestConfig,
+      });
+    }
+    const res = await fetch('/api/ai/conflict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_path: filePath, ours, theirs, base, config: requestConfig }),
+    });
+    if (!res.ok) throw new Error((await res.text()) || 'AI conflict analysis failed');
+    return await res.json();
+  };
+
+  const getCredential = async (provider: string, username = 'default'): Promise<string> => {
+    if (!isTauri()) throw new Error('Credential storage is only available in the desktop keyring');
+    return await invoke<string>('get_credential', { provider, username });
+  };
+
   const saveCredential = async (provider: string, token: string): Promise<void> => {
     if (!isTauri()) throw new Error('Credential storage is only available in the desktop keyring');
     await invoke('save_credential', { provider, username: 'default', token });
@@ -1005,6 +1074,8 @@ export function useGitApi() {
     continueCherryPick,
     abortCherryPick,
     revertCommit,
+    continueRevert,
+    getCommitChanges,
     reset,
     fetchRemote,
     createWorktree,
@@ -1013,6 +1084,8 @@ export function useGitApi() {
     openSystemTerminal,
     generateCommitMessage,
     scanSecrets,
+    analyzeConflict,
+    getCredential,
     saveCredential,
   };
 }

@@ -125,15 +125,18 @@ async function handleCherryPick() {
   }
 }
 
-async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-pick' | 'revert') {
   if (repoStore.statusSummary.conflicted_files.length > 0) {
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) diffStore.selectConflictFile(firstConflict);
     notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
     return;
   }
   try {
     if (operation === 'merge') await repoStore.continueMerge();
     else if (operation === 'rebase') await repoStore.continueRebase();
-    else await repoStore.continueCherryPick();
+    else if (operation === 'cherry-pick') await repoStore.continueCherryPick();
+    else await repoStore.continueRevert();
     diffStore.clearSelection();
     notification.success(t('Operation Continued'), t('The Git operation completed successfully.'));
   } catch (error: any) {
@@ -141,7 +144,7 @@ async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-p
   }
 }
 
-async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick' | 'revert') {
   const confirmed = await confirmation.confirm({
     title: t('Abort Operation'),
     message: t('Abort the current Git operation and restore the previous working tree?'),
@@ -152,7 +155,8 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
   try {
     if (operation === 'merge') await repoStore.abortMerge();
     else if (operation === 'rebase') await repoStore.abortRebase();
-    else await repoStore.abortCherryPick();
+    else if (operation === 'cherry-pick') await repoStore.abortCherryPick();
+    else await repoStore.abortRevert();
     diffStore.clearSelection();
     notification.info(t('Operation Aborted'), t('The previous working tree was restored.'));
   } catch (error: any) {
@@ -163,15 +167,15 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
 
 <template>
   <div class="dbx-toolbar flex flex-col bg-card border-b border-border">
-    <!-- In-progress Operation Banner (Merge / Rebase / Cherry-pick) -->
+    <!-- In-progress Operation Banner (Merge / Rebase / Cherry-pick / Revert) -->
     <div
-      v-if="repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
+      v-if="repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking || repoStore.repoInfo?.is_reverting"
       class="h-8 bg-amber-500/10 border-b border-amber-500/30 px-3 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 select-none animate-pulse"
     >
       <div class="flex items-center space-x-2">
         <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
         <span class="font-bold">
-          {{ repoStore.repoInfo?.is_merging ? t('Merge in progress') : repoStore.repoInfo?.is_rebasing ? t('Rebase in progress') : t('Cherry-pick in progress') }}
+          {{ repoStore.repoInfo?.is_merging ? t('Merge in progress') : repoStore.repoInfo?.is_rebasing ? t('Rebase in progress') : repoStore.repoInfo?.is_cherry_picking ? t('Cherry-pick in progress') : t('Revert in progress') }}
         </span>
         <span class="text-[11px] opacity-80">
           ({{ t('Resolve conflicted files in staging panel, then Continue or Abort') }})
@@ -231,6 +235,24 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Cherry-pick') }}</span>
+        </button>
+
+        <button
+          v-if="repoStore.repoInfo?.is_reverting"
+          @click="handleAbortOperation('revert')"
+          class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
+        >
+          <XCircle class="w-3 h-3" />
+          <span>{{ t('Abort Revert') }}</span>
+        </button>
+        <button
+          v-if="repoStore.repoInfo?.is_reverting"
+          @click="handleContinueOperation('revert')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Play class="w-3 h-3" />
+          <span>{{ t('Continue Revert') }}</span>
         </button>
       </div>
     </div>

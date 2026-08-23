@@ -37,6 +37,7 @@ export interface RepositoryInfo {
   is_merging?: boolean;
   is_rebasing?: boolean;
   is_cherry_picking?: boolean;
+  is_reverting?: boolean;
 }
 
 export interface BranchItem {

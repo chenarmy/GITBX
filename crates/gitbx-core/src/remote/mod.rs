@@ -11,37 +11,47 @@ pub struct RemoteItem {
     pub push_url: Option<String>,
 }
 
-impl Repository {
-    fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
-        let config = self.inner().config()?;
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(
-            move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
-                if allowed.is_user_pass_plaintext() {
-                    if let Ok(credential) = Cred::credential_helper(&config, url, username_from_url)
+pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCallbacks<'static> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(
+        move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
+            if allowed.is_user_pass_plaintext() {
+                if let Some(ref cfg) = config {
+                    if let Ok(credential) = Cred::credential_helper(cfg, url, username_from_url) {
+                        return Ok(credential);
+                    }
+                } else if let Ok(default_cfg) = git2::Config::open_default() {
+                    if let Ok(credential) =
+                        Cred::credential_helper(&default_cfg, url, username_from_url)
                     {
                         return Ok(credential);
                     }
                 }
+            }
 
-                if allowed.is_ssh_key() {
-                    return Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"));
-                }
+            if allowed.is_ssh_key() {
+                return Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"));
+            }
 
-                if allowed.is_username() {
-                    return Cred::username(username_from_url.unwrap_or("git"));
-                }
+            if allowed.is_username() {
+                return Cred::username(username_from_url.unwrap_or("git"));
+            }
 
-                if allowed.is_default() {
-                    return Cred::default();
-                }
+            if allowed.is_default() {
+                return Cred::default();
+            }
 
-                Err(Error::from_str(
-                    "no supported credentials were found in Git Credential Manager or SSH agent",
-                ))
-            },
-        );
-        Ok(callbacks)
+            Err(Error::from_str(
+                "no supported credentials were found in Git Credential Manager or SSH agent",
+            ))
+        },
+    );
+    callbacks
+}
+
+impl Repository {
+    fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
+        Ok(authenticated_remote_callbacks(self.inner().config().ok()))
     }
 
     pub fn list_remotes(&self) -> Result<Vec<RemoteItem>> {

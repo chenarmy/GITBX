@@ -1,5 +1,5 @@
 <script setup lang="ts">
- import { ref, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import { useRepoStore } from '@/stores/repo';
 import { useGitApi } from '@/composables/useGitApi';
@@ -7,11 +7,12 @@ import { useNotificationStore } from '@/stores/notification';
 import { useI18n } from '@/i18n';
 import {
   Sparkles,
-  ShieldCheck,
   Send,
   X,
   Copy,
   Check,
+  ShieldAlert,
+  RefreshCw,
 } from 'lucide-vue-next';
 
 const aiStore = useAiStore();
@@ -22,20 +23,18 @@ const { t } = useI18n();
 
 const naturalCommand = ref('');
 const isCopied = ref(false);
+const summaryDraft = ref('');
+const bodyDraft = ref('');
 
 const hasGeneratedMessage = computed(() => Boolean(aiStore.generatedMessage?.summary?.trim()));
 const naturalCommandPlaceholder = computed(() => t("e.g. 'Undo last commit without losing changes' or 'Create and switch to feat/mcp-tools'..."));
 
-const displayedCommit = computed(() => {
-  if (aiStore.generatedMessage) {
-    return {
-      type: aiStore.generatedMessage.commit_type,
-      summary: aiStore.generatedMessage.summary,
-      body: aiStore.generatedMessage.body || '',
-    };
+watch(() => aiStore.generatedMessage, (val) => {
+  if (val) {
+    summaryDraft.value = val.summary;
+    bodyDraft.value = val.body || '';
   }
-  return { type: '', summary: '', body: '' };
-});
+}, { immediate: true });
 
 async function generate() {
   aiStore.isGenerating = true;
@@ -94,10 +93,9 @@ watch(() => aiStore.isAiModalOpen, (open) => {
 });
 
 function getFullMessage(): string {
-  const commit = displayedCommit.value;
-  return commit.body && commit.body.trim().length > 0
-    ? `${commit.summary}\n\n${commit.body}`
-    : commit.summary;
+  const summary = summaryDraft.value.trim();
+  const body = bodyDraft.value.trim();
+  return body.length > 0 ? `${summary}\n\n${body}` : summary;
 }
 
 function applyToCommitBox() {
@@ -107,6 +105,23 @@ function applyToCommitBox() {
   }
   aiStore.applyCommitMessage(getFullMessage());
   aiStore.closeAiModal();
+}
+
+async function handleNaturalCommand() {
+  const query = naturalCommand.value.trim();
+  if (!query) return;
+  aiStore.isGenerating = true;
+  try {
+    const prompt = `User instruction: ${query}\nRepo: ${repoStore.activeRepoPath}\nBranch: ${repoStore.repoInfo?.head_branch || 'main'}`;
+    const res = await gitApi.generateCommitMessage(prompt, aiStore.llmConfig);
+    aiStore.generatedMessage = res;
+    naturalCommand.value = '';
+    notification.success(t('AI Response'), res.summary);
+  } catch (error: any) {
+    notification.error(t('AI Assistant Error'), error?.message || String(error));
+  } finally {
+    aiStore.isGenerating = false;
+  }
 }
 
 function copyMessage() {
@@ -125,67 +140,93 @@ function copyMessage() {
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
   >
     <div
-      class="w-full max-w-2xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs animate-in fade-in zoom-in-95 duration-150"
     >
-      <!-- Modal Header -->
+      <!-- Header -->
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <div class="p-1 rounded bg-indigo-500/20 text-indigo-400">
-            <Sparkles class="w-4 h-4" />
-          </div>
-          <span class="font-bold text-sm text-foreground">GITBX AI Copilot</span>
+          <Sparkles class="w-4 h-4 text-indigo-400 animate-pulse" />
+          <span class="font-bold text-sm text-foreground">{{ t('GITBX AI Assistant') }}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            {{ aiStore.llmConfig.provider }} / {{ aiStore.llmConfig.model }}
+          </span>
         </div>
         <button
           @click="aiStore.closeAiModal()"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition cursor-pointer"
         >
           <X class="w-4 h-4" />
         </button>
       </div>
 
-      <!-- Modal Body -->
-      <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
-        <!-- 1. Pre-commit Secret Scanner Status -->
+      <!-- Body Content -->
+      <div class="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
+        <!-- 1. Secret Scanning Alert -->
         <div
-          class="p-3 rounded-lg border flex items-center justify-between"
-          :class="hasGeneratedMessage ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-secondary border-border'"
+          v-if="aiStore.detectedSecrets.length > 0"
+          class="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 space-y-2"
         >
-          <div class="flex items-center space-x-2.5">
-            <ShieldCheck class="w-5 h-5 shrink-0" :class="hasGeneratedMessage ? 'text-emerald-400' : 'text-muted-foreground'" />
-            <div>
-              <div class="font-semibold" :class="hasGeneratedMessage ? 'text-emerald-300' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? t('Potential secrets detected') : hasGeneratedMessage ? t('Security & Secret Check Passed') : t('Waiting for staged changes') }}
-              </div>
-              <div class="text-[11px]" :class="hasGeneratedMessage ? 'text-emerald-400/80' : 'text-muted-foreground'">
-                {{ aiStore.detectedSecrets.length ? t('Review detected secrets before committing.') : hasGeneratedMessage ? t('The staged diff has been checked for common credential patterns.') : t('Stage at least one file to run the security scan.') }}
-              </div>
+          <div class="flex items-center space-x-2 font-bold text-rose-400">
+            <ShieldAlert class="w-4 h-4 shrink-0" />
+            <span>{{ t('Security Warning: Secrets Detected!') }}</span>
+          </div>
+          <p class="text-[11px] text-muted-foreground">
+            GITBX detected sensitive tokens in your staged diff. Please review and remove them before committing.
+          </p>
+          <div class="space-y-1 mt-2">
+            <div
+              v-for="(sec, index) in aiStore.detectedSecrets"
+              :key="index"
+              class="flex items-center justify-between bg-card/60 px-2 py-1 rounded text-[11px] border border-rose-500/20"
+            >
+              <span class="font-medium text-rose-200">{{ sec.rule_name }}</span>
+              <span class="font-mono text-muted-foreground">Line {{ sec.line_number }}</span>
             </div>
           </div>
-          <span
-            class="px-2 py-0.5 rounded text-[10px] font-bold"
-            :class="hasGeneratedMessage ? 'bg-emerald-500/20 text-emerald-300' : 'bg-secondary text-muted-foreground'"
-          >{{ hasGeneratedMessage ? t('CLEAN') : t('WAITING') }}</span>
         </div>
 
-        <!-- 2. AI Commit Message Generator Result -->
+        <!-- 2. AI Generated Commit Preview -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="font-semibold text-foreground">{{ t('AI Generated Commit Message (Conventional Commits)') }}</span>
-            <span class="text-[10px] text-muted-foreground">{{ t('Model') }}: {{ aiStore.llmConfig.model }}</span>
+            <div class="flex items-center space-x-2">
+              <span class="font-semibold text-foreground">{{ t('Generated Conventional Commit') }}</span>
+              <span class="text-[10px] text-muted-foreground">({{ aiStore.llmConfig.model }})</span>
+            </div>
+            <button
+              @click="generate"
+              :disabled="aiStore.isGenerating"
+              class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': aiStore.isGenerating }" />
+              <span>{{ t('Regenerate') }}</span>
+            </button>
           </div>
 
-          <div class="p-3 rounded-lg bg-background border border-border space-y-2 font-mono text-[11px]">
-            <div v-if="aiStore.isGenerating" class="text-muted-foreground">{{ t('Generating from staged changes…') }}</div>
-            <div v-else-if="displayedCommit.summary" class="text-indigo-400 font-bold">{{ displayedCommit.summary }}</div>
-            <div v-else class="text-muted-foreground">{{ t('Stage at least one file to generate a real commit message.') }}</div>
-            <div v-if="displayedCommit.body" class="text-muted-foreground whitespace-pre-line border-t border-border/40 pt-2">{{ displayedCommit.body }}</div>
+          <div class="bg-background border border-border rounded-lg p-3 space-y-2">
+            <div>
+              <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{{ t('Summary') }}</label>
+              <input
+                v-model="summaryDraft"
+                type="text"
+                class="w-full bg-card border border-border rounded px-2.5 py-1.5 mt-0.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{{ t('Body (Optional)') }}</label>
+              <textarea
+                v-model="bodyDraft"
+                rows="3"
+                class="w-full bg-card border border-border rounded px-2.5 py-1.5 mt-0.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+              ></textarea>
+            </div>
           </div>
 
+          <!-- Actions -->
           <div class="flex items-center justify-end space-x-2 pt-1">
             <button
               @click="copyMessage"
               :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-secondary hover:bg-accent text-secondary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded border border-border hover:bg-accent text-foreground transition disabled:opacity-40 cursor-pointer"
             >
               <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-blue-400" />
               <span>{{ isCopied ? t('Copied') : t('Copy Message') }}</span>
@@ -193,7 +234,7 @@ function copyMessage() {
             <button
               @click="applyToCommitBox"
               :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <Check class="w-3.5 h-3.5" />
               <span>{{ t('Apply to Commit Box') }}</span>
@@ -209,9 +250,14 @@ function copyMessage() {
               v-model="naturalCommand"
               type="text"
               :placeholder="naturalCommandPlaceholder"
+              @keydown.enter="handleNaturalCommand"
               class="flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-xs"
             />
-            <button @click="generate" :disabled="aiStore.isGenerating" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50">
+            <button
+              @click="handleNaturalCommand"
+              :disabled="aiStore.isGenerating || !naturalCommand.trim()"
+              class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+            >
               <Send class="w-3.5 h-3.5" />
               <span>{{ t('Run') }}</span>
             </button>
