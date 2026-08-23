@@ -19,11 +19,11 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: --bundles nsis,msi
-          - platform: macos-latest
-            args: --bundles app,dmg
+            args: --bundles nsis --bundles msi
+          - platform: macos-14
+            args: --bundles app --bundles dmg
           - platform: ubuntu-22.04
-            args: --bundles appimage,deb
+            args: --bundles appimage --bundles deb
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -101,15 +101,26 @@ jobs:
             }
             const names = release.assets.map((asset) => asset.name);
             const required = [
-              ['latest.json', (name) => name === 'latest.json'],
               ['Windows NSIS installer', (name) => /_x64-setup\.exe$/.test(name)],
-              ['Windows updater signature', (name) => /_x64-setup\.exe\.sig$/.test(name)],
+              ['Windows NSIS signature', (name) => /_x64-setup\.exe\.sig$/.test(name)],
+              ['Windows MSI installer', (name) => /_x64_en-US\.msi$/.test(name)],
+              ['Windows MSI signature', (name) => /_x64_en-US\.msi\.sig$/.test(name)],
+              ['Linux AppImage', (name) => /\.AppImage$/.test(name)],
+              ['Linux AppImage signature', (name) => /\.AppImage\.sig$/.test(name)],
+              ['Linux DEB', (name) => /\.deb$/.test(name)],
+              ['Linux DEB signature', (name) => /\.deb\.sig$/.test(name)],
+              ['macOS DMG', (name) => /\.dmg$/.test(name)],
+              ['macOS updater bundle', (name) => /\.app\.tar\.gz$/.test(name)],
               ['macOS updater signature', (name) => /\.app\.tar\.gz\.sig$/.test(name)],
-              ['Linux updater signature', (name) => /\.AppImage\.sig$/.test(name)],
+              ['latest.json', (name) => name === 'latest.json'],
             ];
             const missing = required.filter(([, matches]) => !names.some(matches)).map(([label]) => label);
             if (missing.length) {
               core.setFailed(`Release remains a draft because assets are missing: ${missing.join(', ')}`);
+              return;
+            }
+            if (names.length !== required.length) {
+              core.setFailed(`Release has ${names.length} assets; expected exactly ${required.length}.`);
               return;
             }
             await github.rest.repos.updateRelease({
