@@ -8,6 +8,7 @@ export const useDiffStore = defineStore('diff', () => {
   const selectedFile = ref<string | null>(null);
   const isStaged = ref<boolean>(false);
   const selectedCommitId = ref<string | null>(null);
+  const selectedConflictFile = ref<string | null>(null);
   const activeDiff = ref<FileDiff>({
     old_path: undefined,
     new_path: undefined,
@@ -18,6 +19,7 @@ export const useDiffStore = defineStore('diff', () => {
   });
 
   const selectFile = async (filePath: string, staged: boolean = false, repoPath?: string, commitId?: string) => {
+    selectedConflictFile.value = null;
     selectedFile.value = filePath;
     isStaged.value = staged;
     selectedCommitId.value = commitId || null;
@@ -53,6 +55,32 @@ export const useDiffStore = defineStore('diff', () => {
       console.warn('Failed to fetch diff:', err);
       activeDiff.value = { old_path: filePath, new_path: filePath, is_binary: false, additions: 0, deletions: 0, hunks: [] };
     }
+  };
+
+  const selectConflictFile = (filePath: string) => {
+    selectedConflictFile.value = filePath;
+    selectedFile.value = filePath;
+    isStaged.value = false;
+    selectedCommitId.value = null;
+  };
+
+  const clearConflictSelection = () => {
+    selectedConflictFile.value = null;
+  };
+
+  const clearSelection = () => {
+    selectedFile.value = null;
+    isStaged.value = false;
+    selectedCommitId.value = null;
+    selectedConflictFile.value = null;
+    activeDiff.value = {
+      old_path: undefined,
+      new_path: undefined,
+      is_binary: false,
+      additions: 0,
+      deletions: 0,
+      hunks: [],
+    };
   };
 
   const parseUnifiedDiff = (raw: string, filePath: string) => {
@@ -114,7 +142,11 @@ export const useDiffStore = defineStore('diff', () => {
     selectedFile,
     isStaged,
     selectedCommitId,
+    selectedConflictFile,
     activeDiff,
     selectFile,
+    selectConflictFile,
+    clearConflictSelection,
+    clearSelection,
   };
 });

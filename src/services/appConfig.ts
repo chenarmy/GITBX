@@ -12,6 +12,7 @@ export const CONFIG_KEYS = {
   skippedVersion: 'gitbx_update_skipped_version',
   lastUpdateCheckAt: 'gitbx_update_last_check_at',
   ai: 'gitbx_ai_config',
+  proxy: 'gitbx_proxy_config',
 } as const;
 
 interface PersistedRepository {
@@ -21,6 +22,24 @@ interface PersistedRepository {
 }
 
 type PersistedAiConfig = Omit<LlmConfig, 'api_key'>;
+
+export type ProxyMode = 'system' | 'custom' | 'none';
+
+export interface ProxySettings {
+  mode: ProxyMode;
+  host: string;
+  port: number;
+  authEnabled: boolean;
+  username: string;
+}
+
+const DEFAULT_PROXY: ProxySettings = {
+  mode: 'system',
+  host: '',
+  port: 8080,
+  authEnabled: false,
+  username: '',
+};
 
 export interface AppConfig {
   version: 2;
@@ -33,6 +52,7 @@ export interface AppConfig {
     language: Locale;
     authorName: string;
     authorEmail: string;
+    proxy: ProxySettings;
   };
   ai: Partial<PersistedAiConfig>;
   updates: {
@@ -69,12 +89,29 @@ function sanitizeAiConfig(value: unknown): Partial<PersistedAiConfig> {
   return config;
 }
 
+function sanitizeProxyConfig(value: unknown): ProxySettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_PROXY };
+  const input = value as Record<string, unknown>;
+  const mode = input.mode === 'custom' || input.mode === 'none' ? input.mode : 'system';
+  const port = typeof input.port === 'number' && Number.isInteger(input.port)
+    ? Math.max(0, Math.min(65535, input.port))
+    : DEFAULT_PROXY.port;
+  return {
+    mode,
+    host: typeof input.host === 'string' ? input.host : DEFAULT_PROXY.host,
+    port,
+    authEnabled: input.authEnabled === true,
+    username: typeof input.username === 'string' ? input.username : DEFAULT_PROXY.username,
+  };
+}
+
 function readLocalConfig(): AppConfig {
   const repositories = parseJson<PersistedRepository[]>(
     localStorage.getItem(CONFIG_KEYS.repositories),
     [],
   ).filter((item) => item && typeof item.path === 'string' && typeof item.name === 'string');
   const ai = sanitizeAiConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.ai), {}));
+  const proxy = sanitizeProxyConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.proxy), {}));
   const savedLocale = localStorage.getItem(CONFIG_KEYS.locale) as Locale | null;
 
   return {
@@ -88,6 +125,7 @@ function readLocalConfig(): AppConfig {
       language: savedLocale && localeCodes.has(savedLocale) ? savedLocale : 'en',
       authorName: localStorage.getItem(CONFIG_KEYS.authorName) || 'Developer',
       authorEmail: localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io',
+      proxy,
     },
     ai,
     updates: {
@@ -132,6 +170,7 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
       authorEmail: typeof settingsInput?.authorEmail === 'string'
         ? settingsInput.authorEmail
         : fallback.settings.authorEmail,
+      proxy: settingsInput?.proxy ? sanitizeProxyConfig(settingsInput.proxy) : fallback.settings.proxy,
     },
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAiConfig(input.ai) : fallback.ai,
     updates: {
@@ -153,6 +192,7 @@ function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.locale, config.settings.language);
   localStorage.setItem(CONFIG_KEYS.authorName, config.settings.authorName);
   localStorage.setItem(CONFIG_KEYS.authorEmail, config.settings.authorEmail);
+  localStorage.setItem(CONFIG_KEYS.proxy, JSON.stringify(config.settings.proxy));
   localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(config.ai));
   if (config.updates.skippedVersion) {
     localStorage.setItem(CONFIG_KEYS.skippedVersion, config.updates.skippedVersion);

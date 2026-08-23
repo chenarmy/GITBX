@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::proxy_options;
 use crate::repository::Repository;
 use git2::{Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
 use serde::{Deserialize, Serialize};
@@ -84,6 +85,7 @@ impl Repository {
         let mut remote = self.inner().find_remote(remote_name)?;
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(self.authenticated_callbacks()?);
+        fetch_opts.proxy_options(proxy_options());
 
         remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
         Ok(())
@@ -106,6 +108,7 @@ impl Repository {
         let mut remote = self.inner().find_remote(remote_name)?;
         let mut options = PushOptions::new();
         options.remote_callbacks(self.authenticated_callbacks()?);
+        options.proxy_options(proxy_options());
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
         if let Err(error) = remote.push(&[refspec.as_str()], Some(&mut options)) {
             let message = error.message().to_ascii_lowercase();

@@ -7,6 +7,7 @@ import CommitGraphCanvas from '@/components/graph/CommitGraphCanvas.vue';
 import StagingPanel from '@/components/staging/StagingPanel.vue';
 import CommitBox from '@/components/staging/CommitBox.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
+import MergeConflictEditor from '@/components/merge/MergeConflictEditor.vue';
 import ConsolePanel from '@/components/layout/ConsolePanel.vue';
 import FooterBar from '@/components/layout/FooterBar.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
@@ -26,10 +27,14 @@ import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConsoleStore } from '@/stores/console';
 import { useUpdatesStore } from '@/stores/updates';
+import { useDiffStore } from '@/stores/diff';
+import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const consoleStore = useConsoleStore();
 const updatesStore = useUpdatesStore();
+const diffStore = useDiffStore();
+const { t } = useI18n();
 let updateCheckTimer: number | undefined;
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -85,12 +90,18 @@ onUnmounted(() => {
             <div class="flex-1 overflow-hidden min-h-0">
               <StagingPanel />
             </div>
-            <CommitBox />
+            <CommitBox v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking" />
+            <div v-else class="px-3 py-2 border-t border-amber-500/30 bg-amber-500/10 text-[11px] text-amber-700 dark:text-amber-300">
+              {{ repoStore.statusSummary.conflicted_files.length > 0
+                ? t('Resolve every conflicted file before continuing.')
+                : t('All conflicts are resolved. Use Continue in the toolbar.') }}
+            </div>
           </div>
 
           <!-- Diff Inspection Area (Right) -->
           <div class="flex-1 overflow-hidden min-w-0">
-            <DiffViewer />
+            <MergeConflictEditor v-if="diffStore.selectedConflictFile" />
+            <DiffViewer v-else />
           </div>
         </div>
       </div>

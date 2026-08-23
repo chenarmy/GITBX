@@ -9,7 +9,7 @@ use axum::{
 use gitbx_ai::{CommitGenerator, GenericOpenAiClient, LlmConfig};
 use gitbx_contracts::GitErrorResponse;
 use gitbx_core::{GitService, GitbxError};
-use gitbx_diff::DiffEngine;
+use gitbx_diff::{load_conflict_file, resolve_conflict_file, DiffEngine};
 use gitbx_graph::GraphLayoutEngine;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -249,6 +249,10 @@ async fn repo_handler(
             )))
         }
         (Method::GET, "diff") => diff_response(&path, &uri),
+        (Method::GET, "conflict") => {
+            let file_path = query(&uri, "file_path").unwrap_or_default();
+            load_conflict_file(&path, &file_path).map(|value| json!(value))
+        }
         (Method::POST, "validate") => {
             let target = body_json
                 .get("path")
@@ -295,16 +299,7 @@ async fn repo_handler(
             GitService::with_write_lock(&path, |repo| repo.unstage_file(file))
         }),
         (Method::POST, "unstage-all") => write_op(&path, || {
-            GitService::with_write_lock(&path, |repo| {
-                let mut index = repo.inner().index()?;
-                if let Ok(head) = repo.inner().head() {
-                    index.read_tree(&head.peel_to_tree()?)?;
-                } else {
-                    index.clear()?;
-                }
-                index.write()?;
-                Ok(())
-            })
+            GitService::with_write_lock(&path, |repo| repo.unstage_all())
         }),
         (Method::POST, "discard") => write_op(&path, || {
             GitService::discard_file(&path, body_json.get("file_path").and_then(Value::as_str))
@@ -414,10 +409,19 @@ async fn repo_handler(
                 body_json.get("strategy").and_then(Value::as_str) == Some("no-ff"),
             )
         }),
-        (Method::POST, "merge/abort") => write_op(&path, || {
-            GitService::with_write_lock(&path, |repo| Ok(repo.inner_mut().cleanup_state()?))
-        }),
+        (Method::POST, "merge/abort") => write_op(&path, || GitService::abort_merge(&path)),
         (Method::POST, "merge/continue") => write_op(&path, || GitService::continue_merge(&path)),
+        (Method::POST, "conflict/resolve") => write_op(&path, || {
+            resolve_conflict_file(
+                &path,
+                body_json
+                    .get("file_path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                body_json.get("content").and_then(Value::as_str),
+                body_json.get("side").and_then(Value::as_str),
+            )
+        }),
         (Method::POST, "cherry-pick") => write_op(&path, || {
             GitService::cherry_pick(
                 &path,

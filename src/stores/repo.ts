@@ -4,6 +4,7 @@ import type { RepositoryInfo, RepoStatusSummary, BranchItem, RemoteItem, TagItem
 import type { GraphCommitNode } from '@/types/graph';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useConsoleStore } from '@/stores/console';
+import { useDiffStore } from '@/stores/diff';
 import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 export interface ManagedRepo {
@@ -44,6 +45,7 @@ function getInitialActiveRepo(): string {
 export const useRepoStore = defineStore('repo', () => {
   const gitApi = useGitApi();
   const consoleStore = useConsoleStore();
+  const diffStore = useDiffStore();
   const repoList = ref<ManagedRepo[]>(getInitialRepos());
   const activeRepoPath = ref<string>(getInitialActiveRepo());
   const repoInfo = ref<RepositoryInfo | null>(null);
@@ -98,6 +100,9 @@ export const useRepoStore = defineStore('repo', () => {
     if (!path) {
       clearLoadedRepoData();
       return false;
+    }
+    if (path !== activeRepoPath.value) {
+      diffStore.clearSelection();
     }
     isLoading.value = true;
     errorMessage.value = null;
@@ -331,8 +336,11 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const pullRemote = async () => {
-    await gitApi.pullRemote(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.pullRemote(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const pushRemote = async () => {

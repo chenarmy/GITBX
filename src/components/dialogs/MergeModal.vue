@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
+import { useDiffStore } from '@/stores/diff';
 import { GitMerge, X, AlertCircle } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
+const diffStore = useDiffStore();
 
 const targetBranch = ref('');
 const strategy = ref<'default' | 'no-ff' | 'squash' | 'ff-only'>('default');
@@ -29,9 +31,13 @@ async function handleMerge() {
       customMessage.value.trim() || undefined
     );
     if (res.conflict) {
-      errorMsg.value = 'Merge conflicts detected. Please resolve conflicts in the editor.';
-    } else {
       repoStore.isMergeModalOpen = false;
+      const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+      if (firstConflict) diffStore.selectConflictFile(firstConflict);
+    } else if (res.success) {
+      repoStore.isMergeModalOpen = false;
+    } else {
+      errorMsg.value = res.error || 'Failed to merge branch';
     }
   } catch (err: any) {
     errorMsg.value = err?.message || 'Failed to merge branch';

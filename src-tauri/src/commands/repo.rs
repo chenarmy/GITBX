@@ -18,7 +18,11 @@ pub async fn init_repo(repo_path: String) -> CommandResult<RepositoryInfo> {
 
 #[tauri::command]
 pub async fn clone_repo(url: String, destination: String) -> CommandResult<RepositoryInfo> {
-    git2::build::RepoBuilder::new()
+    let mut fetch_options = git2::FetchOptions::new();
+    fetch_options.proxy_options(gitbx_core::proxy_options());
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fetch_options);
+    builder
         .clone(&url, std::path::Path::new(&destination))
         .map_err(|e| e.to_string())?;
     GitService::info(&destination).map_err(|e| e.to_string())
@@ -87,17 +91,7 @@ pub async fn stage_all(repo_path: String) -> CommandResult<()> {
 
 #[tauri::command]
 pub async fn unstage_all(repo_path: String) -> CommandResult<()> {
-    GitService::with_write_lock(&repo_path, |repo| {
-        let mut index = repo.inner().index()?;
-        if let Ok(head) = repo.inner().head() {
-            index.read_tree(&head.peel_to_tree()?)?;
-        } else {
-            index.clear()?;
-        }
-        index.write()?;
-        Ok(())
-    })
-    .map_err(|e| e.to_string())
+    GitService::with_write_lock(&repo_path, |repo| repo.unstage_all()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -210,8 +204,7 @@ pub async fn merge(
 
 #[tauri::command]
 pub async fn merge_abort(repo_path: String) -> CommandResult<()> {
-    GitService::with_write_lock(&repo_path, |repo| Ok(repo.inner_mut().cleanup_state()?))
-        .map_err(|e| e.to_string())
+    GitService::abort_merge(&repo_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

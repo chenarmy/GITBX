@@ -3,7 +3,7 @@
 
 mod commands;
 
-use commands::{ai, auth, config, diff, graph, repo, update};
+use commands::{ai, auth, config, diff, graph, repo, terminal, update};
 
 fn main() {
     tauri::Builder::default()
@@ -57,10 +57,13 @@ fn main() {
             repo::rebase_continue,
             repo::operation_abort,
             repo::worktree_add,
+            terminal::open_system_terminal,
             diff::get_file_diff,
             diff::read_file,
             diff::write_file,
             diff::parse_conflicts,
+            diff::get_conflict_file,
+            diff::resolve_conflict,
             graph::get_commit_graph,
             ai::generate_commit_message,
             ai::scan_secrets,

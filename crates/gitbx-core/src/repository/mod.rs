@@ -13,6 +13,9 @@ pub struct RepositoryInfo {
     pub head_commit_id: Option<String>,
     pub is_dirty: bool,
     pub remotes: Vec<String>,
+    pub is_merging: bool,
+    pub is_rebasing: bool,
+    pub is_cherry_picking: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +137,8 @@ impl Repository {
             .map(|s| !s.is_empty())
             .unwrap_or(false);
 
+        let state = self.inner.state();
+
         Ok(RepositoryInfo {
             name,
             path: self.path.to_string_lossy().to_string(),
@@ -142,6 +147,18 @@ impl Repository {
             head_commit_id,
             is_dirty,
             remotes,
+            is_merging: state == git2::RepositoryState::Merge,
+            is_rebasing: matches!(
+                state,
+                git2::RepositoryState::Rebase
+                    | git2::RepositoryState::RebaseInteractive
+                    | git2::RepositoryState::RebaseMerge
+                    | git2::RepositoryState::ApplyMailboxOrRebase
+            ),
+            is_cherry_picking: matches!(
+                state,
+                git2::RepositoryState::CherryPick | git2::RepositoryState::CherryPickSequence
+            ),
         })
     }
 

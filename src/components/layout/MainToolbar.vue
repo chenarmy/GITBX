@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
+import { useDiffStore } from '@/stores/diff';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -22,6 +23,7 @@ import { useI18n } from '@/i18n';
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
+const diffStore = useDiffStore();
 const { t } = useI18n();
 
 const isFetching = ref(false);
@@ -48,7 +50,13 @@ async function handlePull() {
     await repoStore.pullRemote();
     notification.success(t('Pull Completed'), t('Working branch updated with upstream commits.'));
   } catch (err: any) {
-    notification.error(t('Pull Failed'), err?.message || t('Failed to pull from remote'));
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) {
+      diffStore.selectConflictFile(firstConflict);
+      notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    } else {
+      notification.error(t('Pull Failed'), err?.message || t('Failed to pull from remote'));
+    }
   } finally {
     isPulling.value = false;
   }
@@ -103,6 +111,8 @@ async function handleCherryPick() {
         const res = await repoStore.cherryPick(repoStore.selectedCommit.id);
         if (res.conflict) {
           notification.warning('Cherry-pick Conflict', 'Conflicts encountered. Please resolve in the staging panel.');
+          const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+          if (firstConflict) diffStore.selectConflictFile(firstConflict);
         } else {
           notification.success('Cherry-pick Applied', `Commit ${repoStore.selectedCommit.short_id} applied cleanly.`);
         }
@@ -112,6 +122,41 @@ async function handleCherryPick() {
     }
   } else {
     notification.warning('Select Commit', 'Please click a commit node from the graph below to cherry-pick.');
+  }
+}
+
+async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+  if (repoStore.statusSummary.conflicted_files.length > 0) {
+    notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    return;
+  }
+  try {
+    if (operation === 'merge') await repoStore.continueMerge();
+    else if (operation === 'rebase') await repoStore.continueRebase();
+    else await repoStore.continueCherryPick();
+    diffStore.clearSelection();
+    notification.success(t('Operation Continued'), t('The Git operation completed successfully.'));
+  } catch (error: any) {
+    notification.error(t('Continue Failed'), error?.message || String(error));
+  }
+}
+
+async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick') {
+  const confirmed = await confirmation.confirm({
+    title: t('Abort Operation'),
+    message: t('Abort the current Git operation and restore the previous working tree?'),
+    danger: true,
+    confirmText: t('Abort'),
+  });
+  if (!confirmed) return;
+  try {
+    if (operation === 'merge') await repoStore.abortMerge();
+    else if (operation === 'rebase') await repoStore.abortRebase();
+    else await repoStore.abortCherryPick();
+    diffStore.clearSelection();
+    notification.info(t('Operation Aborted'), t('The previous working tree was restored.'));
+  } catch (error: any) {
+    notification.error(t('Abort Failed'), error?.message || String(error));
   }
 }
 </script>
@@ -136,7 +181,7 @@ async function handleCherryPick() {
       <div class="flex items-center space-x-2">
         <button
           v-if="repoStore.repoInfo?.is_merging"
-          @click="repoStore.abortMerge()"
+          @click="handleAbortOperation('merge')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
@@ -144,8 +189,9 @@ async function handleCherryPick() {
         </button>
         <button
           v-if="repoStore.repoInfo?.is_merging"
-          @click="repoStore.continueMerge()"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+          @click="handleContinueOperation('merge')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Merge') }}</span>
@@ -153,7 +199,7 @@ async function handleCherryPick() {
 
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
-          @click="repoStore.abortRebase()"
+          @click="handleAbortOperation('rebase')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
@@ -161,8 +207,9 @@ async function handleCherryPick() {
         </button>
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
-          @click="repoStore.continueRebase()"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+          @click="handleContinueOperation('rebase')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Rebase') }}</span>
@@ -170,7 +217,7 @@ async function handleCherryPick() {
 
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
-          @click="repoStore.abortCherryPick()"
+          @click="handleAbortOperation('cherry-pick')"
           class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
         >
           <XCircle class="w-3 h-3" />
@@ -178,8 +225,9 @@ async function handleCherryPick() {
         </button>
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
-          @click="repoStore.continueCherryPick()"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px]"
+          @click="handleContinueOperation('cherry-pick')"
+          :disabled="repoStore.statusSummary.conflicted_files.length > 0"
+          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Cherry-pick') }}</span>
@@ -280,7 +328,7 @@ async function handleCherryPick() {
         <!-- Discard All Button -->
         <button
           @click="handleDiscardAll"
-          :disabled="repoStore.statusSummary.total_changes === 0"
+          :disabled="repoStore.statusSummary.total_changes === 0 || repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 active:scale-95 text-foreground transition font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           :title="t('Discard all uncommitted changes in working tree')"
         >

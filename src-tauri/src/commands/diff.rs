@@ -1,5 +1,8 @@
 use gitbx_core::GitService;
-use gitbx_diff::{ConflictChunk, DiffEngine, FileDiff, Merge3Engine};
+use gitbx_diff::{
+    load_conflict_file, resolve_conflict_file, ConflictChunk, ConflictFileContent, DiffEngine,
+    FileDiff, Merge3Engine,
+};
 use std::fs;
 
 #[tauri::command]
@@ -139,4 +142,23 @@ pub async fn write_file(
 #[tauri::command]
 pub async fn parse_conflicts(content: String) -> Result<Vec<ConflictChunk>, String> {
     Ok(Merge3Engine::parse_conflicted_file(&content))
+}
+
+#[tauri::command]
+pub async fn get_conflict_file(
+    repo_path: String,
+    file_path: String,
+) -> Result<ConflictFileContent, String> {
+    load_conflict_file(&repo_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn resolve_conflict(
+    repo_path: String,
+    file_path: String,
+    content: Option<String>,
+    side: Option<String>,
+) -> Result<(), String> {
+    resolve_conflict_file(&repo_path, &file_path, content.as_deref(), side.as_deref())
+        .map_err(|e| e.to_string())
 }

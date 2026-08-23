@@ -10,6 +10,7 @@ import {
   FileMinus,
   FileEdit,
   RotateCcw,
+  AlertTriangle,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
@@ -54,6 +55,39 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
 <template>
   <div class="dbx-staging h-full flex flex-col bg-card border-r border-border text-xs select-none overflow-hidden">
+    <!-- Conflicted Files Section -->
+    <div
+      v-if="repoStore.statusSummary.conflicted_files.length > 0"
+      class="max-h-[38%] min-h-[92px] flex flex-col border-b border-amber-500/40 bg-amber-500/5"
+    >
+      <div class="dbx-pane-header h-8 px-2.5 flex items-center justify-between font-bold text-amber-700 dark:text-amber-300 border-b border-amber-500/30">
+        <div class="flex items-center space-x-1.5">
+          <AlertTriangle class="w-3.5 h-3.5" />
+          <span>{{ t('Conflicts') }}</span>
+          <span class="px-1.5 rounded text-[10px] bg-amber-200/70 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {{ repoStore.statusSummary.conflicted_files.length }}
+          </span>
+        </div>
+        <span class="text-[10px] font-medium opacity-80">{{ t('Resolve before continuing') }}</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+        <button
+          v-for="file in repoStore.statusSummary.conflicted_files"
+          :key="file.path"
+          @click="diffStore.selectConflictFile(file.path)"
+          class="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition"
+          :class="diffStore.selectedConflictFile === file.path ? 'bg-amber-500/20 text-amber-900 dark:text-amber-100 font-bold' : 'text-foreground hover:bg-amber-500/10'"
+        >
+          <span class="flex items-center space-x-1.5 min-w-0">
+            <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span class="truncate">{{ file.path }}</span>
+          </span>
+          <span class="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">{{ t('Resolve') }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Staged Changes Section -->
     <div class="flex-1 flex flex-col min-h-0 border-b border-border">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
@@ -64,7 +98,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </span>
         </div>
         <button
-          v-if="repoStore.statusSummary.staged_files.length > 0"
+          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
           @click="repoStore.unstageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
           :title="t('Unstage All')"
@@ -87,6 +121,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <span class="truncate">{{ file.path }}</span>
           </div>
           <button
+            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
             @click.stop="repoStore.unstageFile(file.path)"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
             :title="t('Unstage File')"
@@ -107,7 +142,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </span>
         </div>
         <button
-          v-if="repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length > 0"
+          v-if="repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length > 0 && repoStore.statusSummary.conflicted_files.length === 0"
           @click="repoStore.stageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
           :title="t('Stage All')"

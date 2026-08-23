@@ -8,6 +8,7 @@ import type {
   StashItem,
 } from '@/types/git';
 import type { GraphCommitNode } from '@/types/graph';
+import type { ConflictFileContent } from '@/types/diff';
 import type {
   LlmConfig,
   GeneratedCommitMessage,
@@ -46,6 +47,24 @@ async function parseGitResponse<T>(res: Response, fallback: string): Promise<T> 
     throw new Error(formatGitError(data, `${fallback} (HTTP ${res.status})`));
   }
   return data as T;
+}
+
+async function parseOperationResult(
+  res: Response,
+  fallback: string
+): Promise<{ success: boolean; conflict?: boolean; error?: string; output?: string }> {
+  const data = await res.json().catch(() => null);
+  if (res.ok && data?.success) return data;
+  const error = data?.error ?? data;
+  return {
+    success: false,
+    conflict: Boolean(error?.conflict),
+    error: formatGitError(error, `${fallback} (HTTP ${res.status})`),
+  };
+}
+
+function isConflictError(error: unknown): boolean {
+  return /conflict|unmerged/i.test(formatGitError(error, ''));
 }
 
 export function useGitApi() {
@@ -511,6 +530,42 @@ export function useGitApi() {
     return await res.json();
   };
 
+  const getConflictFile = async (repoPath: string, filePath: string): Promise<ConflictFileContent> => {
+    if (isTauri()) {
+      return await invoke<ConflictFileContent>('get_conflict_file', { repoPath, filePath });
+    }
+    const params = new URLSearchParams({ path: repoPath, file_path: filePath });
+    const res = await fetch(`/api/repo/conflict?${params.toString()}`);
+    return await parseGitResponse<ConflictFileContent>(res, 'Failed to load conflict file');
+  };
+
+  const resolveConflict = async (
+    repoPath: string,
+    filePath: string,
+    options: { content?: string; side?: 'ours' | 'theirs' }
+  ): Promise<void> => {
+    if (isTauri()) {
+      await invoke('resolve_conflict', {
+        repoPath,
+        filePath,
+        content: options.content ?? null,
+        side: options.side ?? null,
+      });
+      return;
+    }
+    const res = await fetch('/api/repo/conflict/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repo_path: repoPath,
+        file_path: filePath,
+        content: options.content,
+        side: options.side,
+      }),
+    });
+    await parseGitResponse(res, 'Failed to resolve conflict');
+  };
+
   const mergeBranch = async (
     repoPath: string,
     target: string,
@@ -527,8 +582,11 @@ export function useGitApi() {
         getConsole().logSuccess(`Merged '${target}' into HEAD cleanly.`);
         return { success: true };
       } catch (err: any) {
-        getConsole().logWarning(`Merge conflict detected while merging '${target}' into HEAD.`, err?.toString());
-        return { success: false, conflict: true, error: err?.toString() };
+        const error = formatGitError(err);
+        const conflict = isConflictError(err);
+        if (conflict) getConsole().logWarning(`Merge conflict detected while merging '${target}' into HEAD.`, error);
+        else getConsole().logError(`Merge failed: ${error}`, undefined, cmd);
+        return { success: false, conflict, error };
       }
     }
 
@@ -537,7 +595,7 @@ export function useGitApi() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath, target, strategy, message }),
     });
-    const data = await res.json();
+    const data = await parseOperationResult(res, 'Merge failed');
     if (data.conflict) {
       getConsole().logWarning(`Merge conflict detected while merging '${target}' into HEAD.`, data.error);
     } else if (data.success) {
@@ -556,11 +614,12 @@ export function useGitApi() {
       getConsole().logInfo('Merge aborted. Working tree restored.');
       return;
     }
-    await fetch('/api/repo/merge/abort', {
+    const res = await fetch('/api/repo/merge/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
+    await parseGitResponse(res, 'Failed to abort merge');
     getConsole().logInfo('Merge aborted. Working tree restored.');
   };
 
@@ -592,7 +651,7 @@ export function useGitApi() {
         getConsole().logSuccess(`Rebase on '${upstream}' finished.`);
         return { success: true };
       } catch (err: any) {
-        return { success: false, conflict: true, error: err?.toString() };
+        return { success: false, conflict: isConflictError(err), error: formatGitError(err) };
       }
     }
     const res = await fetch('/api/repo/rebase', {
@@ -600,7 +659,7 @@ export function useGitApi() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath, upstream }),
     });
-    const data = await res.json();
+    const data = await parseOperationResult(res, 'Rebase failed');
     if (data.conflict) {
       getConsole().logWarning(`Rebase conflicts encountered on '${upstream}'.`, data.error);
     } else if (data.success) {
@@ -635,11 +694,12 @@ export function useGitApi() {
       getConsole().logInfo('Rebase aborted.');
       return;
     }
-    await fetch('/api/repo/rebase/abort', {
+    const res = await fetch('/api/repo/rebase/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
+    await parseGitResponse(res, 'Failed to abort rebase');
     getConsole().logInfo('Rebase aborted.');
   };
 
@@ -655,7 +715,7 @@ export function useGitApi() {
         getConsole().logSuccess(`Cherry-picked commit ${commitId.slice(0, 7)} cleanly.`);
         return { success: true };
       } catch (err: any) {
-        return { success: false, conflict: true, error: err?.toString() };
+        return { success: false, conflict: isConflictError(err), error: formatGitError(err) };
       }
     }
     const res = await fetch('/api/repo/cherry-pick', {
@@ -663,7 +723,7 @@ export function useGitApi() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath, commit_id: commitId }),
     });
-    const data = await res.json();
+    const data = await parseOperationResult(res, 'Cherry-pick failed');
     if (data.conflict) {
       getConsole().logWarning(`Cherry-pick conflict on commit ${commitId.slice(0, 7)}.`, data.error);
     } else if (data.success) {
@@ -698,11 +758,12 @@ export function useGitApi() {
       getConsole().logInfo('Cherry-pick aborted.');
       return;
     }
-    await fetch('/api/repo/cherry-pick/abort', {
+    const res = await fetch('/api/repo/cherry-pick/abort', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
     });
+    await parseGitResponse(res, 'Failed to abort cherry-pick');
     getConsole().logInfo('Cherry-pick aborted.');
   };
 
@@ -841,6 +902,15 @@ export function useGitApi() {
     }
   };
 
+  const openSystemTerminal = async (repoPath: string): Promise<void> => {
+    if (!isTauri()) {
+      throw new Error('Opening a system terminal is only available in the desktop app.');
+    }
+
+    await invoke('open_system_terminal', { repoPath });
+    getConsole().logInfo(`Opened a system terminal in ${repoPath}.`);
+  };
+
   const generateCommitMessage = async (
     diffText: string,
     config: LlmConfig
@@ -923,6 +993,8 @@ export function useGitApi() {
     discardFile,
     createCommit,
     getFileDiff,
+    getConflictFile,
+    resolveConflict,
     mergeBranch,
     abortMerge,
     continueMerge,
@@ -938,6 +1010,7 @@ export function useGitApi() {
     createWorktree,
     pullRemote,
     pushRemote,
+    openSystemTerminal,
     generateCommitMessage,
     scanSecrets,
     saveCredential,

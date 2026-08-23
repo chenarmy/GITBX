@@ -1,3 +1,4 @@
+use gitbx_core::{set_proxy_config, KeyringManager, ProxyConfig};
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
@@ -65,13 +66,32 @@ fn write_config(path: &Path, config: &Value) -> Result<(), String> {
     })
 }
 
+fn apply_proxy_config(config: &Value) -> Result<(), String> {
+    let proxy_value = config
+        .get("settings")
+        .and_then(|settings| settings.get("proxy"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let mut proxy: ProxyConfig = serde_json::from_value(proxy_value)
+        .map_err(|error| format!("Invalid proxy configuration: {error}"))?;
+    if proxy.auth_enabled {
+        proxy.password = KeyringManager::get_token("proxy", "default").ok();
+    }
+    set_proxy_config(proxy)
+}
+
 #[tauri::command]
 pub async fn load_app_config() -> Result<Option<Value>, String> {
-    read_config(&config_path()?)
+    let config = read_config(&config_path()?)?;
+    if let Some(ref config) = config {
+        apply_proxy_config(config)?;
+    }
+    Ok(config)
 }
 
 #[tauri::command]
 pub async fn save_app_config(config: Value) -> Result<String, String> {
+    apply_proxy_config(&config)?;
     let path = config_path()?;
     write_config(&path, &config)?;
     Ok(path.to_string_lossy().to_string())

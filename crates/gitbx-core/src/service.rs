@@ -13,6 +13,62 @@ fn repo_locks() -> &'static Mutex<HashMap<PathBuf, Arc<Mutex<()>>>> {
 pub struct GitService;
 
 impl GitService {
+    fn ensure_no_operation(repo: &Repository, action: &str) -> Result<()> {
+        if repo.inner().state() != git2::RepositoryState::Clean {
+            return Err(GitbxError::General(format!(
+                "Finish or abort the current Git operation before {action}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn ensure_clean_worktree(repo: &Repository, operation: &str) -> Result<()> {
+        if repo.info()?.is_dirty {
+            return Err(GitbxError::General(format!(
+                "Commit, stash, or discard local changes before starting {operation}"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn contains_conflict_markers(content: &str) -> bool {
+        let mut saw_start = false;
+        let mut saw_separator = false;
+        for line in content.lines() {
+            if line.starts_with("<<<<<<<") {
+                saw_start = true;
+                saw_separator = false;
+            } else if saw_start && line.starts_with("=======") {
+                saw_separator = true;
+            } else if saw_start && saw_separator && line.starts_with(">>>>>>>") {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn ensure_index_has_no_conflict_markers(repo: &Repository) -> Result<()> {
+        let index = repo.inner().index()?;
+        for entry in index.iter() {
+            let Ok(blob) = repo.inner().find_blob(entry.id) else {
+                continue;
+            };
+            if blob.size() > 2 * 1024 * 1024 {
+                continue;
+            }
+            let Ok(content) = std::str::from_utf8(blob.content()) else {
+                continue;
+            };
+            if Self::contains_conflict_markers(content) {
+                return Err(GitbxError::MergeConflict(format!(
+                    "File '{}' still contains unresolved conflict markers",
+                    String::from_utf8_lossy(&entry.path)
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn canonical_repo_path(path: &str) -> Result<PathBuf> {
         let input = Path::new(path);
         let canonical = input
@@ -169,6 +225,7 @@ impl GitService {
 
     pub fn discard_file(path: &str, file_path: Option<&str>) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_no_operation(repo, "discarding changes")?;
             let mut checkout = git2::build::CheckoutBuilder::new();
             if let Some(file_path) = file_path {
                 Self::validate_file_path(path, file_path)?;
@@ -183,6 +240,7 @@ impl GitService {
 
     pub fn reset(path: &str, target: &str, mode: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_no_operation(repo, "resetting the repository")?;
             let object = repo.inner().revparse_single(target)?;
             let reset_type = match mode {
                 "--soft" => ResetType::Soft,
@@ -196,6 +254,7 @@ impl GitService {
 
     pub fn merge(path: &str, target: &str, no_ff: bool) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_clean_worktree(repo, "a merge")?;
             let annotated = repo
                 .inner()
                 .find_annotated_commit(repo.inner().revparse_single(target)?.id())?;
@@ -211,8 +270,10 @@ impl GitService {
                 return Ok(());
             }
             let mut options = git2::MergeOptions::new();
+            let mut checkout = git2::build::CheckoutBuilder::new();
+            checkout.conflict_style_diff3(true);
             repo.inner()
-                .merge(&[&annotated], Some(&mut options), None)?;
+                .merge(&[&annotated], Some(&mut options), Some(&mut checkout))?;
             if repo.inner().index()?.has_conflicts() {
                 return Err(GitbxError::MergeConflict("Merge produced conflicts".into()));
             }
@@ -239,6 +300,7 @@ impl GitService {
 
     pub fn cherry_pick(path: &str, commit_id: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_clean_worktree(repo, "a cherry-pick")?;
             let commit = repo.inner().find_commit(git2::Oid::from_str(commit_id)?)?;
             repo.inner().cherrypick(&commit, None)?;
             if repo.inner().index()?.has_conflicts() {
@@ -305,6 +367,7 @@ impl GitService {
 
     pub fn rebase(path: &str, upstream: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
+            Self::ensure_clean_worktree(repo, "a rebase")?;
             let object = repo.inner().revparse_single(upstream)?;
             let annotated = repo.inner().find_annotated_commit(object.id())?;
             let mut rebase = repo.inner().rebase(None, Some(&annotated), None, None)?;
@@ -314,6 +377,11 @@ impl GitService {
                 .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
             while let Some(operation) = rebase.next() {
                 let _operation = operation?;
+                if repo.inner().index()?.has_conflicts() {
+                    return Err(GitbxError::MergeConflict(
+                        "Rebase produced conflicts".into(),
+                    ));
+                }
                 rebase.commit(None, &signature, None)?;
             }
             rebase.finish(Some(&signature))?;
@@ -322,8 +390,55 @@ impl GitService {
         })
     }
 
+    pub fn abort_merge(path: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| {
+            if repo.inner().state() != git2::RepositoryState::Merge {
+                return Err(GitbxError::General(
+                    "No merge operation is in progress".into(),
+                ));
+            }
+            let head = repo.inner().head()?.peel_to_commit()?;
+            repo.inner()
+                .reset(head.as_object(), ResetType::Hard, None)?;
+            drop(head);
+            repo.inner_mut().cleanup_state()?;
+            Ok(())
+        })
+    }
+
     pub fn abort_operation(path: &str) -> Result<()> {
-        Self::with_write_lock(path, |repo| Ok(repo.inner_mut().cleanup_state()?))
+        Self::with_write_lock(path, |repo| match repo.inner().state() {
+            git2::RepositoryState::Rebase
+            | git2::RepositoryState::RebaseInteractive
+            | git2::RepositoryState::RebaseMerge
+            | git2::RepositoryState::ApplyMailboxOrRebase => {
+                let mut rebase = repo.inner().open_rebase(None)?;
+                rebase.abort()?;
+                Ok(())
+            }
+            git2::RepositoryState::CherryPick
+            | git2::RepositoryState::CherryPickSequence
+            | git2::RepositoryState::Revert
+            | git2::RepositoryState::RevertSequence => {
+                let head = repo.inner().head()?.peel_to_commit()?;
+                repo.inner()
+                    .reset(head.as_object(), ResetType::Hard, None)?;
+                drop(head);
+                repo.inner_mut().cleanup_state()?;
+                Ok(())
+            }
+            git2::RepositoryState::Merge => {
+                let head = repo.inner().head()?.peel_to_commit()?;
+                repo.inner()
+                    .reset(head.as_object(), ResetType::Hard, None)?;
+                drop(head);
+                repo.inner_mut().cleanup_state()?;
+                Ok(())
+            }
+            _ => Err(GitbxError::General(
+                "No abortable Git operation is in progress".into(),
+            )),
+        })
     }
 
     pub fn continue_merge(path: &str) -> Result<String> {
@@ -333,6 +448,7 @@ impl GitService {
                     "Resolve all conflicts before continuing the merge".into(),
                 ));
             }
+            Self::ensure_index_has_no_conflict_markers(repo)?;
             let merge_head = repo
                 .inner()
                 .find_reference("MERGE_HEAD")?
@@ -370,11 +486,18 @@ impl GitService {
 
     pub fn continue_rebase(path: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            let mut rebase = repo.inner().rebase(None, None, None, None)?;
+            if repo.inner().index()?.has_conflicts() {
+                return Err(GitbxError::MergeConflict(
+                    "Resolve all conflicts before continuing the rebase".into(),
+                ));
+            }
+            Self::ensure_index_has_no_conflict_markers(repo)?;
+            let mut rebase = repo.inner().open_rebase(None)?;
             let signature = repo
                 .inner()
                 .signature()
                 .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+            rebase.commit(None, &signature, None)?;
             while let Some(operation) = rebase.next() {
                 operation?;
                 if repo.inner().index()?.has_conflicts() {
@@ -397,6 +520,7 @@ impl GitService {
                     "Resolve all conflicts before continuing the cherry-pick".into(),
                 ));
             }
+            Self::ensure_index_has_no_conflict_markers(repo)?;
             let pick_id = repo
                 .inner()
                 .find_reference("CHERRY_PICK_HEAD")?

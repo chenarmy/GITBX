@@ -4,7 +4,7 @@ import { AI_PROVIDER_PRESETS, useAiStore } from '@/stores/ai';
 import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
-import { Settings, X, User, Cpu, Info } from 'lucide-vue-next';
+import { Settings, X, User, Cpu, Info, Globe2 } from 'lucide-vue-next';
 import { SUPPORTED_LOCALES } from '@/i18n/config';
 import { useI18n } from '@/i18n';
 import { computed, ref } from 'vue';
@@ -17,8 +17,16 @@ const notification = useNotificationStore();
 const { t } = useI18n();
 const isCustomProvider = computed(() => aiStore.llmConfig.provider === 'custom');
 const activeTab = ref<'settings' | 'about'>('settings');
+const proxyPassword = ref('');
 
 async function saveSettings() {
+  if (settingsStore.proxyMode === 'custom') {
+    const port = Number(settingsStore.proxyPort);
+    if (!settingsStore.proxyHost.trim() || !Number.isInteger(port) || port < 1 || port > 65535) {
+      notification.error(t('Invalid proxy settings'), t('Enter a proxy server and a port between 1 and 65535.'));
+      return;
+    }
+  }
   if (aiStore.llmConfig.api_key) {
     try {
       await gitApi.saveCredential(aiStore.llmConfig.provider, aiStore.llmConfig.api_key);
@@ -26,6 +34,14 @@ async function saveSettings() {
       notification.success(t('Settings Saved'), t('The AI credential was stored in the system keyring.'));
     } catch (error: any) {
       notification.warning(t('Settings Saved'), error?.message || t('The key remains in memory only.'));
+    }
+  }
+  if (settingsStore.proxyAuthEnabled && proxyPassword.value && gitApi.isTauri()) {
+    try {
+      await gitApi.saveCredential('proxy', proxyPassword.value);
+      proxyPassword.value = '';
+    } catch (error: any) {
+      notification.warning(t('Settings Saved'), error?.message || t('The proxy password remains in memory only.'));
     }
   }
   try {
@@ -113,6 +129,76 @@ function closeSettings() {
               {{ item.nativeLabel }} · {{ item.label }}
             </option>
           </select>
+        </div>
+
+        <!-- Network Proxy -->
+        <div class="space-y-2 border-t border-border pt-3">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <Globe2 class="w-3.5 h-3.5 text-sky-400" />
+            <span>{{ t('Proxy Server') }}</span>
+          </div>
+          <div class="space-y-1.5 text-muted-foreground">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="system" />
+              <span>{{ t('Use system proxy settings') }}</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="custom" />
+              <span>{{ t('Use custom proxy') }}</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input v-model="settingsStore.proxyMode" type="radio" value="none" />
+              <span>{{ t('Do not use a proxy') }}</span>
+            </label>
+          </div>
+          <div v-if="settingsStore.proxyMode === 'custom'" class="space-y-2 rounded border border-border bg-background/50 p-2">
+            <div class="grid grid-cols-[1fr_7rem] gap-2">
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Proxy server') }}</label>
+                <input
+                  v-model="settingsStore.proxyHost"
+                  placeholder="127.0.0.1"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Port') }}</label>
+                <input
+                  v-model.number="settingsStore.proxyPort"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  placeholder="8080"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <label class="flex items-center gap-2 text-muted-foreground cursor-pointer">
+              <input v-model="settingsStore.proxyAuthEnabled" type="checkbox" />
+              <span>{{ t('Proxy requires authentication') }}</span>
+            </label>
+            <div v-if="settingsStore.proxyAuthEnabled" class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Username') }}</label>
+                <input
+                  v-model="settingsStore.proxyUsername"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label class="text-[11px] text-muted-foreground">{{ t('Password') }}</label>
+                <input
+                  v-model="proxyPassword"
+                  type="password"
+                  :placeholder="t('Leave blank to keep saved password')"
+                  class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <p class="text-[10px] text-muted-foreground">
+              {{ t('Proxy settings apply to HTTP(S) Git operations. SSH remotes are not proxied.') }}
+            </p>
+          </div>
         </div>
 
         <!-- Git Signature -->

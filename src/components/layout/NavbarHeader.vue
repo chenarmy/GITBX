@@ -16,15 +16,19 @@ import {
   ChevronDown,
   Trash2,
   FolderOpen,
+  Terminal,
 } from 'lucide-vue-next';
+import { useGitApi, formatGitError } from '@/composables/useGitApi';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
 const { t } = useI18n();
+const gitApi = useGitApi();
 
 const isRepoDropdownOpen = ref(false);
+const isOpeningTerminal = ref(false);
 
 function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
@@ -41,6 +45,21 @@ function handleRemoveRepo(e: Event, path: string) {
 async function handleRefresh() {
   await repoStore.loadRepo();
   notification.success('Repository Refreshed', 'Branches, commits and file statuses are up to date.');
+}
+
+async function handleOpenTerminal() {
+  const repoPath = repoStore.activeRepoPath;
+  if (!repoPath || isOpeningTerminal.value) return;
+
+  isOpeningTerminal.value = true;
+  try {
+    await gitApi.openSystemTerminal(repoPath);
+    notification.success(t('System Terminal Opened'), t('Opened terminal in {path}', { path: repoPath }));
+  } catch (error) {
+    notification.error(t('Failed to Open System Terminal'), formatGitError(error, t('Could not open a terminal for the current repository.')));
+  } finally {
+    isOpeningTerminal.value = false;
+  }
 }
 
 function handleToggleTheme() {
@@ -138,6 +157,16 @@ onUnmounted(() => {
         :title="t('Add or Clone Repository')"
       >
         <Plus class="w-3.5 h-3.5" />
+      </button>
+
+      <!-- Repository-scoped escape hatch for advanced Git commands. -->
+      <button
+        @click="handleOpenTerminal"
+        :disabled="!repoStore.activeRepoPath || isOpeningTerminal"
+        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
+        :title="t('Open System Terminal')"
+      >
+        <Terminal class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningTerminal }" />
       </button>
     </div>
 

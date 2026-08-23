@@ -4,4 +4,5 @@ pub mod config;
 pub mod diff;
 pub mod graph;
 pub mod repo;
+pub mod terminal;
 pub mod update;
