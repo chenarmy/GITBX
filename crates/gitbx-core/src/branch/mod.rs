@@ -20,6 +20,7 @@ pub struct TagItem {
     pub target_commit_id: String,
     pub message: Option<String>,
     pub tagger_name: Option<String>,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +28,15 @@ pub struct StashItem {
     pub index: usize,
     pub message: String,
     pub commit_id: String,
+}
+
+fn sort_tags_by_recency(tags: &mut [TagItem]) {
+    tags.sort_by(|left, right| {
+        right
+            .timestamp
+            .cmp(&left.timestamp)
+            .then_with(|| right.name.cmp(&left.name))
+    });
 }
 
 impl Repository {
@@ -120,8 +130,12 @@ impl Repository {
 
         for name in tag_names.iter().flatten() {
             if let Ok(obj) = self.inner().revparse_single(&format!("refs/tags/{}", name)) {
-                let commit_id = obj.peel_to_commit()?.id().to_string();
+                let commit = obj.peel_to_commit()?;
+                let commit_id = commit.id().to_string();
                 let tag_obj = obj.as_tag();
+                let timestamp = tag_obj
+                    .and_then(|tag| tag.tagger().map(|signature| signature.when().seconds()))
+                    .unwrap_or_else(|| commit.time().seconds());
 
                 tags.push(TagItem {
                     name: name.to_string(),
@@ -129,9 +143,12 @@ impl Repository {
                     message: tag_obj.and_then(|t| t.message().map(|m| m.to_string())),
                     tagger_name: tag_obj
                         .and_then(|t| t.tagger().and_then(|sig| sig.name().map(|n| n.to_string()))),
+                    timestamp,
                 });
             }
         }
+
+        sort_tags_by_recency(&mut tags);
 
         Ok(tags)
     }
@@ -147,5 +164,34 @@ impl Repository {
             true
         })?;
         Ok(stashes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sort_tags_by_recency, TagItem};
+
+    fn tag(name: &str, timestamp: i64) -> TagItem {
+        TagItem {
+            name: name.to_string(),
+            target_commit_id: String::new(),
+            message: None,
+            tagger_name: None,
+            timestamp,
+        }
+    }
+
+    #[test]
+    fn sorts_tags_by_timestamp_descending() {
+        let mut tags = vec![tag("v0.1.2", 200), tag("v0.1.1", 100), tag("v0.1.3", 300)];
+
+        sort_tags_by_recency(&mut tags);
+
+        assert_eq!(
+            tags.iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["v0.1.3", "v0.1.2", "v0.1.1"]
+        );
     }
 }

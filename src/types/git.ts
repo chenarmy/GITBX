@@ -60,6 +60,7 @@ export interface TagItem {
   target_commit_id: string;
   message?: string;
   tagger_name?: string;
+  timestamp: number;
 }
 
 export interface StashItem {

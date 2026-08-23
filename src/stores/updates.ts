@@ -75,12 +75,31 @@ function parseBundledChangelog(markdown: string): ReleaseNote[] {
   });
 }
 
-function mergeReleaseNotes(primary: ReleaseNote[], fallback: ReleaseNote[]) {
-  const versions = new Set(primary.map((release) => release.version));
-  return [...primary, ...fallback.filter((release) => !versions.has(release.version))];
+function sortReleaseNotes(releases: ReleaseNote[]) {
+  return [...releases].sort((left, right) => {
+    const leftTimestamp = Date.parse(left.publishedAt);
+    const rightTimestamp = Date.parse(right.publishedAt);
+    const timestampDifference = (Number.isFinite(rightTimestamp) ? rightTimestamp : 0)
+      - (Number.isFinite(leftTimestamp) ? leftTimestamp : 0);
+
+    if (timestampDifference !== 0) return timestampDifference;
+
+    return normalizeVersion(right.version).localeCompare(normalizeVersion(left.version), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
 }
 
-const BUNDLED_RELEASES = parseBundledChangelog(bundledChangelog);
+function mergeReleaseNotes(primary: ReleaseNote[], fallback: ReleaseNote[]) {
+  const versions = new Set(primary.map((release) => release.version));
+  return sortReleaseNotes([
+    ...primary,
+    ...fallback.filter((release) => !versions.has(release.version)),
+  ]);
+}
+
+const BUNDLED_RELEASES = sortReleaseNotes(parseBundledChangelog(bundledChangelog));
 
 function readCachedReleases(): ReleaseCache | null {
   try {
@@ -303,9 +322,12 @@ export const useUpdatesStore = defineStore('updates', () => {
 
       releaseHistory.value = page === 1
         ? mergeReleaseNotes(releases, BUNDLED_RELEASES)
-        : [...releaseHistory.value, ...releases.filter(
-            (release) => !releaseHistory.value.some((item) => item.version === release.version),
-          )];
+        : sortReleaseNotes([
+            ...releaseHistory.value,
+            ...releases.filter(
+              (release) => !releaseHistory.value.some((item) => item.version === release.version),
+            ),
+          ]);
       releasePage.value = page;
       hasMoreReleaseNotes.value = payload.length === RELEASE_PAGE_SIZE;
       if (page === 1) writeCachedReleases(releaseHistory.value);
