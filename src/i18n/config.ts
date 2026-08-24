@@ -182,6 +182,61 @@ Object.assign(messages['zh-CN'], {
   'The proxy password remains in memory only.': '代理密码仅保留在内存中。',
 });
 
+const commitAndPushMessages: Record<Locale, MessageCatalog> = {
+  en: {
+    'Commit & Push': 'Commit & Push',
+    'Commit and Push Completed': 'Commit and Push Completed',
+    'Commit and Push Failed': 'Commit and Push Failed',
+    'Stage all changes, commit, and push to the current remote branch': 'Stage all changes, commit, and push to the current remote branch',
+  },
+  ja: {
+    'Commit & Push': 'コミットしてプッシュ',
+    'Commit and Push Completed': 'コミットとプッシュが完了しました',
+    'Commit and Push Failed': 'コミットとプッシュに失敗しました',
+    'Stage all changes, commit, and push to the current remote branch': 'すべての変更をステージし、コミットして現在のリモートブランチにプッシュします',
+  },
+  de: {
+    'Commit & Push': 'Committen & Pushen',
+    'Commit and Push Completed': 'Commit und Push abgeschlossen',
+    'Commit and Push Failed': 'Commit und Push fehlgeschlagen',
+    'Stage all changes, commit, and push to the current remote branch': 'Alle Änderungen bereitstellen, committen und zum aktuellen Remote-Branch pushen',
+  },
+  es: {
+    'Commit & Push': 'Commit y Push',
+    'Commit and Push Completed': 'Commit y Push completados',
+    'Commit and Push Failed': 'Error al hacer Commit y Push',
+    'Stage all changes, commit, and push to the current remote branch': 'Preparar todos los cambios, crear el commit y enviarlo a la rama remota actual',
+  },
+  'zh-CN': {
+    'Commit & Push': '提交并推送',
+    'Commit and Push Completed': '提交并推送完成',
+    'Commit and Push Failed': '提交并推送失败',
+    'Stage all changes, commit, and push to the current remote branch': '暂存所有更改、提交并推送到当前远程分支',
+  },
+  'zh-TW': {
+    'Commit & Push': '提交並推送',
+    'Commit and Push Completed': '提交並推送完成',
+    'Commit and Push Failed': '提交並推送失敗',
+    'Stage all changes, commit, and push to the current remote branch': '暫存所有變更、提交並推送到目前的遠端分支',
+  },
+  fr: {
+    'Commit & Push': 'Committer et pousser',
+    'Commit and Push Completed': 'Commit et envoi terminés',
+    'Commit and Push Failed': "Échec du commit et de l’envoi",
+    'Stage all changes, commit, and push to the current remote branch': 'Indexer toutes les modifications, créer le commit et les envoyer vers la branche distante actuelle',
+  },
+  ar: {
+    'Commit & Push': 'الالتزام والدفع',
+    'Commit and Push Completed': 'اكتمل الالتزام والدفع',
+    'Commit and Push Failed': 'فشل الالتزام والدفع',
+    'Stage all changes, commit, and push to the current remote branch': 'تهيئة جميع التغييرات، ثم الالتزام بها ودفعها إلى الفرع البعيد الحالي',
+  },
+};
+
+for (const code of Object.keys(commitAndPushMessages) as Locale[]) {
+  Object.assign(messages[code], commitAndPushMessages[code]);
+}
+
 // Dialog and operation labels that are shared by the smaller feature modals.
 // Keeping these in the same editable catalog makes adding another language a
 // data-only change.

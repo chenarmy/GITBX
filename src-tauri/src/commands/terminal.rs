@@ -3,6 +3,14 @@ use std::process::Command;
 
 use gitbx_core::GitService;
 
+#[cfg(target_os = "windows")]
+fn normalize_windows_path(path: String) -> String {
+    if let Some(unc_path) = path.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{unc_path}");
+    }
+    path.strip_prefix(r"\\?\").unwrap_or(&path).to_string()
+}
+
 /// Open a native terminal with the selected Git repository as its working directory.
 ///
 /// The repository path is passed as an argument instead of being interpolated into
@@ -25,9 +33,13 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
     let path = std::fs::canonicalize(path)
         .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
     let path_string = path.to_string_lossy().into_owned();
+    #[cfg(target_os = "windows")]
+    let path_string = normalize_windows_path(path_string);
 
     #[cfg(target_os = "windows")]
     {
+        let launch_path = Path::new(&path_string);
+
         // Git Bash is the preferred Windows shell for Git work. The explicit
         // locations cover standard and per-user Git for Windows installs.
         let mut git_bash_candidates = vec![
@@ -41,6 +53,8 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
         for candidate in git_bash_candidates {
             if Command::new(&candidate)
                 .arg(format!("--cd={path_string}"))
+                .current_dir(launch_path)
+                .env("CHERE_INVOKING", "1")
                 .spawn()
                 .is_ok()
             {
@@ -53,6 +67,7 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
             let command = format!("Set-Location -LiteralPath '{escaped_path}'");
             if Command::new(shell)
                 .args(["-NoExit", "-Command", command.as_str()])
+                .current_dir(launch_path)
                 .spawn()
                 .is_ok()
             {
@@ -60,13 +75,19 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
             }
         }
 
-        let command = format!("cd /d \"{path_string}\"");
-        Command::new("cmd.exe")
-            .args(["/K", command.as_str()])
-            .spawn()
-            .map_err(|error| {
-                format!("Failed to open Git Bash, PowerShell, or Command Prompt: {error}")
-            })?;
+        let command = if path_string.starts_with(r"\\") {
+            format!("pushd \"{path_string}\"")
+        } else {
+            format!("cd /d \"{path_string}\"")
+        };
+        let mut cmd = Command::new("cmd.exe");
+        cmd.args(["/K", command.as_str()]);
+        if !path_string.starts_with(r"\\") {
+            cmd.current_dir(launch_path);
+        }
+        cmd.spawn().map_err(|error| {
+            format!("Failed to open Git Bash, PowerShell, or Command Prompt: {error}")
+        })?;
         Ok(())
     }
 
@@ -138,6 +159,8 @@ pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
     let path = std::fs::canonicalize(path)
         .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
     let path_string = path.to_string_lossy().into_owned();
+    #[cfg(target_os = "windows")]
+    let path_string = normalize_windows_path(path_string);
 
     #[cfg(target_os = "windows")]
     {
@@ -175,5 +198,19 @@ pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
     {
         let _ = path_string;
         Err("Opening a file manager is not supported on this platform".to_string())
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::normalize_windows_path;
+
+    #[test]
+    fn strips_windows_extended_path_prefixes() {
+        assert_eq!(normalize_windows_path(r"\\?\I:\GITBX".into()), r"I:\GITBX");
+        assert_eq!(
+            normalize_windows_path(r"\\?\UNC\server\share\repo".into()),
+            r"\\server\share\repo"
+        );
     }
 }

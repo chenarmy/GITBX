@@ -5,38 +5,72 @@ import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { Settings, X, User, Cpu, Info, Globe2 } from 'lucide-vue-next';
-import { SUPPORTED_LOCALES } from '@/i18n/config';
+import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AboutUpdates from '@/components/settings/AboutUpdates.vue';
+import type { LlmConfig } from '@/types/ai';
 
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
 const { t } = useI18n();
-const isCustomProvider = computed(() => aiStore.llmConfig.provider === 'custom');
 const activeTab = ref<'settings' | 'about'>('settings');
 const proxyPassword = ref('');
+const draftLanguage = ref<Locale>(settingsStore.language);
+const draftProxyMode = ref(settingsStore.proxyMode);
+const draftProxyHost = ref(settingsStore.proxyHost);
+const draftProxyPort = ref(settingsStore.proxyPort);
+const draftProxyAuthEnabled = ref(settingsStore.proxyAuthEnabled);
+const draftProxyUsername = ref(settingsStore.proxyUsername);
+const draftAuthorName = ref(settingsStore.authorName);
+const draftAuthorEmail = ref(settingsStore.authorEmail);
+const draftLlmConfig = ref<LlmConfig>({ ...aiStore.llmConfig, api_key: '' });
+const isCustomProvider = computed(() => draftLlmConfig.value.provider === 'custom');
+
+function resetDraft() {
+  draftLanguage.value = settingsStore.language;
+  draftProxyMode.value = settingsStore.proxyMode;
+  draftProxyHost.value = settingsStore.proxyHost;
+  draftProxyPort.value = settingsStore.proxyPort;
+  draftProxyAuthEnabled.value = settingsStore.proxyAuthEnabled;
+  draftProxyUsername.value = settingsStore.proxyUsername;
+  draftAuthorName.value = settingsStore.authorName;
+  draftAuthorEmail.value = settingsStore.authorEmail;
+  draftLlmConfig.value = { ...aiStore.llmConfig, api_key: '' };
+  proxyPassword.value = '';
+}
+
+watch(
+  () => settingsStore.isSettingsModalOpen,
+  (isOpen) => {
+    if (isOpen) {
+      resetDraft();
+      activeTab.value = 'settings';
+    }
+  },
+);
 
 async function saveSettings() {
-  if (settingsStore.proxyMode === 'custom') {
-    const port = Number(settingsStore.proxyPort);
-    if (!settingsStore.proxyHost.trim() || !Number.isInteger(port) || port < 1 || port > 65535) {
+  if (draftProxyMode.value === 'custom') {
+    const port = Number(draftProxyPort.value);
+    if (!draftProxyHost.value.trim() || !Number.isInteger(port) || port < 1 || port > 65535) {
       notification.error(t('Invalid proxy settings'), t('Enter a proxy server and a port between 1 and 65535.'));
       return;
     }
   }
-  if (aiStore.llmConfig.api_key) {
+  let savedAiCredential = false;
+  if (draftLlmConfig.value.api_key) {
     try {
-      await gitApi.saveCredential(aiStore.llmConfig.provider, aiStore.llmConfig.api_key);
-      aiStore.llmConfig.api_key = '';
+      await gitApi.saveCredential(draftLlmConfig.value.provider, draftLlmConfig.value.api_key);
+      savedAiCredential = true;
       notification.success(t('Settings Saved'), t('The AI credential was stored in the system keyring.'));
     } catch (error: any) {
       notification.warning(t('Settings Saved'), error?.message || t('The key remains in memory only.'));
     }
   }
-  if (settingsStore.proxyAuthEnabled && proxyPassword.value && gitApi.isTauri()) {
+  if (draftProxyAuthEnabled.value && proxyPassword.value && gitApi.isTauri()) {
     try {
       await gitApi.saveCredential('proxy', proxyPassword.value);
       proxyPassword.value = '';
@@ -45,6 +79,17 @@ async function saveSettings() {
     }
   }
   try {
+    settingsStore.proxyMode = draftProxyMode.value;
+    settingsStore.proxyHost = draftProxyHost.value;
+    settingsStore.proxyPort = Number(draftProxyPort.value);
+    settingsStore.proxyAuthEnabled = draftProxyAuthEnabled.value;
+    settingsStore.proxyUsername = draftProxyUsername.value;
+    settingsStore.authorName = draftAuthorName.value;
+    settingsStore.authorEmail = draftAuthorEmail.value;
+    settingsStore.changeLanguage(draftLanguage.value);
+    Object.assign(aiStore.llmConfig, draftLlmConfig.value, {
+      api_key: savedAiCredential ? '' : draftLlmConfig.value.api_key,
+    });
     await aiStore.persistConfig();
     await settingsStore.persistSettings();
     notification.success(t('Settings Saved'), t('Configuration was saved to the user directory.'));
@@ -56,26 +101,34 @@ async function saveSettings() {
 
 function handleProviderChange(event: Event) {
   const provider = (event.target as HTMLSelectElement).value as LlmProvider;
-  aiStore.setProvider(provider);
+  const previousProvider = draftLlmConfig.value.provider;
+  draftLlmConfig.value.provider = provider;
+  draftLlmConfig.value.api_key = '';
+  if (provider === 'custom' && previousProvider !== 'custom') {
+    draftLlmConfig.value.api_base = '';
+    draftLlmConfig.value.model = '';
+  } else if (provider !== 'custom') {
+    const preset = AI_PROVIDER_PRESETS[provider];
+    draftLlmConfig.value.api_base = preset.api_base;
+    draftLlmConfig.value.model = preset.model;
+  }
 }
 
 function providerModels() {
-  if (aiStore.llmConfig.provider === 'custom') return [];
-  return AI_PROVIDER_PRESETS[aiStore.llmConfig.provider].models;
+  if (draftLlmConfig.value.provider === 'custom') return [];
+  return AI_PROVIDER_PRESETS[draftLlmConfig.value.provider].models;
 }
 
 function closeSettings() {
-  if (activeTab.value === 'settings') {
-    void saveSettings();
-  } else {
-    settingsStore.isSettingsModalOpen = false;
-  }
+  resetDraft();
+  settingsStore.isSettingsModalOpen = false;
 }
 </script>
 
 <template>
   <div
     v-if="settingsStore.isSettingsModalOpen"
+    @click.self="closeSettings"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
   >
     <div
@@ -121,8 +174,7 @@ function closeSettings() {
             <span>{{ t('Language') }}</span>
           </div>
           <select
-            :value="settingsStore.language"
-            @change="settingsStore.changeLanguage(($event.target as HTMLSelectElement).value as any)"
+            v-model="draftLanguage"
             class="w-full bg-background border border-border rounded px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option v-for="item in SUPPORTED_LOCALES" :key="item.code" :value="item.code">
@@ -139,24 +191,24 @@ function closeSettings() {
           </div>
           <div class="space-y-1.5 text-muted-foreground">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="settingsStore.proxyMode" type="radio" value="system" />
+              <input v-model="draftProxyMode" type="radio" value="system" />
               <span>{{ t('Use system proxy settings') }}</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="settingsStore.proxyMode" type="radio" value="custom" />
+              <input v-model="draftProxyMode" type="radio" value="custom" />
               <span>{{ t('Use custom proxy') }}</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="settingsStore.proxyMode" type="radio" value="none" />
+              <input v-model="draftProxyMode" type="radio" value="none" />
               <span>{{ t('Do not use a proxy') }}</span>
             </label>
           </div>
-          <div v-if="settingsStore.proxyMode === 'custom'" class="space-y-2 rounded border border-border bg-background/50 p-2">
+          <div v-if="draftProxyMode === 'custom'" class="space-y-2 rounded border border-border bg-background/50 p-2">
             <div class="grid grid-cols-[1fr_7rem] gap-2">
               <div>
                 <label class="text-[11px] text-muted-foreground">{{ t('Proxy server') }}</label>
                 <input
-                  v-model="settingsStore.proxyHost"
+                  v-model="draftProxyHost"
                   placeholder="127.0.0.1"
                   class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
@@ -164,7 +216,7 @@ function closeSettings() {
               <div>
                 <label class="text-[11px] text-muted-foreground">{{ t('Port') }}</label>
                 <input
-                  v-model.number="settingsStore.proxyPort"
+                  v-model.number="draftProxyPort"
                   type="number"
                   min="1"
                   max="65535"
@@ -174,14 +226,14 @@ function closeSettings() {
               </div>
             </div>
             <label class="flex items-center gap-2 text-muted-foreground cursor-pointer">
-              <input v-model="settingsStore.proxyAuthEnabled" type="checkbox" />
+              <input v-model="draftProxyAuthEnabled" type="checkbox" />
               <span>{{ t('Proxy requires authentication') }}</span>
             </label>
-            <div v-if="settingsStore.proxyAuthEnabled" class="grid grid-cols-2 gap-2">
+            <div v-if="draftProxyAuthEnabled" class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[11px] text-muted-foreground">{{ t('Username') }}</label>
                 <input
-                  v-model="settingsStore.proxyUsername"
+                  v-model="draftProxyUsername"
                   class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
@@ -211,14 +263,14 @@ function closeSettings() {
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('Author Name') }}</label>
               <input
-                v-model="settingsStore.authorName"
+                v-model="draftAuthorName"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('Author Email') }}</label>
               <input
-                v-model="settingsStore.authorEmail"
+                v-model="draftAuthorEmail"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -231,11 +283,11 @@ function closeSettings() {
             <Cpu class="w-3.5 h-3.5 text-purple-400" />
             <span>{{ t('AI Copilot & LLM Provider') }}</span>
           </div>
-          <div :key="aiStore.llmConfig.provider" class="space-y-2">
+          <div :key="draftLlmConfig.provider" class="space-y-2">
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('Provider') }}</label>
               <select
-                :value="aiStore.llmConfig.provider"
+                :value="draftLlmConfig.provider"
                 @change="handleProviderChange"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
@@ -250,14 +302,14 @@ function closeSettings() {
               <label class="text-[11px] text-muted-foreground">{{ t('Model') }}</label>
               <select
                 v-if="!isCustomProvider"
-                v-model="aiStore.llmConfig.model"
+                v-model="draftLlmConfig.model"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option v-for="model in providerModels()" :key="model" :value="model">{{ model }}</option>
               </select>
               <input
                 v-else
-                v-model="aiStore.llmConfig.model"
+                v-model="draftLlmConfig.model"
                 placeholder="Model ID"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -265,7 +317,7 @@ function closeSettings() {
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('API Base URL') }}</label>
               <input
-                v-model="aiStore.llmConfig.api_base"
+                v-model="draftLlmConfig.api_base"
                 :placeholder="isCustomProvider ? 'https://api.example.com/v1' : undefined"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -276,7 +328,7 @@ function closeSettings() {
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('API Key') }}</label>
               <input
-                v-model="aiStore.llmConfig.api_key"
+                v-model="draftLlmConfig.api_key"
                 type="password"
                 placeholder="sk-..."
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
