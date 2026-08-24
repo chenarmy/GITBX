@@ -28,20 +28,45 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        // Prefer Windows Terminal, but keep classic Command Prompt as a fallback.
-        if Command::new("wt.exe")
-            .args(["-d", path_string.as_str()])
-            .spawn()
-            .is_ok()
-        {
-            return Ok(());
+        // Git Bash is the preferred Windows shell for Git work. The explicit
+        // locations cover standard and per-user Git for Windows installs.
+        let mut git_bash_candidates = vec![
+            "git-bash.exe".to_string(),
+            "C:\\Program Files\\Git\\git-bash.exe".to_string(),
+            "C:\\Program Files (x86)\\Git\\git-bash.exe".to_string(),
+        ];
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            git_bash_candidates.push(format!("{local_app_data}\\Programs\\Git\\git-bash.exe"));
+        }
+        for candidate in git_bash_candidates {
+            if Command::new(&candidate)
+                .arg(format!("--cd={path_string}"))
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+
+        let escaped_path = path_string.replace('\'', "''");
+        for shell in ["pwsh.exe", "powershell.exe"] {
+            let command = format!("Set-Location -LiteralPath '{escaped_path}'");
+            if Command::new(shell)
+                .args(["-NoExit", "-Command", command.as_str()])
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
         }
 
         let command = format!("cd /d \"{path_string}\"");
         Command::new("cmd.exe")
             .args(["/K", command.as_str()])
             .spawn()
-            .map_err(|error| format!("Failed to open a Windows terminal: {error}"))?;
+            .map_err(|error| {
+                format!("Failed to open Git Bash, PowerShell, or Command Prompt: {error}")
+            })?;
         Ok(())
     }
 
@@ -94,5 +119,61 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
     {
         let _ = path_string;
         Err("Opening a system terminal is not supported on this platform".to_string())
+    }
+}
+
+/// Open the repository in the platform's native file manager.
+#[tauri::command]
+pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
+    let repo_path = repo_path.trim();
+    if repo_path.is_empty() {
+        return Err("No repository is currently open".to_string());
+    }
+    let path = Path::new(repo_path);
+    if !path.is_dir() {
+        return Err(format!("Repository directory does not exist: {repo_path}"));
+    }
+    GitService::open(repo_path)
+        .map_err(|error| format!("The selected directory is not a Git repository: {error}"))?;
+    let path = std::fs::canonicalize(path)
+        .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
+    let path_string = path.to_string_lossy().into_owned();
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe")
+            .arg(&path_string)
+            .spawn()
+            .map_err(|error| format!("Failed to open File Explorer: {error}"))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path_string)
+            .spawn()
+            .map_err(|error| format!("Failed to open Finder: {error}"))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for program in ["xdg-open", "gio"] {
+            let mut command = Command::new(program);
+            if program == "gio" {
+                command.arg("open");
+            }
+            if command.arg(&path_string).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        Err("No supported file manager was found".to_string())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        let _ = path_string;
+        Err("Opening a file manager is not supported on this platform".to_string())
     }
 }

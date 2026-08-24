@@ -38,7 +38,7 @@ impl AppState {
         }
     }
 
-    fn authorized(&self, headers: &HeaderMap) -> bool {
+    pub fn authorized(&self, headers: &HeaderMap) -> bool {
         match &self.auth_token {
             Some(expected) => headers
                 .get("authorization")
@@ -49,7 +49,19 @@ impl AppState {
         }
     }
 
-    fn allowed(&self, repo_path: &str) -> bool {
+    pub fn authorized_token(&self, token: Option<&str>, headers: &HeaderMap) -> bool {
+        match &self.auth_token {
+            Some(expected) => {
+                if token.is_some_and(|t| t == expected) {
+                    return true;
+                }
+                self.authorized(headers)
+            }
+            None => true,
+        }
+    }
+
+    pub fn allowed(&self, repo_path: &str) -> bool {
         if self.allowed_roots.is_empty() {
             return true;
         }
@@ -64,6 +76,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/ai/commit", post(ai_commit))
+        .route("/api/ai/conflict", post(ai_conflict))
         .route("/api/repo/*path", any(repo_handler))
         .with_state(state)
 }
@@ -93,12 +106,60 @@ async fn ai_commit(
             ),
         );
     }
-    let config = body
+    let mut config = body
         .get("config")
         .cloned()
         .and_then(|value| serde_json::from_value::<LlmConfig>(value).ok())
         .unwrap_or_default();
+    if config.api_key.as_deref().unwrap_or("").trim().is_empty() {
+        if let Ok(key) = gitbx_core::KeyringManager::get_token(&config.provider, "default") {
+            config.api_key = Some(key);
+        }
+    }
     match CommitGenerator::generate_from_diff(&GenericOpenAiClient::new(config), diff).await {
+        Ok(value) => (StatusCode::OK, Json(json!(value))).into_response(),
+        Err(error) => error_response(
+            StatusCode::BAD_GATEWAY,
+            GitErrorResponse::new("AI_PROVIDER_ERROR", error.to_string()),
+        ),
+    }
+}
+
+async fn ai_conflict(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return error_response(
+            StatusCode::UNAUTHORIZED,
+            GitErrorResponse::new("UNAUTHORIZED", "Authentication required"),
+        );
+    }
+    let file_path = body.get("file_path").and_then(Value::as_str).unwrap_or("");
+    let ours = body.get("ours").and_then(Value::as_str).unwrap_or("");
+    let theirs = body.get("theirs").and_then(Value::as_str).unwrap_or("");
+    let base = body.get("base").and_then(Value::as_str);
+
+    let mut config = body
+        .get("config")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<LlmConfig>(value).ok())
+        .unwrap_or_default();
+    if config.api_key.as_deref().unwrap_or("").trim().is_empty() {
+        if let Ok(key) = gitbx_core::KeyringManager::get_token(&config.provider, "default") {
+            config.api_key = Some(key);
+        }
+    }
+    match gitbx_ai::ConflictAnalyzer::analyze_conflict(
+        &GenericOpenAiClient::new(config),
+        file_path,
+        ours,
+        theirs,
+        base,
+    )
+    .await
+    {
         Ok(value) => (StatusCode::OK, Json(json!(value))).into_response(),
         Err(error) => error_response(
             StatusCode::BAD_GATEWAY,
@@ -274,10 +335,8 @@ async fn repo_handler(
                 .get("destination")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            git2::build::RepoBuilder::new()
-                .clone(url, Path::new(destination))
-                .map(|_| json!({ "success": true, "path": destination }))
-                .map_err(GitbxError::from)
+            GitService::clone_repo(url, destination)
+                .map(|info| json!({ "success": true, "path": info.path, "name": info.name }))
         }
         (Method::POST, "stage") => write_op(&path, || {
             let file = body_json
@@ -321,6 +380,22 @@ async fn repo_handler(
                 repo.create_commit(message, author, email)
                     .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
             })
+        }),
+        (Method::POST, "commit-and-push") => write_op(&path, || {
+            let message = body_json
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let author = body_json
+                .get("author")
+                .and_then(Value::as_str)
+                .unwrap_or("GITBX");
+            let email = body_json
+                .get("email")
+                .and_then(Value::as_str)
+                .unwrap_or("gitbx@localhost");
+            GitService::commit_and_push(&path, message, author, email)
+                .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
         }),
         (Method::POST, "branch/create") => write_op(&path, || {
             GitService::create_branch(
@@ -453,12 +528,14 @@ async fn repo_handler(
             )
         }),
         (Method::POST, "rebase/continue") => write_op(&path, || GitService::continue_rebase(&path)),
-        (Method::POST, "cherry-pick/continue") => {
-            write_op(&path, || GitService::continue_cherry_pick(&path))
+        (Method::GET, "commit-changes") => {
+            let commit_id = query(&uri, "commit_id").unwrap_or_default();
+            GitService::get_commit_changes(&path, &commit_id).map(|value| json!(value))
         }
-        (Method::POST, "rebase/abort") | (Method::POST, "cherry-pick/abort") => {
-            write_op(&path, || GitService::abort_operation(&path))
-        }
+        (Method::POST, "revert/continue") => write_op(&path, || GitService::continue_revert(&path)),
+        (Method::POST, "rebase/abort")
+        | (Method::POST, "cherry-pick/abort")
+        | (Method::POST, "revert/abort") => write_op(&path, || GitService::abort_operation(&path)),
         (Method::POST, "worktree/add") => write_op(&path, || {
             GitService::worktree(
                 &path,

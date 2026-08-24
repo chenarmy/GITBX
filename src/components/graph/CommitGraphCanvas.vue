@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
-import { useDiffStore } from '@/stores/diff';
 import type { GraphCommitNode } from '@/types/graph';
 import CommitContextMenu from '@/components/menus/CommitContextMenu.vue';
 import { Tag } from 'lucide-vue-next';
@@ -13,7 +12,6 @@ import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const { locale, t } = useI18n();
-const diffStore = useDiffStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
 const commitContextMenu = ref<{ commit: GraphCommitNode; x: number; y: number } | null>(null);
@@ -107,8 +105,7 @@ function drawGraph() {
 }
 
 function handleSelectCommit(commit: GraphCommitNode) {
-  repoStore.selectedCommit = commit;
-  diffStore.selectFile('', false, repoStore.activeRepoPath, commit.id);
+  repoStore.selectCommit(commit);
 }
 
 function openCommitContextMenu(e: MouseEvent, commit: GraphCommitNode) {

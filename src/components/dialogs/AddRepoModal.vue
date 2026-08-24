@@ -28,8 +28,7 @@ const initPath = ref('');
 
 const isSubmitting = ref(false);
 const errorMsg = ref<string | null>(null);
-const isWindows = typeof navigator !== 'undefined'
-  && (/Windows/i.test(navigator.userAgent) || navigator.platform === 'Win32');
+const isDesktop = gitApi.isTauri();
 
 type DirectoryField = 'local' | 'clone' | 'init';
 
@@ -187,7 +186,7 @@ async function handleInit() {
                 @keydown.enter="handleAddLocal"
               />
               <button
-                v-if="isWindows"
+                v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
                 class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
@@ -225,7 +224,7 @@ async function handleInit() {
                 @keydown.enter="handleClone"
               />
               <button
-                v-if="isWindows"
+                v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
                 class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
@@ -251,7 +250,7 @@ async function handleInit() {
                 @keydown.enter="handleInit"
               />
               <button
-                v-if="isWindows"
+                v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
                 class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"

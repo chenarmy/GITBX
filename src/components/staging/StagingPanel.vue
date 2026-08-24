@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
 import { useConfirmationStore } from '@/stores/confirmation';
@@ -11,6 +12,7 @@ import {
   FileEdit,
   RotateCcw,
   AlertTriangle,
+  GitCommit,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
@@ -18,6 +20,48 @@ const repoStore = useRepoStore();
 const diffStore = useDiffStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
+
+// Keep the full status in the store, but progressively render large lists so
+// repositories with thousands of changes do not freeze the webview.
+const FILE_PAGE_SIZE = 200;
+const stagedLimit = ref(FILE_PAGE_SIZE);
+const unstagedLimit = ref(FILE_PAGE_SIZE);
+const untrackedLimit = ref(FILE_PAGE_SIZE);
+const conflictLimit = ref(FILE_PAGE_SIZE);
+const commitFileLimit = ref(FILE_PAGE_SIZE);
+const stagedFiles = computed(() => repoStore.statusSummary.staged_files.slice(0, stagedLimit.value));
+const unstagedFiles = computed(() => repoStore.statusSummary.unstaged_files.slice(0, unstagedLimit.value));
+const untrackedFiles = computed(() => repoStore.statusSummary.untracked_files.slice(0, untrackedLimit.value));
+const conflictedFiles = computed(() => repoStore.statusSummary.conflicted_files.slice(0, conflictLimit.value));
+const commitFiles = computed(() => repoStore.selectedCommitFiles.slice(0, commitFileLimit.value));
+
+watch(
+  () => [
+    repoStore.statusSummary.staged_files.length,
+    repoStore.statusSummary.unstaged_files.length,
+    repoStore.statusSummary.untracked_files.length,
+    repoStore.statusSummary.conflicted_files.length,
+    repoStore.selectedCommitFiles.length,
+  ],
+  () => {
+    stagedLimit.value = FILE_PAGE_SIZE;
+    unstagedLimit.value = FILE_PAGE_SIZE;
+    untrackedLimit.value = FILE_PAGE_SIZE;
+    conflictLimit.value = FILE_PAGE_SIZE;
+    commitFileLimit.value = FILE_PAGE_SIZE;
+  },
+);
+
+function showMore(section: 'staged' | 'unstaged' | 'untracked' | 'conflict' | 'commit') {
+  const limits = {
+    staged: stagedLimit,
+    unstaged: unstagedLimit,
+    untracked: untrackedLimit,
+    conflict: conflictLimit,
+    commit: commitFileLimit,
+  };
+  limits[section].value += FILE_PAGE_SIZE;
+}
 
 function getStatusIcon(status: string) {
   switch (status) {
@@ -73,7 +117,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
       <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
         <button
-          v-for="file in repoStore.statusSummary.conflicted_files"
+          v-for="file in conflictedFiles"
           :key="file.path"
           @click="diffStore.selectConflictFile(file.path)"
           class="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition"
@@ -85,11 +129,68 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </span>
           <span class="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">{{ t('Resolve') }}</span>
         </button>
+        <button
+          v-if="conflictedFiles.length < repoStore.statusSummary.conflicted_files.length"
+          @click="showMore('conflict')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.conflicted_files.length - conflictedFiles.length }) }}
+        </button>
       </div>
     </div>
 
-    <!-- Staged Changes Section -->
-    <div class="flex-1 flex flex-col min-h-0 border-b border-border">
+    <!-- Selected Commit Changes Section (when inspecting a historical commit) -->
+    <div
+      v-if="repoStore.selectedCommit && diffStore.commitId"
+      class="flex-1 flex flex-col min-h-0 bg-muted/10"
+    >
+      <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
+        <div class="flex items-center space-x-1.5 min-w-0">
+          <GitCommit class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="font-mono text-[11px] text-primary">{{ repoStore.selectedCommit.short_id }}</span>
+          <span class="text-[10px] text-muted-foreground truncate font-normal">({{ repoStore.selectedCommitFiles.length }} {{ t('files') }})</span>
+        </div>
+        <button
+          @click="diffStore.clearSelection(); repoStore.selectedCommit = null;"
+          class="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+        >
+          {{ t('Working Tree') }}
+        </button>
+      </div>
+
+      <div class="p-2 border-b border-border bg-card/60">
+        <div class="font-medium text-foreground truncate text-[11px]">{{ repoStore.selectedCommit.summary }}</div>
+        <div class="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-between">
+          <span>{{ repoStore.selectedCommit.author_name }}</span>
+          <span>{{ new Date(repoStore.selectedCommit.author_time * 1000).toLocaleDateString() }}</span>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+        <div
+          v-for="file in commitFiles"
+          :key="file.path"
+          @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath, repoStore.selectedCommit?.id)"
+          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs"
+          :class="diffStore.selectedFile === file.path ? 'bg-primary/15 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+        >
+          <div class="flex items-center space-x-1.5 truncate">
+            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
+            <span class="truncate">{{ file.path }}</span>
+          </div>
+        </div>
+        <button
+          v-if="commitFiles.length < repoStore.selectedCommitFiles.length"
+          @click="showMore('commit')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.selectedCommitFiles.length - commitFiles.length }) }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Staged Changes Section (Normal Working Tree) -->
+    <div v-else class="flex-1 flex flex-col min-h-0 border-b border-border">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>{{ t('Staged Changes') }}</span>
@@ -98,7 +199,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </span>
         </div>
         <button
-          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
+          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
           @click="repoStore.unstageAll()"
           class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
           :title="t('Unstage All')"
@@ -110,7 +211,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
       <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
         <div
-          v-for="file in repoStore.statusSummary.staged_files"
+          v-for="file in stagedFiles"
           :key="file.path"
           @click="diffStore.selectFile(file.path, true, repoStore.activeRepoPath)"
           class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
@@ -121,7 +222,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <span class="truncate">{{ file.path }}</span>
           </div>
           <button
-            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking"
+            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
             @click.stop="repoStore.unstageFile(file.path)"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
             :title="t('Unstage File')"
@@ -129,11 +230,18 @@ async function handleDiscardFile(e: Event, filePath: string) {
             <Minus class="w-3 h-3" />
           </button>
         </div>
+        <button
+          v-if="stagedFiles.length < repoStore.statusSummary.staged_files.length"
+          @click="showMore('staged')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.staged_files.length - stagedFiles.length }) }}
+        </button>
       </div>
     </div>
 
     <!-- Unstaged Changes & Untracked Files Section -->
-    <div class="flex-1 flex flex-col min-h-0">
+    <div v-if="!diffStore.commitId" class="flex-1 flex flex-col min-h-0">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>{{ t('Changes') }}</span>
@@ -155,7 +263,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
       <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
         <!-- Unstaged modified files -->
         <div
-          v-for="file in repoStore.statusSummary.unstaged_files"
+          v-for="file in unstagedFiles"
           :key="file.path"
           @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath)"
           class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
@@ -183,9 +291,17 @@ async function handleDiscardFile(e: Event, filePath: string) {
           </div>
         </div>
 
+        <button
+          v-if="unstagedFiles.length < repoStore.statusSummary.unstaged_files.length"
+          @click="showMore('unstaged')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.unstaged_files.length - unstagedFiles.length }) }}
+        </button>
+
         <!-- Untracked files -->
         <div
-          v-for="file in repoStore.statusSummary.untracked_files"
+          v-for="file in untrackedFiles"
           :key="file.path"
           @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath)"
           class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
@@ -212,6 +328,13 @@ async function handleDiscardFile(e: Event, filePath: string) {
             </button>
           </div>
         </div>
+        <button
+          v-if="untrackedFiles.length < repoStore.statusSummary.untracked_files.length"
+          @click="showMore('untracked')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.untracked_files.length - untrackedFiles.length }) }}
+        </button>
       </div>
     </div>
   </div>

@@ -4,7 +4,7 @@ import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
-import { Sparkles, Send } from 'lucide-vue-next';
+import { Sparkles, Send, Upload } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -42,6 +42,24 @@ async function handleCommit() {
     aiStore.draftCommitMessage = '';
   } catch (err: any) {
     notification.error(t('Commit Failed'), err?.message);
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+async function handleCommitAndPush() {
+  if (!commitMessage.value.trim()) return;
+  isSubmitting.value = true;
+  try {
+    await repoStore.commitAndPush(
+      commitMessage.value,
+      settingsStore.authorName,
+      settingsStore.authorEmail,
+    );
+    notification.success(t('Commit and Push Completed'), commitMessage.value);
+    aiStore.draftCommitMessage = '';
+  } catch (err: any) {
+    notification.error(t('Commit and Push Failed'), err?.message);
   } finally {
     isSubmitting.value = false;
   }
@@ -85,14 +103,25 @@ async function handleCommit() {
         {{ t('Committer:') }} <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
       </div>
 
-      <button
-        @click="handleCommit"
-        :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
-        class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
-      >
-        <Send class="w-3.5 h-3.5" />
-        <span>{{ t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' }) }}</span>
-      </button>
+      <div class="flex items-center gap-1 shrink-0">
+        <button
+          @click="handleCommit"
+          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm whitespace-nowrap"
+        >
+          <Send class="w-3.5 h-3.5" />
+          <span>{{ t('Commit') }}</span>
+        </button>
+        <button
+          @click="handleCommitAndPush"
+          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.total_changes === 0"
+          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+          :title="t('Stage all changes, commit, and push to the current remote branch')"
+        >
+          <Upload class="w-3.5 h-3.5" />
+          <span>{{ t('Commit & Push') }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>

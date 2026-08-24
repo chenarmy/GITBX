@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { RepositoryInfo, RepoStatusSummary, BranchItem, RemoteItem, TagItem, StashItem } from '@/types/git';
+import type { RepositoryInfo, RepoStatusSummary, FileStatusItem, BranchItem, RemoteItem, TagItem, StashItem } from '@/types/git';
 import type { GraphCommitNode } from '@/types/graph';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useConsoleStore } from '@/stores/console';
@@ -56,6 +56,7 @@ export const useRepoStore = defineStore('repo', () => {
   const stashes = ref<StashItem[]>([]);
   const commitNodes = ref<GraphCommitNode[]>([]);
   const selectedCommit = ref<GraphCommitNode | null>(null);
+  const selectedCommitFiles = ref<FileStatusItem[]>([]);
   const isLoading = ref<boolean>(false);
   const errorMessage = ref<string | null>(null);
 
@@ -229,6 +230,11 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
+  const commitAndPush = async (message: string, author: string, email: string) => {
+    await gitApi.commitAndPush(activeRepoPath.value, message, author, email);
+    await loadRepo(activeRepoPath.value);
+  };
+
   const checkoutBranch = async (branchName: string) => {
     await gitApi.checkoutBranch(activeRepoPath.value, branchName);
     await loadRepo(activeRepoPath.value);
@@ -325,6 +331,37 @@ export const useRepoStore = defineStore('repo', () => {
     return res;
   };
 
+  const selectCommit = async (commit: GraphCommitNode | null) => {
+    selectedCommit.value = commit;
+    if (!commit || !activeRepoPath.value) {
+      selectedCommitFiles.value = [];
+      diffStore.clearSelection();
+      return;
+    }
+    try {
+      const files = await gitApi.getCommitChanges(activeRepoPath.value, commit.id);
+      selectedCommitFiles.value = files;
+      if (files.length > 0) {
+        await diffStore.selectFile(files[0].path, false, activeRepoPath.value, commit.id);
+      } else {
+        diffStore.clearSelection();
+      }
+    } catch {
+      selectedCommitFiles.value = [];
+      diffStore.clearSelection();
+    }
+  };
+
+  const continueRevert = async () => {
+    await gitApi.continueRevert(activeRepoPath.value);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const abortRevert = async () => {
+    await gitApi.abortMerge(activeRepoPath.value);
+    await loadRepo(activeRepoPath.value);
+  };
+
   const reset = async (target: string, mode: '--soft' | '--mixed' | '--hard' = '--mixed') => {
     await gitApi.reset(activeRepoPath.value, target, mode);
     await loadRepo(activeRepoPath.value);
@@ -359,6 +396,7 @@ export const useRepoStore = defineStore('repo', () => {
     stashes,
     commitNodes,
     selectedCommit,
+    selectedCommitFiles,
     isLoading,
     errorMessage,
     isAddRepoModalOpen,
@@ -382,6 +420,7 @@ export const useRepoStore = defineStore('repo', () => {
     unstageAll,
     discardFile,
     commit,
+    commitAndPush,
     checkoutBranch,
     createBranch,
     deleteBranch,
@@ -390,6 +429,7 @@ export const useRepoStore = defineStore('repo', () => {
     createTag,
     createStash,
     popStash,
+    selectCommit,
     mergeBranch,
     abortMerge,
     continueMerge,
@@ -400,6 +440,8 @@ export const useRepoStore = defineStore('repo', () => {
     continueCherryPick,
     abortCherryPick,
     revertCommit,
+    continueRevert,
+    abortRevert,
     reset,
     fetchRemote,
     pullRemote,
