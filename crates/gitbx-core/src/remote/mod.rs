@@ -4,6 +4,36 @@ use crate::repository::Repository;
 use git2::{Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
 use serde::{Deserialize, Serialize};
 
+fn percent_decode(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return None;
+            }
+            let high = (bytes[index + 1] as char).to_digit(16)?;
+            let low = (bytes[index + 2] as char).to_digit(16)?;
+            decoded.push((high * 16 + low) as u8);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+fn embedded_http_credentials(url: &str) -> Option<(String, String)> {
+    let authority = url
+        .split_once("://")
+        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or(rest))?;
+    let (userinfo, _) = authority.rsplit_once('@')?;
+    let (username, password) = userinfo.split_once(':')?;
+    Some((percent_decode(username)?, percent_decode(password)?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteItem {
     pub name: String,
@@ -16,6 +46,12 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
     callbacks.credentials(
         move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
             if allowed.is_user_pass_plaintext() {
+                // Keep credentials supplied in a clone URL usable for later fetch/push
+                // operations. Git may pass the remote URL back to this callback without
+                // invoking the credential helper again.
+                if let Some((username, password)) = embedded_http_credentials(url) {
+                    return Cred::userpass_plaintext(&username, &password);
+                }
                 if let Some(ref cfg) = config {
                     if let Ok(credential) = Cred::credential_helper(cfg, url, username_from_url) {
                         return Ok(credential);
@@ -115,6 +151,8 @@ impl Repository {
             .shorthand()
             .ok_or_else(|| crate::error::GitbxError::General("HEAD is detached".into()))?
             .to_string();
+        let mut local_branch = self.inner().find_branch(&branch, git2::BranchType::Local)?;
+        let has_upstream = local_branch.upstream().is_ok();
         let mut remote = self.inner().find_remote(remote_name)?;
         let mut options = PushOptions::new();
         options.remote_callbacks(self.authenticated_callbacks()?);
@@ -134,12 +172,19 @@ impl Repository {
             }
             return Err(error.into());
         }
+        if !has_upstream {
+            let tracking_branch = format!("{remote_name}/{branch}");
+            local_branch.set_upstream(Some(&tracking_branch))?;
+        }
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use super::embedded_http_credentials;
     use crate::repository::Repository;
     use tempfile::tempdir;
 
@@ -177,5 +222,51 @@ mod tests {
             .set_remote_urls(" ", "https://example.com/repo.git", None)
             .is_err());
         assert!(repo.set_remote_urls("origin", " ", None).is_err());
+    }
+
+    #[test]
+    fn extracts_encoded_credentials_from_remote_url() {
+        assert_eq!(
+            embedded_http_credentials("https://alice:p%40ss%3Aword@example.com/repo.git"),
+            Some(("alice".into(), "p@ss:word".into()))
+        );
+    }
+
+    #[test]
+    fn push_sets_tracking_branch_for_new_local_branch() {
+        let remote_dir = tempdir().expect("remote tempdir");
+        let local_dir = tempdir().expect("local tempdir");
+        Repository::init(remote_dir.path(), true).expect("bare remote");
+        let local = Repository::init(local_dir.path(), false).expect("local repository");
+        fs::write(local_dir.path().join("README.md"), "initial\n").expect("write file");
+        local.stage_all().expect("stage file");
+        local
+            .create_commit("initial", "Test", "test@example.com")
+            .expect("initial commit");
+        local
+            .inner()
+            .remote("origin", remote_dir.path().to_str().expect("remote path"))
+            .expect("remote");
+
+        local.push_current("origin").expect("push");
+        let branch = local
+            .inner()
+            .head()
+            .expect("head")
+            .shorthand()
+            .expect("branch")
+            .to_string();
+        let branch = local
+            .inner()
+            .find_branch(&branch, git2::BranchType::Local)
+            .expect("local branch");
+        assert_eq!(
+            branch
+                .upstream()
+                .expect("upstream")
+                .name()
+                .expect("upstream name"),
+            Some(format!("origin/{}", branch.name().unwrap().unwrap()).as_str())
+        );
     }
 }

@@ -423,6 +423,17 @@ impl GitService {
         Self::with_write_lock(path, |repo| repo.push_current(remote))
     }
 
+    /// Stage the complete working tree, create a commit, and push the checked-out
+    /// branch. This intentionally includes both staged and unstaged changes.
+    pub fn commit_and_push(path: &str, message: &str, author: &str, email: &str) -> Result<String> {
+        Self::with_write_lock(path, |repo| {
+            repo.stage_all()?;
+            let commit_id = repo.create_commit(message, author, email)?;
+            repo.push_current("origin")?;
+            Ok(commit_id)
+        })
+    }
+
     pub fn pull(path: &str, remote: &str) -> Result<()> {
         Self::fetch_all(path)?;
         let target = Self::with_write_lock(path, |repo| {

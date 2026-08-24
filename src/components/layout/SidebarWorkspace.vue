@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
@@ -17,6 +17,7 @@ import {
   Trash2,
   MoreVertical,
   GitFork,
+  FolderTree,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
@@ -29,6 +30,28 @@ const isTagsOpen = ref(true);
 const isStashesOpen = ref(true);
 
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
+
+interface BranchGroup {
+  name: string;
+  branches: BranchItem[];
+}
+
+function groupBranches(branches: BranchItem[]): BranchGroup[] {
+  const groups = new Map<string, BranchItem[]>();
+  for (const branch of branches) {
+    const slash = branch.name.indexOf('/');
+    const groupName = slash > 0 ? branch.name.slice(0, slash) : '';
+    const items = groups.get(groupName) || [];
+    items.push(branch);
+    groups.set(groupName, items);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, items]) => ({ name, branches: items.sort((a, b) => a.name.localeCompare(b.name)) }));
+}
+
+const localBranchGroups = computed(() => groupBranches(repoStore.branches.filter((branch) => !branch.is_remote)));
+const remoteBranchGroups = computed(() => groupBranches(repoStore.branches.filter((branch) => branch.is_remote)));
 
 function handleCheckout(name: string) {
   repoStore.checkoutBranch(name);
@@ -45,7 +68,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
 </script>
 
 <template>
-  <aside class="dbx-sidebar w-60 bg-muted/30 dark:bg-card border-r border-border flex flex-col select-none overflow-y-auto text-xs">
+  <aside class="dbx-sidebar w-60 h-full min-h-0 shrink-0 bg-muted/30 dark:bg-card border-r border-border flex flex-col select-none overflow-y-auto overscroll-contain text-xs">
     <!-- Repositories Section (SourceTree style) -->
     <div class="p-2 border-b border-border">
       <div
@@ -117,30 +140,36 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         </button>
       </div>
 
-      <div v-if="isBranchesOpen" class="mt-1 space-y-0.5">
-        <div
-          v-for="branch in repoStore.branches.filter(b => !b.is_remote)"
-          :key="branch.name"
-          @dblclick="handleCheckout(branch.name)"
-          @click="handleCheckout(branch.name)"
-          @contextmenu.prevent="openContextMenu($event, branch)"
-          class="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-          :class="branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary'"
-        >
-          <div class="flex items-center space-x-1.5 truncate">
-            <GitBranch class="w-3.5 h-3.5 shrink-0" :class="branch.is_head ? 'text-primary' : 'text-muted-foreground'" />
-            <span class="truncate">{{ branch.name }}</span>
+      <div v-if="isBranchesOpen" class="mt-1 space-y-1">
+        <div v-for="group in localBranchGroups" :key="group.name || '__root'">
+          <div v-if="group.name" class="flex items-center space-x-1 px-2 text-[10px] text-muted-foreground/80 font-semibold">
+            <FolderTree class="w-3 h-3" />
+            <span class="truncate">{{ group.name }}/</span>
           </div>
+          <div
+            v-for="branch in group.branches"
+            :key="branch.name"
+            @dblclick="handleCheckout(branch.name)"
+            @click="handleCheckout(branch.name)"
+            @contextmenu.prevent="openContextMenu($event, branch)"
+            class="flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
+            :class="[branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary', group.name ? 'pl-5' : '']"
+          >
+            <div class="flex items-center space-x-1.5 truncate">
+              <GitBranch class="w-3.5 h-3.5 shrink-0" :class="branch.is_head ? 'text-primary' : 'text-muted-foreground'" />
+              <span class="truncate">{{ group.name ? branch.name.slice(group.name.length + 1) : branch.name }}</span>
+            </div>
 
-          <div class="flex items-center space-x-1">
-            <Check v-if="branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
-            <button
-              @click.stop="openContextMenu($event, branch)"
-              class="p-0.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 transition"
-              :title="t('More actions')"
-            >
-              <MoreVertical class="w-3 h-3" />
-            </button>
+            <div class="flex items-center space-x-1">
+              <Check v-if="branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
+              <button
+                @click.stop="openContextMenu($event, branch)"
+                class="p-0.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 transition"
+                :title="t('More actions')"
+              >
+                <MoreVertical class="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -158,16 +187,23 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         </div>
       </div>
 
-      <div v-if="isRemotesOpen" class="mt-1 space-y-0.5 text-muted-foreground">
-        <div
-          v-for="branch in repoStore.branches.filter(b => b.is_remote)"
-          :key="branch.name"
-          @dblclick="handleCheckout(branch.name)"
-          @contextmenu.prevent="openContextMenu($event, branch)"
-          class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
-        >
-          <Globe class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 opacity-80 shrink-0" />
-          <span class="truncate">{{ branch.name }}</span>
+      <div v-if="isRemotesOpen" class="mt-1 space-y-1 text-muted-foreground">
+        <div v-for="group in remoteBranchGroups" :key="group.name || '__root'">
+          <div v-if="group.name" class="flex items-center space-x-1 px-2 text-[10px] text-muted-foreground/80 font-semibold">
+            <FolderTree class="w-3 h-3" />
+            <span class="truncate">{{ group.name }}/</span>
+          </div>
+          <div
+            v-for="branch in group.branches"
+            :key="branch.name"
+            @dblclick="handleCheckout(branch.name)"
+            @contextmenu.prevent="openContextMenu($event, branch)"
+            class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
+            :class="group.name ? 'pl-5' : ''"
+          >
+            <Globe class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 opacity-80 shrink-0" />
+            <span class="truncate">{{ group.name ? branch.name.slice(group.name.length + 1) : branch.name }}</span>
+          </div>
         </div>
       </div>
     </div>

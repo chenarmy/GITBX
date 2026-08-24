@@ -69,6 +69,10 @@ function isConflictError(error: unknown): boolean {
   return /conflict|unmerged/i.test(formatGitError(error, ''));
 }
 
+function redactRemoteUrl(url: string): string {
+  return url.replace(/(https?:\/\/)([^\s/@:]+)(?::[^\s/@]*)?@/i, '$1$2:***@');
+}
+
 export function useGitApi() {
   const getConsole = () => useConsoleStore();
 
@@ -112,10 +116,10 @@ export function useGitApi() {
   };
 
   const cloneRepo = async (url: string, destination: string): Promise<{ success: boolean; path: string; name: string }> => {
-    getConsole().logCommand(`git clone "${url}" "${destination}"`);
+    getConsole().logCommand(`git clone "${redactRemoteUrl(url)}" "${destination}"`);
     if (isTauri()) {
       const info = await invoke<RepositoryInfo>('clone_repo', { url, destination });
-      getConsole().logSuccess(`Cloned ${url} into ${destination}`);
+      getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
       return { success: true, path: info.path, name: info.name };
     }
     const res = await fetch('/api/repo/clone', {
@@ -125,7 +129,7 @@ export function useGitApi() {
     });
     const data = await res.json();
     if (data.success) {
-      getConsole().logSuccess(`Cloned ${url} into ${destination}`);
+      getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
     } else {
       getConsole().logError(`Clone failed: ${data.error}`);
     }
@@ -505,6 +509,34 @@ export function useGitApi() {
       throw new Error(data.error);
     }
     getConsole().logSuccess(`Commit created successfully: ${message}`, data.output);
+    return data.commit_id;
+  };
+
+  const commitAndPush = async (
+    repoPath: string,
+    message: string,
+    author: string,
+    email: string,
+  ): Promise<string> => {
+    const cmd = `git add -A && git commit -m "${message}" && git push -u origin HEAD`;
+    getConsole().logCommand(cmd);
+    if (isTauri()) {
+      const cid = await invoke<string>('commit_and_push', { repoPath, message, author, email });
+      getConsole().logSuccess(`Commit ${cid.slice(0, 7)} created and pushed.`);
+      return cid;
+    }
+    const res = await fetch('/api/repo/commit-and-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath, message, author, email }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.error || !data?.success) {
+      const error = formatGitError(data?.error ?? data, `Commit and push failed (HTTP ${res.status})`);
+      getConsole().logError(error, undefined, cmd);
+      throw new Error(error);
+    }
+    getConsole().logSuccess(`Commit ${data.commit_id.slice(0, 7)} created and pushed.`);
     return data.commit_id;
   };
 
@@ -913,6 +945,14 @@ export function useGitApi() {
     getConsole().logInfo(`Opened a system terminal in ${repoPath}.`);
   };
 
+  const openFileManager = async (repoPath: string): Promise<void> => {
+    if (!isTauri()) {
+      throw new Error('Opening a file manager is only available in the desktop app.');
+    }
+    await invoke('open_file_manager', { repoPath });
+    getConsole().logInfo(`Opened the file manager in ${repoPath}.`);
+  };
+
   const generateCommitMessage = async (
     diffText: string,
     config: LlmConfig
@@ -1061,6 +1101,7 @@ export function useGitApi() {
     unstageAll,
     discardFile,
     createCommit,
+    commitAndPush,
     getFileDiff,
     getConflictFile,
     resolveConflict,
@@ -1082,6 +1123,7 @@ export function useGitApi() {
     pullRemote,
     pushRemote,
     openSystemTerminal,
+    openFileManager,
     generateCommitMessage,
     scanSecrets,
     analyzeConflict,

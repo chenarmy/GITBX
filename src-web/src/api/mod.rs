@@ -381,6 +381,22 @@ async fn repo_handler(
                     .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
             })
         }),
+        (Method::POST, "commit-and-push") => write_op(&path, || {
+            let message = body_json
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let author = body_json
+                .get("author")
+                .and_then(Value::as_str)
+                .unwrap_or("GITBX");
+            let email = body_json
+                .get("email")
+                .and_then(Value::as_str)
+                .unwrap_or("gitbx@localhost");
+            GitService::commit_and_push(&path, message, author, email)
+                .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
+        }),
         (Method::POST, "branch/create") => write_op(&path, || {
             GitService::create_branch(
                 &path,

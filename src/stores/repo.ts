@@ -230,6 +230,11 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
+  const commitAndPush = async (message: string, author: string, email: string) => {
+    await gitApi.commitAndPush(activeRepoPath.value, message, author, email);
+    await loadRepo(activeRepoPath.value);
+  };
+
   const checkoutBranch = async (branchName: string) => {
     await gitApi.checkoutBranch(activeRepoPath.value, branchName);
     await loadRepo(activeRepoPath.value);
@@ -415,6 +420,7 @@ export const useRepoStore = defineStore('repo', () => {
     unstageAll,
     discardFile,
     commit,
+    commitAndPush,
     checkoutBranch,
     createBranch,
     deleteBranch,

@@ -106,6 +106,16 @@ pub async fn create_commit(
 }
 
 #[tauri::command]
+pub async fn commit_and_push(
+    repo_path: String,
+    message: String,
+    author: String,
+    email: String,
+) -> CommandResult<String> {
+    GitService::commit_and_push(&repo_path, &message, &author, &email).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn checkout_branch(repo_path: String, branch_name: String) -> CommandResult<()> {
     GitService::with_write_lock(&repo_path, |repo| repo.checkout_branch(&branch_name))
         .map_err(|e| e.to_string())

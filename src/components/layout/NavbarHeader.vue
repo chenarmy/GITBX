@@ -29,6 +29,7 @@ const gitApi = useGitApi();
 
 const isRepoDropdownOpen = ref(false);
 const isOpeningTerminal = ref(false);
+const isOpeningFileManager = ref(false);
 
 function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
@@ -59,6 +60,21 @@ async function handleOpenTerminal() {
     notification.error(t('Failed to Open System Terminal'), formatGitError(error, t('Could not open a terminal for the current repository.')));
   } finally {
     isOpeningTerminal.value = false;
+  }
+}
+
+async function handleOpenFileManager() {
+  const repoPath = repoStore.activeRepoPath;
+  if (!repoPath || isOpeningFileManager.value) return;
+
+  isOpeningFileManager.value = true;
+  try {
+    await gitApi.openFileManager(repoPath);
+    notification.success(t('File Explorer Opened'), t('Opened file manager in {path}', { path: repoPath }));
+  } catch (error) {
+    notification.error(t('Failed to Open File Explorer'), formatGitError(error, t('Could not open the file manager for the current repository.')));
+  } finally {
+    isOpeningFileManager.value = false;
   }
 }
 
@@ -167,6 +183,14 @@ onUnmounted(() => {
         :title="t('Open System Terminal')"
       >
         <Terminal class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningTerminal }" />
+      </button>
+      <button
+        @click="handleOpenFileManager"
+        :disabled="!repoStore.activeRepoPath || isOpeningFileManager"
+        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
+        :title="t('Open File Explorer')"
+      >
+        <FolderOpen class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningFileManager }" />
       </button>
     </div>
 
