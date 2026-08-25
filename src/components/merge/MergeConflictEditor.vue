@@ -6,6 +6,7 @@ import { useDiffStore } from '@/stores/diff';
 import { useNotificationStore } from '@/stores/notification';
 import { useRepoStore } from '@/stores/repo';
 import { useAiStore } from '@/stores/ai';
+import { useSettingsStore } from '@/stores/settings';
 import type { ConflictChunk, ConflictFileContent } from '@/types/diff';
 import { useI18n } from '@/i18n';
 
@@ -13,6 +14,7 @@ const gitApi = useGitApi();
 const diffStore = useDiffStore();
 const repoStore = useRepoStore();
 const aiStore = useAiStore();
+const settingsStore = useSettingsStore();
 const notification = useNotificationStore();
 const { t } = useI18n();
 
@@ -130,7 +132,8 @@ async function handleAiAnalyze() {
       firstSection.ours,
       firstSection.theirs,
       firstSection.base ?? undefined,
-      aiStore.llmConfig
+      aiStore.llmConfig,
+      settingsStore.language,
     );
     if (res.suggested_content) {
       conflictIndexes.value.forEach((idx) => {

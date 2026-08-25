@@ -16,6 +16,7 @@ import type {
   SecretDetection,
   ConflictResolutionSuggestion,
 } from '@/types/ai';
+import type { Locale } from '@/i18n/config';
 import { useConsoleStore } from '@/stores/console';
 
 const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -955,7 +956,8 @@ export function useGitApi() {
 
   const generateCommitMessage = async (
     diffText: string,
-    config: LlmConfig
+    config: LlmConfig,
+    language: Locale
   ): Promise<GeneratedCommitMessage> => {
     getConsole().logInfo(`AI Copilot generating commit message using model: ${config.model}...`);
     let requestConfig = config;
@@ -971,12 +973,13 @@ export function useGitApi() {
       return await invoke<GeneratedCommitMessage>('generate_commit_message', {
         diffText,
         config: requestConfig,
+        language,
       });
     }
     const res = await fetch('/api/ai/commit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ diff_text: diffText, config }),
+      body: JSON.stringify({ diff_text: diffText, config, language }),
     });
     if (!res.ok) throw new Error((await res.text()) || 'AI commit generation failed');
     return await res.json();
@@ -1034,7 +1037,8 @@ export function useGitApi() {
     ours: string,
     theirs: string,
     base?: string,
-    config?: LlmConfig
+    config?: LlmConfig,
+    language: Locale = 'en'
   ): Promise<ConflictResolutionSuggestion> => {
     getConsole().logInfo(`AI analyzing merge conflict in ${filePath}...`);
     const finalConfig: LlmConfig = config || { provider: 'openai', api_base: 'https://api.openai.com/v1', model: 'gpt-4o' };
@@ -1054,12 +1058,13 @@ export function useGitApi() {
         theirs,
         base,
         config: requestConfig,
+        language,
       });
     }
     const res = await fetch('/api/ai/conflict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_path: filePath, ours, theirs, base, config: requestConfig }),
+      body: JSON.stringify({ file_path: filePath, ours, theirs, base, config: requestConfig, language }),
     });
     if (!res.ok) throw new Error((await res.text()) || 'AI conflict analysis failed');
     return await res.json();

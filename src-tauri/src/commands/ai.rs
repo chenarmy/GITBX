@@ -23,10 +23,11 @@ fn resolve_config(mut config: LlmConfig) -> LlmConfig {
 pub async fn generate_commit_message(
     diff_text: String,
     config: LlmConfig,
+    language: String,
 ) -> Result<GeneratedCommitMessage, String> {
     let resolved = resolve_config(config);
     let client = GenericOpenAiClient::new(resolved);
-    CommitGenerator::generate_from_diff(&client, &diff_text)
+    CommitGenerator::generate_from_diff(&client, &diff_text, Some(&language))
         .await
         .map_err(|e| e.to_string())
 }
@@ -44,10 +45,18 @@ pub async fn analyze_conflict(
     theirs: String,
     base: Option<String>,
     config: LlmConfig,
+    language: String,
 ) -> Result<ConflictResolutionSuggestion, String> {
     let resolved = resolve_config(config);
     let client = GenericOpenAiClient::new(resolved);
-    ConflictAnalyzer::analyze_conflict(&client, &file_path, &ours, &theirs, base.as_deref())
-        .await
-        .map_err(|e| e.to_string())
+    ConflictAnalyzer::analyze_conflict(
+        &client,
+        &file_path,
+        &ours,
+        &theirs,
+        base.as_deref(),
+        Some(&language),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
