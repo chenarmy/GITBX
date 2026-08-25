@@ -166,14 +166,22 @@ impl GitService {
 
     pub fn delete_branch(path: &str, name: &str, _force: bool) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            let mut branch = repo.inner().find_branch(name, BranchType::Local)?;
-            if branch.is_head() {
-                return Err(GitbxError::General(
-                    "Cannot delete the currently checked out branch".into(),
-                ));
+            if let Ok(mut local_branch) = repo.inner().find_branch(name, BranchType::Local) {
+                if local_branch.is_head() {
+                    return Err(GitbxError::General(
+                        "Cannot delete the currently checked out branch".into(),
+                    ));
+                }
+                local_branch.delete()?;
+                return Ok(());
             }
-            branch.delete()?;
-            Ok(())
+
+            if let Ok(mut remote_branch) = repo.inner().find_branch(name, BranchType::Remote) {
+                remote_branch.delete()?;
+                return Ok(());
+            }
+
+            Err(GitbxError::General(format!("Branch '{}' not found", name)))
         })
     }
 
@@ -424,7 +432,7 @@ impl GitService {
     }
 
     /// Stage the complete working tree, create a commit, and push the checked-out
-    /// branch. This intentionally includes both staged and unstaged changes.
+    /// branch.
     pub fn commit_and_push(path: &str, message: &str, author: &str, email: &str) -> Result<String> {
         Self::with_write_lock(path, |repo| {
             repo.stage_all()?;
@@ -850,5 +858,75 @@ mod tests {
             .expect("commit changes");
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].path, "file.txt");
+    }
+
+    #[test]
+    fn checkout_remote_branch_creates_local_tracking_branch() {
+        let dir = tempdir().expect("tempdir");
+        let origin_path = dir.path().join("origin");
+        let local_path = dir.path().join("local");
+        fs::create_dir(&origin_path).expect("origin dir");
+        let origin_repo = Repository::init_bare(&origin_path).expect("init bare origin");
+
+        // Clone to local
+        let local_repo = Repository::clone(origin_path.to_str().unwrap(), &local_path).expect("clone");
+        fs::write(local_path.join("file.txt"), "hello\n").expect("write file");
+        let mut index = local_repo.index().expect("index");
+        index.add_path(std::path::Path::new("file.txt")).expect("add");
+        let tree_id = index.write_tree().expect("tree");
+        index.write().expect("write index");
+        let tree = local_repo.find_tree(tree_id).expect("tree");
+        let sig = git2::Signature::now("Test", "test@example.com").expect("sig");
+        let c1 = local_repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).expect("commit");
+        drop(tree);
+        drop(index);
+
+        // Push master to origin
+        let mut origin_remote = local_repo.find_remote("origin").expect("remote");
+        let mut push_opts = git2::PushOptions::new();
+        origin_remote.push(&["refs/heads/master:refs/heads/master"], Some(&mut push_opts)).expect("push master");
+
+        // Create remote branch on origin: v1.1
+        let c1_obj = origin_repo.find_commit(c1).expect("find commit on bare origin");
+        origin_repo.branch("v1.1", &c1_obj, false).expect("create v1.1 branch on bare origin");
+
+        // Fetch on local
+        let local_path_str = local_path.to_str().unwrap();
+        GitService::fetch_all(local_path_str).expect("fetch all");
+
+        // Now checkout "origin/v1.1" directly
+        let local_core_repo = GitService::open(local_path_str).expect("open");
+        local_core_repo.checkout_branch("origin/v1.1").expect("checkout remote branch");
+
+        // Check that HEAD is now local branch "v1.1" and NOT detached!
+        let info = GitService::info(local_path_str).expect("info");
+        assert_eq!(info.head_branch.as_deref(), Some("v1.1"));
+        assert!(!local_core_repo.inner().head_detached().expect("head detached check"));
+
+        // Check that upstream is set to origin/v1.1
+        let branches = local_core_repo.list_branches(None).expect("list branches");
+        let local_v11 = branches.iter().find(|b| b.name == "v1.1" && !b.is_remote).expect("local branch v1.1 exists");
+        assert_eq!(local_v11.upstream_name.as_deref(), Some("origin/v1.1"));
+
+        // Create origin/HEAD symbolic reference
+        local_repo
+            .reference_symbolic("refs/remotes/origin/HEAD", "refs/remotes/origin/master", true, "test")
+            .expect("create origin/HEAD");
+
+        // Verify list_branches does NOT include origin/HEAD
+        let refreshed_branches = local_core_repo.list_branches(None).expect("list branches");
+        assert!(
+            !refreshed_branches.iter().any(|b| b.name == "origin/HEAD" || b.name.ends_with("/HEAD")),
+            "origin/HEAD should not be in list_branches"
+        );
+
+        // Verify get_commits does NOT include origin/HEAD in branch_refs
+        let commits = local_core_repo.get_commits(10).expect("get_commits");
+        for commit in commits {
+            assert!(
+                !commit.branch_refs.iter().any(|r| r == "origin/HEAD" || r.ends_with("/HEAD")),
+                "origin/HEAD should not be in commit branch_refs"
+            );
+        }
     }
 }

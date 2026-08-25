@@ -187,11 +187,13 @@ impl Repository {
             std::collections::HashMap::new();
         if let Ok(branches) = self.inner.branches(None) {
             for item in branches.flatten() {
+                let is_remote = item.1 == git2::BranchType::Remote;
+                let name = item.0.name().ok().flatten().unwrap_or("").to_string();
+                if name.is_empty() || (is_remote && (name == "HEAD" || name.ends_with("/HEAD"))) {
+                    continue;
+                }
                 if let Ok(target) = item.0.get().peel_to_commit() {
-                    let name = item.0.name().ok().flatten().unwrap_or("").to_string();
-                    if !name.is_empty() {
-                        branch_map.entry(target.id()).or_default().push(name);
-                    }
+                    branch_map.entry(target.id()).or_default().push(name);
                 }
             }
         }

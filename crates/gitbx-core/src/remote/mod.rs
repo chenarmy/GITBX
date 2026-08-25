@@ -4,36 +4,6 @@ use crate::repository::Repository;
 use git2::{Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
 use serde::{Deserialize, Serialize};
 
-fn percent_decode(value: &str) -> Option<String> {
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' {
-            if index + 2 >= bytes.len() {
-                return None;
-            }
-            let high = (bytes[index + 1] as char).to_digit(16)?;
-            let low = (bytes[index + 2] as char).to_digit(16)?;
-            decoded.push((high * 16 + low) as u8);
-            index += 3;
-        } else {
-            decoded.push(bytes[index]);
-            index += 1;
-        }
-    }
-    String::from_utf8(decoded).ok()
-}
-
-fn embedded_http_credentials(url: &str) -> Option<(String, String)> {
-    let authority = url
-        .split_once("://")
-        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or(rest))?;
-    let (userinfo, _) = authority.rsplit_once('@')?;
-    let (username, password) = userinfo.split_once(':')?;
-    Some((percent_decode(username)?, percent_decode(password)?))
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteItem {
     pub name: String,
@@ -46,17 +16,12 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
     callbacks.credentials(
         move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
             if allowed.is_user_pass_plaintext() {
-                // Keep credentials supplied in a clone URL usable for later fetch/push
-                // operations. Git may pass the remote URL back to this callback without
-                // invoking the credential helper again.
-                if let Some((username, password)) = embedded_http_credentials(url) {
-                    return Cred::userpass_plaintext(&username, &password);
-                }
                 if let Some(ref cfg) = config {
                     if let Ok(credential) = Cred::credential_helper(cfg, url, username_from_url) {
                         return Ok(credential);
                     }
-                } else if let Ok(default_cfg) = git2::Config::open_default() {
+                }
+                if let Ok(default_cfg) = git2::Config::open_default() {
                     if let Ok(credential) =
                         Cred::credential_helper(&default_cfg, url, username_from_url)
                     {
@@ -66,15 +31,41 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
             }
 
             if allowed.is_ssh_key() {
-                return Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"));
+                let user = username_from_url.unwrap_or("git");
+                if let Ok(credential) = Cred::ssh_key_from_agent(user) {
+                    return Ok(credential);
+                }
+
+                let home = std::env::var("USERPROFILE")
+                    .or_else(|_| std::env::var("HOME"))
+                    .map(std::path::PathBuf::from);
+                if let Ok(home_path) = home {
+                    let ssh_dir = home_path.join(".ssh");
+                    for key_name in &["id_ed25519", "id_rsa", "id_ecdsa", "id_dsa", "identity"] {
+                        let priv_key = ssh_dir.join(key_name);
+                        if priv_key.exists() {
+                            let pub_key = ssh_dir.join(format!("{key_name}.pub"));
+                            let pub_key_ref = if pub_key.exists() {
+                                Some(pub_key.as_path())
+                            } else {
+                                None
+                            };
+                            if let Ok(cred) = Cred::ssh_key(user, pub_key_ref, &priv_key, None) {
+                                return Ok(cred);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if allowed.is_default() {
+                if let Ok(credential) = Cred::default() {
+                    return Ok(credential);
+                }
             }
 
             if allowed.is_username() {
                 return Cred::username(username_from_url.unwrap_or("git"));
-            }
-
-            if allowed.is_default() {
-                return Cred::default();
             }
 
             Err(Error::from_str(
@@ -83,6 +74,26 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
         },
     );
     callbacks
+}
+
+fn create_git_command() -> std::process::Command {
+    if cfg!(target_os = "windows") {
+        for candidate in &[
+            r"C:\Program Files\Git\cmd\git.exe",
+            r"C:\Program Files\Git\bin\git.exe",
+            r"C:\Program Files (x86)\Git\cmd\git.exe",
+            r"C:\Program Files (x86)\Git\bin\git.exe",
+            "git",
+        ] {
+            if *candidate == "git" || std::path::Path::new(candidate).exists() {
+                if let Ok(mut child) = std::process::Command::new(candidate).arg("--version").spawn() {
+                    let _ = child.wait();
+                    return std::process::Command::new(candidate);
+                }
+            }
+        }
+    }
+    std::process::Command::new("git")
 }
 
 impl Repository {
@@ -133,7 +144,18 @@ impl Repository {
         fetch_opts.remote_callbacks(self.authenticated_callbacks()?);
         fetch_opts.proxy_options(proxy_options());
 
-        remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
+        if let Err(err) = remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None) {
+            if let Ok(output) = create_git_command()
+                .current_dir(self.path())
+                .args(["fetch", remote_name])
+                .output()
+            {
+                if output.status.success() {
+                    return Ok(());
+                }
+            }
+            return Err(err.into());
+        }
         Ok(())
     }
 
@@ -151,14 +173,32 @@ impl Repository {
             .shorthand()
             .ok_or_else(|| crate::error::GitbxError::General("HEAD is detached".into()))?
             .to_string();
-        let mut local_branch = self.inner().find_branch(&branch, git2::BranchType::Local)?;
-        let has_upstream = local_branch.upstream().is_ok();
         let mut remote = self.inner().find_remote(remote_name)?;
         let mut options = PushOptions::new();
         options.remote_callbacks(self.authenticated_callbacks()?);
         options.proxy_options(proxy_options());
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
         if let Err(error) = remote.push(&[refspec.as_str()], Some(&mut options)) {
+            // Fallback to system git CLI push if available
+            if let Ok(output) = create_git_command()
+                .current_dir(self.path())
+                .args(["push", remote_name, &branch])
+                .output()
+            {
+                if output.status.success() {
+                    return Ok(());
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                    if !stderr.is_empty() {
+                        let lower = stderr.to_ascii_lowercase();
+                        if lower.contains("permission to") || lower.contains("authentication failed") || lower.contains("denied") {
+                            return Err(crate::error::GitbxError::AuthFailed(stderr));
+                        }
+                        return Err(crate::error::GitbxError::General(stderr));
+                    }
+                }
+            }
+
             let message = error.message().to_ascii_lowercase();
             if message.contains("401")
                 || message.contains("403")
@@ -172,19 +212,12 @@ impl Repository {
             }
             return Err(error.into());
         }
-        if !has_upstream {
-            let tracking_branch = format!("{remote_name}/{branch}");
-            local_branch.set_upstream(Some(&tracking_branch))?;
-        }
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use super::embedded_http_credentials;
     use crate::repository::Repository;
     use tempfile::tempdir;
 
@@ -222,51 +255,5 @@ mod tests {
             .set_remote_urls(" ", "https://example.com/repo.git", None)
             .is_err());
         assert!(repo.set_remote_urls("origin", " ", None).is_err());
-    }
-
-    #[test]
-    fn extracts_encoded_credentials_from_remote_url() {
-        assert_eq!(
-            embedded_http_credentials("https://alice:p%40ss%3Aword@example.com/repo.git"),
-            Some(("alice".into(), "p@ss:word".into()))
-        );
-    }
-
-    #[test]
-    fn push_sets_tracking_branch_for_new_local_branch() {
-        let remote_dir = tempdir().expect("remote tempdir");
-        let local_dir = tempdir().expect("local tempdir");
-        Repository::init(remote_dir.path(), true).expect("bare remote");
-        let local = Repository::init(local_dir.path(), false).expect("local repository");
-        fs::write(local_dir.path().join("README.md"), "initial\n").expect("write file");
-        local.stage_all().expect("stage file");
-        local
-            .create_commit("initial", "Test", "test@example.com")
-            .expect("initial commit");
-        local
-            .inner()
-            .remote("origin", remote_dir.path().to_str().expect("remote path"))
-            .expect("remote");
-
-        local.push_current("origin").expect("push");
-        let branch = local
-            .inner()
-            .head()
-            .expect("head")
-            .shorthand()
-            .expect("branch")
-            .to_string();
-        let branch = local
-            .inner()
-            .find_branch(&branch, git2::BranchType::Local)
-            .expect("local branch");
-        assert_eq!(
-            branch
-                .upstream()
-                .expect("upstream")
-                .name()
-                .expect("upstream name"),
-            Some(format!("origin/{}", branch.name().unwrap().unwrap()).as_str())
-        );
     }
 }

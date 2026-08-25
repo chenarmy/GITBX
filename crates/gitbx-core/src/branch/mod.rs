@@ -47,8 +47,14 @@ impl Repository {
         for item in branches {
             let (branch, b_type) = item?;
             let name = branch.name()?.unwrap_or("").to_string();
-            let is_head = branch.is_head();
             let is_remote = b_type == BranchType::Remote;
+
+            // Filter out remote HEAD references such as "origin/HEAD"
+            if is_remote && (name == "HEAD" || name.ends_with("/HEAD")) {
+                continue;
+            }
+
+            let is_head = branch.is_head();
             let target_commit_id = branch.get().peel_to_commit()?.id().to_string();
 
             let upstream = branch.upstream().ok();
@@ -85,14 +91,29 @@ impl Repository {
     }
 
     pub fn create_branch(&self, name: &str, target_commit_id: Option<&str>) -> Result<()> {
-        let commit = if let Some(oid_str) = target_commit_id {
-            let oid = git2::Oid::from_str(oid_str)?;
-            self.inner().find_commit(oid)?
+        let (commit, upstream_to_set) = if let Some(target_str) = target_commit_id {
+            if let Ok(oid) = git2::Oid::from_str(target_str) {
+                (self.inner().find_commit(oid)?, None)
+            } else if let Ok(remote_branch) = self.inner().find_branch(target_str, BranchType::Remote) {
+                let c = remote_branch.get().peel_to_commit()?;
+                let upstream = remote_branch.name()?.map(|s| s.to_string());
+                (c, upstream)
+            } else if let Ok(obj) = self.inner().revparse_single(target_str) {
+                (obj.peel_to_commit()?, None)
+            } else {
+                return Err(crate::GitbxError::General(format!(
+                    "Target commit or branch '{}' not found",
+                    target_str
+                )));
+            }
         } else {
-            self.inner().head()?.peel_to_commit()?
+            (self.inner().head()?.peel_to_commit()?, None)
         };
 
-        self.inner().branch(name, &commit, false)?;
+        let mut branch = self.inner().branch(name, &commit, false)?;
+        if let Some(upstream) = upstream_to_set {
+            let _ = branch.set_upstream(Some(&upstream));
+        }
         Ok(())
     }
 
@@ -108,6 +129,67 @@ impl Repository {
     }
 
     pub fn checkout_branch(&self, name: &str) -> Result<()> {
+        // 1. If it's already a local branch, check it out directly
+        if let Ok(local_branch) = self.inner().find_branch(name, BranchType::Local) {
+            let reference = local_branch.get();
+            let object = reference.peel_to_commit()?.into_object();
+            self.inner().checkout_tree(&object, None)?;
+            self.inner().set_head(reference.name().unwrap_or(name))?;
+            return Ok(());
+        }
+
+        // 2. If it's a remote tracking branch (e.g. "origin/v1.1" or "remotes/origin/v1.1")
+        if let Ok(remote_branch) = self.inner().find_branch(name, BranchType::Remote) {
+            let remote_ref = remote_branch.get();
+            let commit = remote_ref.peel_to_commit()?;
+
+            // Extract local branch name (e.g. "origin/v1.1" -> "v1.1")
+            let local_name = if let Some(slash_idx) = name.find('/') {
+                &name[slash_idx + 1..]
+            } else {
+                name
+            };
+
+            // If a local branch with that name already exists, check it out
+            if let Ok(existing_local) = self.inner().find_branch(local_name, BranchType::Local) {
+                let reference = existing_local.get();
+                let object = reference.peel_to_commit()?.into_object();
+                self.inner().checkout_tree(&object, None)?;
+                self.inner().set_head(reference.name().unwrap_or(local_name))?;
+                return Ok(());
+            }
+
+            // Create new local tracking branch (IDEA behavior)
+            let mut new_branch = self.inner().branch(local_name, &commit, false)?;
+            let _ = new_branch.set_upstream(Some(name));
+
+            let object = commit.into_object();
+            self.inner().checkout_tree(&object, None)?;
+            self.inner().set_head(&format!("refs/heads/{}", local_name))?;
+            return Ok(());
+        }
+
+        // 3. If name doesn't contain a slash, check if a remote branch exists (e.g. "v1.1" -> "origin/v1.1")
+        if !name.contains('/') {
+            if let Ok(remote_branches) = self.inner().branches(Some(BranchType::Remote)) {
+                let mut matched_remote = None;
+                for item in remote_branches {
+                    if let Ok((b, _)) = item {
+                        if let Ok(Some(b_name)) = b.name() {
+                            if b_name.ends_with(&format!("/{}", name)) {
+                                matched_remote = Some(b_name.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+                if let Some(remote_name) = matched_remote {
+                    return self.checkout_branch(&remote_name);
+                }
+            }
+        }
+
+        // 4. Fallback: revparse_ext (commit hash, tag, detached HEAD, etc.)
         let (object, reference) = self.inner().revparse_ext(name)?;
         self.inner().checkout_tree(&object, None)?;
 

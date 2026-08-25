@@ -51,7 +51,13 @@ function groupBranches(branches: BranchItem[]): BranchGroup[] {
 }
 
 const localBranchGroups = computed(() => groupBranches(repoStore.branches.filter((branch) => !branch.is_remote)));
-const remoteBranchGroups = computed(() => groupBranches(repoStore.branches.filter((branch) => branch.is_remote)));
+const remoteBranchGroups = computed(() =>
+  groupBranches(
+    repoStore.branches.filter(
+      (branch) => branch.is_remote && !branch.name.endsWith('/HEAD') && branch.name !== 'HEAD'
+    )
+  )
+);
 
 function handleCheckout(name: string) {
   repoStore.checkoutBranch(name);
@@ -186,7 +192,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isRemotesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Remote Branches') }} ({{ repoStore.branches.filter(b => b.is_remote).length }})</span>
+          <span>{{ t('Remote Branches') }} ({{ repoStore.branches.filter(b => b.is_remote && !b.name.endsWith('/HEAD') && b.name !== 'HEAD').length }})</span>
         </div>
       </div>
 

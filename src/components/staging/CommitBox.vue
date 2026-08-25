@@ -4,7 +4,7 @@ import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
-import { Sparkles, Send, Upload } from 'lucide-vue-next';
+import { Sparkles, Send, ArrowUpCircle } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -51,15 +51,19 @@ async function handleCommitAndPush() {
   if (!commitMessage.value.trim()) return;
   isSubmitting.value = true;
   try {
-    await repoStore.commitAndPush(
+    await repoStore.commit(
       commitMessage.value,
       settingsStore.authorName,
-      settingsStore.authorEmail,
+      settingsStore.authorEmail
     );
-    notification.success(t('Commit and Push Completed'), commitMessage.value);
+    notification.success(t('Commit Created'), commitMessage.value);
     aiStore.draftCommitMessage = '';
+
+    notification.info(t('Git Push'), t("Pushing commits to remote..."));
+    await repoStore.pushRemote();
+    notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
-    notification.error(t('Commit and Push Failed'), err?.message);
+    notification.error(t('Push Failed'), err?.message || String(err));
   } finally {
     isSubmitting.value = false;
   }
@@ -97,28 +101,30 @@ async function handleCommitAndPush() {
       class="flex-1 w-full bg-background border border-border rounded-sm p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground min-h-[60px]"
     ></textarea>
 
-    <!-- Bottom Actions: Author info & Commit Button -->
+    <!-- Bottom Actions: Author info & Commit / Push Buttons -->
     <div class="flex items-center justify-between mt-2 pt-1 border-t border-border gap-2">
       <div class="text-[11px] text-muted-foreground truncate flex-1">
         {{ t('Committer:') }} <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
       </div>
 
-      <div class="flex items-center gap-1 shrink-0">
+      <div class="flex items-center space-x-1.5">
         <button
           @click="handleCommit"
           :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm whitespace-nowrap"
+          class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
+          :title="t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' })"
         >
           <Send class="w-3.5 h-3.5" />
           <span>{{ t('Commit') }}</span>
         </button>
+
         <button
           @click="handleCommitAndPush"
-          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.total_changes === 0"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-          :title="t('Stage all changes, commit, and push to the current remote branch')"
+          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
+          class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
+          :title="t('Commit and Push to remote')"
         >
-          <Upload class="w-3.5 h-3.5" />
+          <ArrowUpCircle class="w-3.5 h-3.5" />
           <span>{{ t('Commit & Push') }}</span>
         </button>
       </div>

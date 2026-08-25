@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { GitBranch, X, AlertCircle } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
@@ -12,17 +12,45 @@ const checkoutOnCreate = ref(true);
 const isSubmitting = ref(false);
 const errorMsg = ref<string | null>(null);
 
+watch(
+  () => repoStore.isBranchModalOpen,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null;
+      if (repoStore.targetBranchForAction) {
+        const raw = repoStore.targetBranchForAction;
+        const slashIdx = raw.indexOf('/');
+        branchName.value = slashIdx !== -1 ? raw.slice(slashIdx + 1) : raw;
+      } else {
+        branchName.value = '';
+      }
+    }
+  }
+);
+
+const startingPointDisplay = computed(() => {
+  if (repoStore.targetBranchForAction) {
+    return repoStore.targetBranchForAction;
+  }
+  if (repoStore.selectedCommit) {
+    return `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}`;
+  }
+  return t('Current HEAD');
+});
+
 async function handleCreate() {
   if (!branchName.value.trim()) return;
   isSubmitting.value = true;
   errorMsg.value = null;
   try {
+    const startPoint = repoStore.targetBranchForAction || repoStore.selectedCommit?.id;
     await repoStore.createBranch(
       branchName.value.trim(),
-      repoStore.selectedCommit?.id,
+      startPoint,
       checkoutOnCreate.value
     );
     branchName.value = '';
+    repoStore.targetBranchForAction = '';
     repoStore.isBranchModalOpen = false;
   } catch (err: any) {
     errorMsg.value = err?.message || 'Failed to create branch';
@@ -76,7 +104,7 @@ async function handleCreate() {
         <div class="p-2.5 rounded bg-muted/40 border border-border space-y-1">
           <div class="text-muted-foreground">{{ t('Starting Point:') }}</div>
           <div class="font-mono text-foreground">
-            {{ repoStore.selectedCommit ? `${repoStore.selectedCommit.short_id} - ${repoStore.selectedCommit.summary}` : t('Current HEAD') }}
+            {{ startingPointDisplay }}
           </div>
         </div>
 

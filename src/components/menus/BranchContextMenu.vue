@@ -30,23 +30,35 @@ const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
 });
 
+const isRemoteBranch = computed(() => {
+  return props.branch.is_remote;
+});
+
+const trackedBranchName = computed(() => {
+  if (props.branch.upstream_name) {
+    return props.branch.upstream_name.replace(/^refs\/remotes\//, '');
+  }
+  return `origin/${props.branch.name}`;
+});
+
 const menuStyle = computed(() => {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
   const height = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const menuHeight = isCurrentBranch.value ? 260 : 420;
+  const menuHeight = isCurrentBranch.value ? 260 : isRemoteBranch.value ? 280 : 420;
   return {
     left: `${Math.min(props.x, width - 300)}px`,
     top: `${Math.min(props.y, height - menuHeight)}px`,
   };
 });
 
-function handleCheckout() {
-  repoStore.checkoutBranch(props.branch.name);
+async function handleCheckout() {
+  await repoStore.checkoutBranch(props.branch.name);
   emit('close');
 }
 
 function handleNewBranchFrom() {
   repoStore.selectedCommit = repoStore.commitNodes.find(c => c.id === props.branch.target_commit_id) || null;
+  repoStore.targetBranchForAction = props.branch.name;
   repoStore.isBranchModalOpen = true;
   emit('close');
 }
@@ -186,7 +198,7 @@ onUnmounted(() => {
         <button
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
         >
-          <span>{{ t("Tracked Branch 'origin/{branch}'", { branch: branch.name }) }}</span>
+          <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
           <ChevronRight class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -202,7 +214,75 @@ onUnmounted(() => {
       </div>
     </template>
 
-    <!-- CASE 2: Non-current Branch -->
+    <!-- CASE 2: Remote Branch (IDEA Style) -->
+    <template v-else-if="isRemoteBranch">
+      <div class="py-1">
+        <button
+          @click="handleCheckout"
+          class="w-full px-3 py-1.5 text-left hover:bg-primary/10 hover:text-primary flex items-center justify-between font-semibold transition"
+        >
+          <span>{{ t('Checkout') }}</span>
+        </button>
+
+        <button
+          @click="handleNewBranchFrom"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
+        >
+          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
+        </button>
+      </div>
+
+      <div class="py-1">
+        <button
+          @click="handleMergeInto"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+        >
+          <span>{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
+        </button>
+
+        <button
+          @click="handleRebaseOnto"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+        >
+          <span>{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
+        </button>
+      </div>
+
+      <div class="py-1">
+        <button
+          @click="handleCompare"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
+        </button>
+        <button
+          @click="handleShowDiffWithWorkingTree"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t('Show Diff with Working Tree') }}
+        </button>
+      </div>
+
+      <div class="py-1">
+        <button
+          @click="handleNewWorktree"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
+        </button>
+      </div>
+
+      <div class="py-1">
+        <button
+          @click="handleDelete"
+          class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 flex items-center space-x-1.5 font-medium transition"
+        >
+          <span>{{ t('Delete') }}</span>
+        </button>
+      </div>
+    </template>
+
+    <!-- CASE 3: Other Local Branch -->
     <template v-else>
       <div class="py-1">
         <button
@@ -290,7 +370,7 @@ onUnmounted(() => {
         <button
           class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
         >
-          <span>{{ t("Tracked Branch 'origin/{branch}'", { branch: branch.name }) }}</span>
+          <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
           <ChevronRight class="w-3.5 h-3.5" />
         </button>
       </div>
