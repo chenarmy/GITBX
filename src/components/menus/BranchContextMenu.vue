@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
-import { useDiffStore } from '@/stores/diff';
-import { useGitApi } from '@/composables/useGitApi';
+import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { useI18n } from '@/i18n';
@@ -20,7 +19,6 @@ const emit = defineEmits<{
 }>();
 
 const repoStore = useRepoStore();
-const diffStore = useDiffStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
@@ -64,9 +62,16 @@ function handleNewBranchFrom() {
 }
 
 async function handleCheckoutAndRebase() {
-  await repoStore.checkoutBranch(props.branch.name);
-  await repoStore.rebase(repoStore.repoInfo?.head_branch || 'main');
-  emit('close');
+  const previousBranch = repoStore.repoInfo?.head_branch;
+  try {
+    if (!previousBranch) throw new Error('The current branch could not be determined.');
+    await repoStore.checkoutBranch(props.branch.name);
+    await repoStore.rebase(previousBranch);
+  } catch (error) {
+    notification.error(t('Operation Failed'), formatGitError(error));
+  } finally {
+    emit('close');
+  }
 }
 
 async function handleCheckoutAndUpdate() {
@@ -75,14 +80,23 @@ async function handleCheckoutAndUpdate() {
   emit('close');
 }
 
-function handleCompare() {
-  diffStore.selectFile('', false, repoStore.activeRepoPath);
-  notification.info(t('Branch comparison'), t("Selected '{branch}' for comparison.", { branch: props.branch.name }));
-  emit('close');
+async function handleCompare() {
+  try {
+    const files = await repoStore.compareBranch(props.branch);
+    const base = repoStore.repoInfo?.head_branch || 'HEAD';
+    notification.info(
+      t('Branch comparison'),
+      `${base} → ${props.branch.name} · ${files.length} ${t('files')}`,
+    );
+  } catch (error) {
+    notification.error(t('Operation Failed'), formatGitError(error, 'Failed to compare branches'));
+  } finally {
+    emit('close');
+  }
 }
 
 function handleShowDiffWithWorkingTree() {
-  diffStore.selectFile('', false, repoStore.activeRepoPath);
+  void repoStore.selectCommit(null);
   emit('close');
 }
 

@@ -7,8 +7,15 @@ import type {
   RemoteItem,
   TagItem,
   StashItem,
+  FileHistoryEntry,
+  BlameLine,
+  RebaseCommit,
+  RebasePlanItem,
+  SyncStatus,
+  WorktreeInfo,
+  LocalHistoryEntry,
 } from '@/types/git';
-import type { GraphCommitNode } from '@/types/graph';
+import type { GraphPage } from '@/types/graph';
 import type { ConflictFileContent } from '@/types/diff';
 import type {
   LlmConfig,
@@ -309,16 +316,19 @@ export function useGitApi() {
 
   const getCommitGraph = async (
     repoPath: string,
-    maxCount: number = 100
-  ): Promise<GraphCommitNode[]> => {
+    offset = 0,
+    limit = 150,
+  ): Promise<GraphPage> => {
     if (isTauri()) {
-      return await invoke<GraphCommitNode[]>('get_commit_graph', {
+      return await invoke<GraphPage>('get_commit_graph', {
         repoPath,
-        maxCount,
+        offset,
+        limit,
       });
     }
-    const res = await fetch(`/api/repo/graph?path=${encodeURIComponent(repoPath)}&max=${maxCount}`);
-    return await parseGitResponse<GraphCommitNode[]>(res, 'Failed to load commit graph');
+    const params = new URLSearchParams({ path: repoPath, offset: String(offset), limit: String(limit) });
+    const res = await fetch(`/api/repo/graph?${params.toString()}`);
+    return await parseGitResponse<GraphPage>(res, 'Failed to load commit graph');
   };
 
   const listTags = async (repoPath: string): Promise<TagItem[]> => {
@@ -484,7 +494,8 @@ export function useGitApi() {
     repoPath: string,
     message: string,
     author: string,
-    email: string
+    email: string,
+    options: { amend?: boolean; sign?: boolean; preCommitCommand?: string } = {},
   ): Promise<string> => {
     const cmd = `git commit -m "${message}" --author="${author} <${email}>"`;
     getConsole().logCommand(cmd);
@@ -495,6 +506,9 @@ export function useGitApi() {
         message,
         author,
         email,
+        amend: options.amend || false,
+        sign: options.sign || false,
+        preCommitCommand: options.preCommitCommand || null,
       });
       getConsole().logSuccess(`Commit ${cid.slice(0, 7)} created: ${message}`);
       return cid;
@@ -502,7 +516,7 @@ export function useGitApi() {
     const res = await fetch('/api/repo/commit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: repoPath, message, author, email }),
+      body: JSON.stringify({ repo_path: repoPath, message, author, email, amend: options.amend, sign: options.sign, pre_commit_command: options.preCommitCommand }),
     });
     const data = await res.json();
     if (data.error) {
@@ -545,7 +559,8 @@ export function useGitApi() {
     repoPath: string,
     filePath: string,
     staged = false,
-    commitId?: string
+    commitId?: string,
+    comparison?: { baseCommitId: string; targetCommitId: string; oldFilePath?: string },
   ): Promise<any> => {
     const params = new URLSearchParams({
       path: repoPath,
@@ -553,16 +568,114 @@ export function useGitApi() {
       staged: String(staged),
     });
     if (commitId) params.append('commit', commitId);
+    if (comparison) {
+      params.append('base_commit', comparison.baseCommitId);
+      params.append('target_commit', comparison.targetCommitId);
+      if (comparison.oldFilePath) params.append('old_file', comparison.oldFilePath);
+    }
     if (isTauri()) {
       return await invoke('get_file_diff', {
         repoPath,
         filePath,
         staged,
         commitId: commitId || null,
+        baseCommitId: comparison?.baseCommitId || null,
+        targetCommitId: comparison?.targetCommitId || null,
+        oldFilePath: comparison?.oldFilePath || null,
       });
     }
     const res = await fetch(`/api/repo/diff?${params.toString()}`);
     return await res.json();
+  };
+
+  const getCommitTemplate = async (repoPath: string): Promise<string | null> => {
+    if (isTauri()) return await invoke<string | null>('get_commit_template', { repoPath });
+    const res = await fetch(`/api/repo/commit-template?path=${encodeURIComponent(repoPath)}`);
+    return await parseGitResponse<string | null>(res, 'Failed to load commit template');
+  };
+
+  const stashOperation = async (repoPath: string, operation: 'apply' | 'drop' | 'rename', index: number, message?: string): Promise<void> => {
+    const cmd = `git stash ${operation} stash@{${index}}`;
+    getConsole().logCommand(cmd);
+    if (isTauri()) {
+      if (operation === 'rename') await invoke('rename_stash', { repoPath, index, message: message || '' });
+      else await invoke(`${operation}_stash`, { repoPath, index });
+      return;
+    }
+    const res = await fetch(`/api/repo/stash/${operation}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath, index, message }),
+    });
+    await parseGitResponse(res, `Failed to ${operation} stash`);
+  };
+
+  const getStashChanges = async (repoPath: string, commitId: string): Promise<FileStatusItem[]> => {
+    if (isTauri()) return await invoke<FileStatusItem[]>('get_stash_changes', { repoPath, commitId });
+    const params = new URLSearchParams({ path: repoPath, commit_id: commitId });
+    const res = await fetch(`/api/repo/stash/changes?${params.toString()}`);
+    return await parseGitResponse<FileStatusItem[]>(res, 'Failed to load stash changes');
+  };
+
+  const createShelf = async (repoPath: string, message: string, filePaths: string[]): Promise<void> => {
+    getConsole().logCommand(`git stash push -m "[Shelf] ${message}" -- ${filePaths.join(' ')}`);
+    if (isTauri()) {
+      await invoke('create_shelf', { repoPath, message, filePaths });
+      return;
+    }
+    const res = await fetch('/api/repo/shelf/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath, message, file_paths: filePaths }),
+    });
+    await parseGitResponse(res, 'Failed to create shelf');
+  };
+
+  const applyPartialPatch = async (
+    repoPath: string,
+    filePath: string,
+    patch: string,
+    target: 'index' | 'workdir',
+  ): Promise<void> => {
+    const cmd = target === 'index'
+      ? `git apply --cached <selected patch for "${filePath}">`
+      : `git apply --reverse <selected patch for "${filePath}">`;
+    getConsole().logCommand(cmd);
+    if (isTauri()) {
+      await invoke('apply_partial_patch', { repoPath, filePath, patch, target });
+      return;
+    }
+    const res = await fetch('/api/repo/patch/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath, file_path: filePath, patch, target }),
+    });
+    await parseGitResponse(res, 'Failed to apply the selected patch');
+  };
+
+  const getFileHistory = async (
+    repoPath: string,
+    filePath: string,
+    maxCount = 100,
+  ): Promise<FileHistoryEntry[]> => {
+    if (isTauri()) {
+      return await invoke<FileHistoryEntry[]>('get_file_history', { repoPath, filePath, maxCount });
+    }
+    const params = new URLSearchParams({ path: repoPath, file_path: filePath, max_count: String(maxCount) });
+    const res = await fetch(`/api/repo/file-history?${params.toString()}`);
+    return await parseGitResponse<FileHistoryEntry[]>(res, 'Failed to load file history');
+  };
+
+  const getFileBlame = async (
+    repoPath: string,
+    filePath: string,
+    revision?: string,
+  ): Promise<BlameLine[]> => {
+    if (isTauri()) {
+      return await invoke<BlameLine[]>('get_file_blame', { repoPath, filePath, revision: revision || null });
+    }
+    const params = new URLSearchParams({ path: repoPath, file_path: filePath });
+    if (revision) params.set('revision', revision);
+    const res = await fetch(`/api/repo/file-blame?${params.toString()}`);
+    return await parseGitResponse<BlameLine[]>(res, 'Failed to load blame');
   };
 
   const getConflictFile = async (repoPath: string, filePath: string): Promise<ConflictFileContent> => {
@@ -885,18 +998,18 @@ export function useGitApi() {
     if (!res.ok || data.error) throw new Error(data.error?.message || data.error || 'Failed to create worktree');
   };
 
-  const pullRemote = async (repoPath: string): Promise<void> => {
-    const cmd = `git pull`;
+  const pullRemote = async (repoPath: string, strategy: 'merge' | 'rebase' | 'ff-only' = 'merge'): Promise<void> => {
+    const cmd = `git pull --${strategy === 'merge' ? 'no-rebase' : strategy}`;
     getConsole().logCommand(cmd);
     if (isTauri()) {
-      await invoke('pull', { repoPath });
+      await invoke('pull', { repoPath, strategy });
       getConsole().logSuccess('Pull completed.');
       return;
     }
     const res = await fetch('/api/repo/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: repoPath }),
+      body: JSON.stringify({ repo_path: repoPath, strategy }),
     });
     const data = await res.json();
     if (res.ok && data.success) {
@@ -908,12 +1021,12 @@ export function useGitApi() {
     }
   };
 
-  const pushRemote = async (repoPath: string): Promise<void> => {
-    const cmd = `git push`;
+  const pushRemote = async (repoPath: string, forceWithLease = false): Promise<void> => {
+    const cmd = `git push${forceWithLease ? ' --force-with-lease' : ''}`;
     getConsole().logCommand(cmd);
     if (isTauri()) {
       try {
-        await invoke('push', { repoPath });
+        await invoke('push', { repoPath, forceWithLease });
         getConsole().logSuccess('Push completed.');
         return;
       } catch (error) {
@@ -925,7 +1038,7 @@ export function useGitApi() {
     const res = await fetch('/api/repo/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_path: repoPath }),
+      body: JSON.stringify({ repo_path: repoPath, force_with_lease: forceWithLease }),
     });
     const data = await res.json().catch(() => null);
     if (res.ok && data?.success) {
@@ -1032,6 +1145,119 @@ export function useGitApi() {
     return await parseGitResponse<FileStatusItem[]>(res, 'Failed to fetch commit changes');
   };
 
+  const listWorktrees = async (repoPath: string): Promise<WorktreeInfo[]> => {
+    if (isTauri()) return await invoke<WorktreeInfo[]>('list_worktrees', { repoPath });
+    const res = await fetch(`/api/repo/worktrees?path=${encodeURIComponent(repoPath)}`);
+    return await parseGitResponse<WorktreeInfo[]>(res, 'Failed to load worktrees');
+  };
+
+  const worktreeOperation = async (repoPath: string, endpoint: 'remove' | 'lock' | 'prune', body: Record<string, unknown> = {}): Promise<void> => {
+    if (isTauri()) {
+      if (endpoint === 'remove') await invoke('remove_worktree', { repoPath, worktreePath: body.worktree_path, force: body.force || false });
+      else if (endpoint === 'lock') await invoke('set_worktree_locked', { repoPath, worktreePath: body.worktree_path, locked: body.locked, reason: body.reason || null });
+      else await invoke('prune_worktrees', { repoPath });
+      return;
+    }
+    const res = await fetch(`/api/repo/worktree/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_path: repoPath, ...body }) });
+    await parseGitResponse(res, `Failed to ${endpoint} worktree`);
+  };
+
+  const discoverGitRoots = async (repoPath: string): Promise<string[]> => {
+    if (isTauri()) return await invoke<string[]>('discover_git_roots', { repoPath });
+    const res = await fetch(`/api/repo/git-roots?path=${encodeURIComponent(repoPath)}`);
+    return await parseGitResponse<string[]>(res, 'Failed to discover Git roots');
+  };
+
+  const openPullRequest = async (repoPath: string, base: string, compare: string): Promise<void> => {
+    if (isTauri()) { await invoke('open_pull_request', { repoPath, base, compare }); return; }
+    const params = new URLSearchParams({ path: repoPath, base, compare });
+    const res = await fetch(`/api/repo/pull-request-url?${params.toString()}`);
+    const url = await parseGitResponse<string>(res, 'Failed to create pull request URL');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const listLocalHistory = async (repoPath: string, filePath: string): Promise<LocalHistoryEntry[]> => {
+    if (isTauri()) return await invoke<LocalHistoryEntry[]>('list_local_history', { repoPath, filePath });
+    const params = new URLSearchParams({ path: repoPath, file_path: filePath });
+    const res = await fetch(`/api/repo/local-history?${params.toString()}`);
+    return await parseGitResponse<LocalHistoryEntry[]>(res, 'Failed to load local history');
+  };
+
+  const createLocalHistorySnapshot = async (repoPath: string, filePath: string, label: string): Promise<LocalHistoryEntry> => {
+    if (isTauri()) return await invoke<LocalHistoryEntry>('create_local_history_snapshot', { repoPath, filePath, label });
+    const res = await fetch('/api/repo/local-history/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_path: repoPath, file_path: filePath, label }) });
+    return await parseGitResponse<LocalHistoryEntry>(res, 'Failed to create local history snapshot');
+  };
+
+  const restoreLocalHistory = async (repoPath: string, filePath: string, snapshotId: string): Promise<void> => {
+    if (isTauri()) { await invoke('restore_local_history', { repoPath, filePath, snapshotId }); return; }
+    const res = await fetch('/api/repo/local-history/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_path: repoPath, file_path: filePath, snapshot_id: snapshotId }) });
+    await parseGitResponse(res, 'Failed to restore local history');
+  };
+
+  const readLocalHistory = async (repoPath: string, filePath: string, snapshotId: string): Promise<string> => {
+    if (isTauri()) return await invoke<string>('read_local_history', { repoPath, filePath, snapshotId });
+    const params = new URLSearchParams({ path: repoPath, file_path: filePath, snapshot_id: snapshotId });
+    const res = await fetch(`/api/repo/local-history/content?${params.toString()}`);
+    return await parseGitResponse<string>(res, 'Failed to read local history');
+  };
+
+  const getSyncStatus = async (repoPath: string): Promise<SyncStatus> => {
+    if (isTauri()) return await invoke<SyncStatus>('get_sync_status', { repoPath });
+    const res = await fetch(`/api/repo/sync-status?path=${encodeURIComponent(repoPath)}`);
+    return await parseGitResponse<SyncStatus>(res, 'Failed to load sync status');
+  };
+
+  const getInteractiveRebaseCommits = async (repoPath: string, upstream: string): Promise<RebaseCommit[]> => {
+    if (isTauri()) return await invoke<RebaseCommit[]>('get_interactive_rebase_commits', { repoPath, upstream });
+    const params = new URLSearchParams({ path: repoPath, upstream });
+    const res = await fetch(`/api/repo/rebase/commits?${params.toString()}`);
+    return await parseGitResponse<RebaseCommit[]>(res, 'Failed to load rebase commits');
+  };
+
+  const interactiveRebase = async (repoPath: string, upstream: string, plan: RebasePlanItem[]): Promise<void> => {
+    getConsole().logCommand(`git rebase -i "${upstream}"`);
+    if (isTauri()) {
+      await invoke('interactive_rebase', { repoPath, upstream, plan });
+      return;
+    }
+    const res = await fetch('/api/repo/rebase/interactive', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath, upstream, plan }),
+    });
+    await parseGitResponse(res, 'Interactive rebase failed');
+  };
+
+  const resolveRevision = async (repoPath: string, revision: string): Promise<string> => {
+    if (isTauri()) {
+      return await invoke<string>('resolve_revision', { repoPath, revision });
+    }
+    const params = new URLSearchParams({ path: repoPath, revision });
+    const res = await fetch(`/api/repo/resolve-revision?${params.toString()}`);
+    return await parseGitResponse<string>(res, 'Revision was not found');
+  };
+
+  const getBranchChanges = async (
+    repoPath: string,
+    baseRevision: string,
+    targetRevision: string,
+  ): Promise<FileStatusItem[]> => {
+    if (isTauri()) {
+      return await invoke<FileStatusItem[]>('get_branch_changes', {
+        repoPath,
+        baseRevision,
+        targetRevision,
+      });
+    }
+    const params = new URLSearchParams({
+      path: repoPath,
+      base_revision: baseRevision,
+      target_revision: targetRevision,
+    });
+    const res = await fetch(`/api/repo/branch-changes?${params.toString()}`);
+    return await parseGitResponse<FileStatusItem[]>(res, 'Failed to compare branches');
+  };
+
   const analyzeConflict = async (
     filePath: string,
     ours: string,
@@ -1100,20 +1326,31 @@ export function useGitApi() {
     listStashes,
     createStash,
     popStash,
+    applyStash: (repoPath: string, index: number) => stashOperation(repoPath, 'apply', index),
+    dropStash: (repoPath: string, index: number) => stashOperation(repoPath, 'drop', index),
+    renameStash: (repoPath: string, index: number, message: string) => stashOperation(repoPath, 'rename', index, message),
+    getStashChanges,
+    createShelf,
     stageFile,
     stageAll,
     unstageFile,
     unstageAll,
     discardFile,
     createCommit,
+    getCommitTemplate,
     commitAndPush,
     getFileDiff,
+    applyPartialPatch,
+    getFileHistory,
+    getFileBlame,
     getConflictFile,
     resolveConflict,
     mergeBranch,
     abortMerge,
     continueMerge,
     rebase,
+    getInteractiveRebaseCommits,
+    interactiveRebase,
     continueRebase,
     abortRebase,
     cherryPick,
@@ -1122,11 +1359,24 @@ export function useGitApi() {
     revertCommit,
     continueRevert,
     getCommitChanges,
+    resolveRevision,
+    getBranchChanges,
     reset,
     fetchRemote,
     createWorktree,
+    listWorktrees,
+    removeWorktree: (repoPath: string, worktreePath: string, force = false) => worktreeOperation(repoPath, 'remove', { worktree_path: worktreePath, force }),
+    setWorktreeLocked: (repoPath: string, worktreePath: string, locked: boolean, reason?: string) => worktreeOperation(repoPath, 'lock', { worktree_path: worktreePath, locked, reason }),
+    pruneWorktrees: (repoPath: string) => worktreeOperation(repoPath, 'prune'),
+    discoverGitRoots,
+    openPullRequest,
+    listLocalHistory,
+    createLocalHistorySnapshot,
+    restoreLocalHistory,
+    readLocalHistory,
     pullRemote,
     pushRemote,
+    getSyncStatus,
     openSystemTerminal,
     openFileManager,
     generateCommitMessage,

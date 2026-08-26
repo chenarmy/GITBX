@@ -56,7 +56,9 @@ impl GraphLayoutEngine {
                 lane: current_lane,
                 edges,
                 branch_refs: c.branch_refs.clone(),
+                containing_branch_refs: c.containing_branch_refs.clone(),
                 tag_refs: c.tag_refs.clone(),
+                changed_paths: c.changed_paths.clone(),
                 is_head,
             });
         }
@@ -84,7 +86,9 @@ mod tests {
             summary: id.into(),
             body: None,
             branch_refs: Vec::new(),
+            containing_branch_refs: Vec::new(),
             tag_refs: Vec::new(),
+            changed_paths: Vec::new(),
         }
     }
 

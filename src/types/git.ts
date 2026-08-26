@@ -69,3 +69,69 @@ export interface StashItem {
   message: string;
   commit_id: string;
 }
+
+export interface FileHistoryEntry {
+  id: string;
+  short_id: string;
+  summary: string;
+  message: string;
+  author_name: string;
+  author_email: string;
+  author_time: number;
+  parent_ids: string[];
+  branch_refs: string[];
+  containing_branch_refs: string[];
+  tag_refs: string[];
+  changed_paths: string[];
+}
+
+export interface BlameLine {
+  line_number: number;
+  content: string;
+  commit_id: string;
+  short_id: string;
+  author_name: string;
+  author_email: string;
+  author_time: number;
+  summary: string;
+}
+
+export interface RebaseCommit {
+  id: string;
+  short_id: string;
+  summary: string;
+  author_name: string;
+  author_time: number;
+}
+
+export type RebaseAction = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
+export interface RebasePlanItem {
+  commit_id: string;
+  action: RebaseAction;
+  message?: string;
+}
+
+export interface SyncStatus {
+  upstream?: string;
+  incoming: RebaseCommit[];
+  outgoing: RebaseCommit[];
+}
+
+export interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch?: string;
+  is_main: boolean;
+  is_detached: boolean;
+  is_locked: boolean;
+  lock_reason?: string;
+  is_prunable: boolean;
+}
+
+export interface LocalHistoryEntry {
+  id: string;
+  file_path: string;
+  timestamp: number;
+  label: string;
+  size: number;
+}

@@ -1,19 +1,26 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
-import { Sparkles, Send, ArrowUpCircle } from 'lucide-vue-next';
+import { Sparkles, Send, ArrowUpCircle, Settings2, FileText } from 'lucide-vue-next';
+import { useGitApi } from '@/composables/useGitApi';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
+const gitApi = useGitApi();
 const { t } = useI18n();
 
 const isSubmitting = ref(false);
+const showAdvanced = ref(false);
+const amend = ref(false);
+const signCommit = ref(localStorage.getItem('gitbx_sign_commits') === 'true');
+const preCommitCommand = ref(localStorage.getItem('gitbx_pre_commit_command') || '');
+const commitTemplate = ref<string | null>(null);
 // Keep the AI result and the editable Summary on one reactive source.
 // This makes Apply deterministic even while the AI modal is closing.
 const commitMessage = computed({
@@ -24,6 +31,19 @@ const commitMessage = computed({
 });
 
 const CONVENTIONAL_TAGS = ['feat', 'fix', 'refactor', 'docs', 'chore', 'perf'];
+
+watch(() => repoStore.activeRepoPath, async (repoPath) => {
+  commitTemplate.value = repoPath ? await gitApi.getCommitTemplate(repoPath).catch(() => null) : null;
+}, { immediate: true });
+
+function applyTemplate() {
+  if (commitTemplate.value) commitMessage.value = commitTemplate.value;
+}
+
+function persistCommitOptions() {
+  localStorage.setItem('gitbx_sign_commits', String(signCommit.value));
+  localStorage.setItem('gitbx_pre_commit_command', preCommitCommand.value);
+}
 
 function insertPrefix(tag: string) {
   commitMessage.value = `${tag}: ${commitMessage.value.replace(/^(feat|fix|refactor|docs|chore|perf):\s*/, '')}`;
@@ -36,10 +56,13 @@ async function handleCommit() {
     await repoStore.commit(
       commitMessage.value,
       settingsStore.authorName,
-      settingsStore.authorEmail
+      settingsStore.authorEmail,
+      { amend: amend.value, sign: signCommit.value, preCommitCommand: preCommitCommand.value.trim() || undefined },
     );
     notification.success(t('Commit Created'), commitMessage.value);
     aiStore.draftCommitMessage = '';
+    amend.value = false;
+    persistCommitOptions();
   } catch (err: any) {
     notification.error(t('Commit Failed'), err?.message);
   } finally {
@@ -54,10 +77,13 @@ async function handleCommitAndPush() {
     await repoStore.commit(
       commitMessage.value,
       settingsStore.authorName,
-      settingsStore.authorEmail
+      settingsStore.authorEmail,
+      { amend: amend.value, sign: signCommit.value, preCommitCommand: preCommitCommand.value.trim() || undefined },
     );
     notification.success(t('Commit Created'), commitMessage.value);
     aiStore.draftCommitMessage = '';
+    amend.value = false;
+    persistCommitOptions();
 
     notification.info(t('Git Push'), t("Pushing commits to remote..."));
     await repoStore.pushRemote();
@@ -71,7 +97,7 @@ async function handleCommitAndPush() {
 </script>
 
 <template>
-  <div class="dbx-commit-box h-44 bg-card border-t border-border flex flex-col p-2.5 text-xs select-none shrink-0">
+  <div class="dbx-commit-box bg-card border-t border-border flex flex-col p-2.5 text-xs select-none shrink-0" :class="showAdvanced ? 'h-64' : 'h-44'">
     <!-- Conventional Commit shortcuts & AI Trigger -->
     <div class="flex items-center justify-between mb-1.5 gap-1">
       <div class="flex items-center flex-wrap gap-1 overflow-hidden">
@@ -92,6 +118,8 @@ async function handleCommitAndPush() {
         <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
         <span>{{ t('AI Msg') }}</span>
       </button>
+      <button v-if="commitTemplate" @click="applyTemplate" class="p-1 rounded hover:bg-accent text-muted-foreground" :title="t('Apply Commit Template')"><FileText class="w-3.5 h-3.5" /></button>
+      <button @click="showAdvanced = !showAdvanced" class="p-1 rounded hover:bg-accent" :class="showAdvanced ? 'text-primary' : 'text-muted-foreground'" :title="t('Commit Options')"><Settings2 class="w-3.5 h-3.5" /></button>
     </div>
 
     <!-- Commit message input -->
@@ -100,6 +128,12 @@ async function handleCommitAndPush() {
       :placeholder="t('Commit summary (e.g. feat: add Canvas graph view)...')"
       class="flex-1 w-full bg-background border border-border rounded-sm p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground min-h-[60px]"
     ></textarea>
+
+    <div v-if="showAdvanced" class="mt-1.5 grid grid-cols-[auto_auto_1fr] gap-3 items-center text-[10px]">
+      <label class="flex items-center gap-1"><input v-model="amend" type="checkbox" />{{ t('Amend Previous Commit') }}</label>
+      <label class="flex items-center gap-1"><input v-model="signCommit" type="checkbox" />{{ t('Sign Commit') }}</label>
+      <input v-model="preCommitCommand" class="min-w-0 bg-background border border-border rounded px-2 py-1 font-mono" :placeholder="t('Pre-commit command (optional)')" />
+    </div>
 
     <!-- Bottom Actions: Author info & Commit / Push Buttons -->
     <div class="flex items-center justify-between mt-2 pt-1 border-t border-border gap-2">
@@ -110,7 +144,7 @@ async function handleCommitAndPush() {
       <div class="flex items-center space-x-1.5">
         <button
           @click="handleCommit"
-          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
+          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.statusSummary.staged_files.length === 0)"
           class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
           :title="t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' })"
         >
@@ -120,7 +154,7 @@ async function handleCommitAndPush() {
 
         <button
           @click="handleCommitAndPush"
-          :disabled="!commitMessage.trim() || isSubmitting || repoStore.statusSummary.staged_files.length === 0"
+          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.statusSummary.staged_files.length === 0)"
           class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
           :title="t('Commit and Push to remote')"
         >

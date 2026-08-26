@@ -22,6 +22,12 @@ import RebaseModal from '@/components/dialogs/RebaseModal.vue';
 import ResetModal from '@/components/dialogs/ResetModal.vue';
 import RenameBranchModal from '@/components/dialogs/RenameBranchModal.vue';
 import RemoteManagerModal from '@/components/dialogs/RemoteManagerModal.vue';
+import FileInvestigationModal from '@/components/dialogs/FileInvestigationModal.vue';
+import SyncStatusModal from '@/components/dialogs/SyncStatusModal.vue';
+import WorktreeManagerModal from '@/components/dialogs/WorktreeManagerModal.vue';
+import ChangelistManagerModal from '@/components/dialogs/ChangelistManagerModal.vue';
+import PullRequestModal from '@/components/dialogs/PullRequestModal.vue';
+import LocalHistoryModal from '@/components/dialogs/LocalHistoryModal.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog.vue';
 import { useRepoStore } from '@/stores/repo';
@@ -123,6 +129,12 @@ onUnmounted(() => {
     <ResetModal />
     <RenameBranchModal />
     <RemoteManagerModal />
+    <FileInvestigationModal />
+    <SyncStatusModal />
+    <WorktreeManagerModal />
+    <ChangelistManagerModal />
+    <PullRequestModal />
+    <LocalHistoryModal />
     <AiAssistantModal />
     <SettingsModal />
     <UpdateAvailableDialog />

@@ -1,0 +1,13 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import { GitPullRequest, X } from 'lucide-vue-next';
+import { useRepoStore } from '@/stores/repo';
+import { useNotificationStore } from '@/stores/notification';
+import { useGitApi, formatGitError } from '@/composables/useGitApi';
+import { useI18n } from '@/i18n';
+const repoStore = useRepoStore(); const notification = useNotificationStore(); const gitApi = useGitApi(); const { t } = useI18n();
+const base = ref('main'); const compare = ref(''); const submitting = ref(false);
+watch(() => repoStore.isPullRequestOpen, (open) => { if (open) { compare.value = repoStore.repoInfo?.head_branch || ''; base.value = compare.value === 'main' ? 'develop' : 'main'; } });
+async function open() { submitting.value = true; try { await gitApi.openPullRequest(repoStore.activeRepoPath, base.value, compare.value); repoStore.isPullRequestOpen = false; } catch (error) { notification.error(t('Unable to Create PR/MR'), formatGitError(error)); } finally { submitting.value = false; } }
+</script>
+<template><div v-if="repoStore.isPullRequestOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"><div class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-xs"><div class="h-11 px-4 flex justify-between items-center border-b border-border bg-muted/50"><div class="flex gap-2"><GitPullRequest class="w-4 h-4 text-fuchsia-500" /><span class="font-bold text-sm">{{ t('Create Pull or Merge Request') }}</span></div><button @click="repoStore.isPullRequestOpen = false"><X class="w-4 h-4" /></button></div><div class="p-4 space-y-4"><p class="text-muted-foreground">{{ t('Open the remote provider with the source and target branches preselected.') }}</p><label class="block space-y-1"><span class="font-semibold">{{ t('Target Branch') }}</span><input v-model="base" class="w-full bg-background border border-border rounded px-3 py-2 font-mono" /></label><label class="block space-y-1"><span class="font-semibold">{{ t('Source Branch') }}</span><input v-model="compare" class="w-full bg-background border border-border rounded px-3 py-2 font-mono" /></label></div><div class="h-12 px-4 flex justify-end gap-2 border-t border-border bg-muted/30"><button class="px-3 rounded hover:bg-accent" @click="repoStore.isPullRequestOpen = false">{{ t('Cancel') }}</button><button class="px-4 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40" :disabled="!base.trim() || !compare.trim() || submitting" @click="open">{{ t('Open PR/MR') }}</button></div></div></div></template>

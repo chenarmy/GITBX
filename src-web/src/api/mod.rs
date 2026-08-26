@@ -10,7 +10,7 @@ use gitbx_ai::{CommitGenerator, GenericOpenAiClient, LlmConfig};
 use gitbx_contracts::GitErrorResponse;
 use gitbx_core::{GitService, GitbxError};
 use gitbx_diff::{load_conflict_file, resolve_conflict_file, DiffEngine};
-use gitbx_graph::GraphLayoutEngine;
+use gitbx_graph::{GraphLayoutEngine, GraphPage};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -295,6 +295,9 @@ async fn repo_handler(
     let result: Result<Value, GitbxError> = (|| match (method, endpoint) {
         (Method::GET, "info") => read_repo()?.info().map(|value| json!(value)),
         (Method::GET, "status") => read_repo()?.get_status().map(|value| json!(value)),
+        (Method::GET, "commit-template") => {
+            GitService::get_commit_template(&path).map(|value| json!(value))
+        }
         (Method::GET, "branches") => read_repo()?.list_branches(None).map(|value| json!(value)),
         (Method::GET, "remotes") => read_repo()?.list_remotes().map(|value| json!(value)),
         (Method::GET, "tags") => read_repo()?.list_tags().map(|value| json!(value)),
@@ -304,17 +307,41 @@ async fn repo_handler(
         }
         (Method::GET, "graph") => {
             let repo = read_repo()?;
-            let max = query(&uri, "max")
+            let offset = query(&uri, "offset")
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(200);
-            let commits = repo.get_commits(max)?;
+                .unwrap_or(0usize);
+            let limit = query(&uri, "limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(150usize)
+                .clamp(20, 500);
+            let commits = repo.get_commits(offset.saturating_add(limit).saturating_add(1))?;
+            let has_more = commits.len() > offset.saturating_add(limit);
             let info = repo.info()?;
-            Ok(json!(GraphLayoutEngine::compute_layout(
-                &commits,
-                info.head_commit_id.as_deref()
-            )))
+            let nodes = GraphLayoutEngine::compute_layout(&commits, info.head_commit_id.as_deref())
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .collect();
+            Ok(json!(GraphPage {
+                nodes,
+                offset,
+                limit,
+                has_more
+            }))
         }
         (Method::GET, "diff") => diff_response(&path, &uri),
+        (Method::GET, "file-history") => {
+            let file_path = query(&uri, "file_path").unwrap_or_default();
+            let max_count = query(&uri, "max_count")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(100usize);
+            GitService::get_file_history(&path, &file_path, max_count).map(|value| json!(value))
+        }
+        (Method::GET, "file-blame") => {
+            let file_path = query(&uri, "file_path").unwrap_or_default();
+            let revision = query(&uri, "revision");
+            GitService::blame_file(&path, &file_path, revision.as_deref()).map(|value| json!(value))
+        }
         (Method::GET, "conflict") => {
             let file_path = query(&uri, "file_path").unwrap_or_default();
             load_conflict_file(&path, &file_path).map(|value| json!(value))
@@ -383,10 +410,22 @@ async fn repo_handler(
                 .get("email")
                 .and_then(Value::as_str)
                 .unwrap_or("gitbx@localhost");
-            GitService::with_write_lock(&path, |repo| {
-                repo.create_commit(message, author, email)
-                    .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
-            })
+            GitService::create_commit_advanced(
+                &path,
+                message,
+                author,
+                email,
+                body_json
+                    .get("amend")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                body_json
+                    .get("sign")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                body_json.get("pre_commit_command").and_then(Value::as_str),
+            )
+            .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
         }),
         (Method::POST, "commit-and-push") => write_op(&path, || {
             let message = body_json
@@ -468,6 +507,53 @@ async fn repo_handler(
                 body_json.get("index").and_then(Value::as_u64).unwrap_or(0) as usize,
             )
         }),
+        (Method::POST, "stash/apply") => write_op(&path, || {
+            GitService::apply_stash(
+                &path,
+                body_json.get("index").and_then(Value::as_u64).unwrap_or(0) as usize,
+            )
+        }),
+        (Method::POST, "stash/drop") => write_op(&path, || {
+            GitService::drop_stash(
+                &path,
+                body_json.get("index").and_then(Value::as_u64).unwrap_or(0) as usize,
+            )
+        }),
+        (Method::POST, "stash/rename") => write_op(&path, || {
+            GitService::rename_stash(
+                &path,
+                body_json.get("index").and_then(Value::as_u64).unwrap_or(0) as usize,
+                body_json
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            )
+        }),
+        (Method::GET, "stash/changes") => {
+            let commit_id = query(&uri, "commit_id").unwrap_or_default();
+            GitService::get_stash_changes(&path, &commit_id).map(|value| json!(value))
+        }
+        (Method::POST, "shelf/create") => write_op(&path, || {
+            let files = body_json
+                .get("file_paths")
+                .and_then(Value::as_array)
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(ToOwned::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            GitService::create_shelf(
+                &path,
+                body_json
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                &files,
+            )
+        }),
         (Method::POST, "reset") => write_op(&path, || {
             GitService::reset(
                 &path,
@@ -523,8 +609,30 @@ async fn repo_handler(
             )
         }),
         (Method::POST, "fetch") => write_op(&path, || GitService::fetch_all(&path)),
-        (Method::POST, "pull") => write_op(&path, || GitService::pull(&path, "origin")),
-        (Method::POST, "push") => write_op(&path, || GitService::push(&path, "origin")),
+        (Method::POST, "pull") => write_op(&path, || {
+            GitService::pull_with_strategy(
+                &path,
+                "origin",
+                body_json
+                    .get("strategy")
+                    .and_then(Value::as_str)
+                    .unwrap_or("merge"),
+            )
+        }),
+        (Method::POST, "push") => write_op(&path, || {
+            if body_json
+                .get("force_with_lease")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                GitService::push_force_with_lease(&path, "origin")
+            } else {
+                GitService::push(&path, "origin")
+            }
+        }),
+        (Method::GET, "sync-status") => {
+            GitService::get_sync_status(&path).map(|value| json!(value))
+        }
         (Method::POST, "rebase") => write_op(&path, || {
             GitService::rebase(
                 &path,
@@ -534,10 +642,39 @@ async fn repo_handler(
                     .unwrap_or("HEAD"),
             )
         }),
+        (Method::GET, "rebase/commits") => {
+            let upstream = query(&uri, "upstream").unwrap_or_default();
+            GitService::get_interactive_rebase_commits(&path, &upstream).map(|value| json!(value))
+        }
+        (Method::POST, "rebase/interactive") => write_op(&path, || {
+            let plan: Vec<gitbx_core::RebasePlanItem> =
+                serde_json::from_value(body_json.get("plan").cloned().unwrap_or_else(|| json!([])))
+                    .map_err(|error| {
+                        GitbxError::General(format!("Invalid rebase plan: {error}"))
+                    })?;
+            GitService::interactive_rebase(
+                &path,
+                body_json
+                    .get("upstream")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                &plan,
+            )
+        }),
         (Method::POST, "rebase/continue") => write_op(&path, || GitService::continue_rebase(&path)),
         (Method::GET, "commit-changes") => {
             let commit_id = query(&uri, "commit_id").unwrap_or_default();
             GitService::get_commit_changes(&path, &commit_id).map(|value| json!(value))
+        }
+        (Method::GET, "resolve-revision") => {
+            let revision = query(&uri, "revision").unwrap_or_default();
+            GitService::resolve_revision(&path, &revision).map(|value| json!(value))
+        }
+        (Method::GET, "branch-changes") => {
+            let base_revision = query(&uri, "base_revision").unwrap_or_default();
+            let target_revision = query(&uri, "target_revision").unwrap_or_default();
+            GitService::get_changes_between(&path, &base_revision, &target_revision)
+                .map(|value| json!(value))
         }
         (Method::POST, "revert/continue") => write_op(&path, || GitService::continue_revert(&path)),
         (Method::POST, "rebase/abort")
@@ -552,6 +689,93 @@ async fn repo_handler(
                     .unwrap_or(""),
                 body_json
                     .get("branch")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            )
+        }),
+        (Method::GET, "worktrees") => GitService::list_worktrees(&path).map(|value| json!(value)),
+        (Method::POST, "worktree/remove") => write_op(&path, || {
+            GitService::remove_worktree(
+                &path,
+                body_json
+                    .get("worktree_path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                body_json
+                    .get("force")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            )
+        }),
+        (Method::POST, "worktree/lock") => write_op(&path, || {
+            GitService::set_worktree_locked(
+                &path,
+                body_json
+                    .get("worktree_path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                body_json
+                    .get("locked")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                body_json.get("reason").and_then(Value::as_str),
+            )
+        }),
+        (Method::POST, "worktree/prune") => write_op(&path, || GitService::prune_worktrees(&path)),
+        (Method::GET, "git-roots") => {
+            GitService::discover_git_roots(&path).map(|value| json!(value))
+        }
+        (Method::GET, "pull-request-url") => GitService::pull_request_url(
+            &path,
+            &query(&uri, "base").unwrap_or_else(|| "main".into()),
+            &query(&uri, "compare").unwrap_or_default(),
+        )
+        .map(|value| json!(value)),
+        (Method::GET, "local-history") => {
+            GitService::list_local_history(&path, &query(&uri, "file_path").unwrap_or_default())
+                .map(|value| json!(value))
+        }
+        (Method::GET, "local-history/content") => GitService::read_local_history(
+            &path,
+            &query(&uri, "file_path").unwrap_or_default(),
+            &query(&uri, "snapshot_id").unwrap_or_default(),
+        )
+        .map(|value| json!(value)),
+        (Method::POST, "local-history/create") => GitService::create_local_history_snapshot(
+            &path,
+            body_json
+                .get("file_path")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+            body_json
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or("Manual snapshot"),
+        )
+        .map(|value| json!(value)),
+        (Method::POST, "local-history/restore") => write_op(&path, || {
+            GitService::restore_local_history(
+                &path,
+                body_json
+                    .get("file_path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                body_json
+                    .get("snapshot_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            )
+        }),
+        (Method::POST, "patch/apply") => write_op(&path, || {
+            GitService::apply_partial_patch(
+                &path,
+                body_json
+                    .get("file_path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                body_json.get("patch").and_then(Value::as_str).unwrap_or(""),
+                body_json
+                    .get("target")
                     .and_then(Value::as_str)
                     .unwrap_or(""),
             )
@@ -600,7 +824,27 @@ fn diff_response(path: &str, uri: &axum::http::Uri) -> Result<Value, GitbxError>
     let repo = GitService::open(path)?;
     let staged = query(uri, "staged").as_deref() == Some("true");
     let commit_id = query(uri, "commit");
-    let (old, new) = if let Some(commit_id) = commit_id {
+    let base_commit_id = query(uri, "base_commit");
+    let target_commit_id = query(uri, "target_commit");
+    let old_file = query(uri, "old_file").unwrap_or_else(|| file.clone());
+    let read_revision_file = |revision: &str, file_path: &str| -> Vec<u8> {
+        repo.inner()
+            .revparse_single(revision)
+            .ok()
+            .and_then(|object| object.peel_to_commit().ok())
+            .and_then(|commit| commit.tree().ok()?.get_path(Path::new(file_path)).ok())
+            .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
+            .map(|blob| blob.content().to_vec())
+            .unwrap_or_default()
+    };
+    let (old, new) = if let (Some(base_id), Some(target_id)) =
+        (base_commit_id.as_deref(), target_commit_id.as_deref())
+    {
+        (
+            read_revision_file(base_id, &old_file),
+            read_revision_file(target_id, &file),
+        )
+    } else if let Some(commit_id) = commit_id {
         let commit = repo.inner().find_commit(git2::Oid::from_str(&commit_id)?)?;
         let old = commit
             .parent(0)
@@ -642,7 +886,7 @@ fn diff_response(path: &str, uri: &axum::http::Uri) -> Result<Value, GitbxError>
     serde_json::to_value(DiffEngine::diff_strings(
         &String::from_utf8_lossy(&old),
         &String::from_utf8_lossy(&new),
-        Some(&file),
+        Some(&old_file),
         Some(&file),
     ))
     .map_err(|error| GitbxError::General(error.to_string()))

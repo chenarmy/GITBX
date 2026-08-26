@@ -26,8 +26,18 @@ pub struct GraphCommitNode {
     pub lane: usize,
     pub edges: Vec<GraphEdge>,
     pub branch_refs: Vec<String>,
+    pub containing_branch_refs: Vec<String>,
     pub tag_refs: Vec<String>,
+    pub changed_paths: Vec<String>,
     pub is_head: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphPage {
+    pub nodes: Vec<GraphCommitNode>,
+    pub offset: usize,
+    pub limit: usize,
+    pub has_more: bool,
 }
 
 pub struct LaneTracker {
