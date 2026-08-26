@@ -16,9 +16,14 @@ impl ConflictAnalyzer {
         ours: &str,
         theirs: &str,
         base: Option<&str>,
+        language: Option<&str>,
     ) -> anyhow::Result<ConflictResolutionSuggestion> {
-        let system_prompt = "You are a Git merge conflict resolution expert. Analyze both sides of the conflict and provide the cleanest merged resolution with explanation. \
-        Output format in JSON with keys 'explanation' and 'suggested_content'.";
+        let system_prompt = format!(
+            "You are a Git merge conflict resolution expert. Analyze both sides of the conflict and provide the cleanest merged resolution with explanation. \
+            Write the explanation in {}. Preserve the source code and other file content in its original language and syntax. \
+            Output format in JSON with keys 'explanation' and 'suggested_content'.",
+            crate::language_name(language)
+        );
 
         let user_prompt = format!(
             "File: {}\n\n=== BASE ===\n{}\n\n=== OURS (Current Branch) ===\n{}\n\n=== THEIRS (Incoming Branch) ===\n{}\n",
@@ -28,7 +33,7 @@ impl ConflictAnalyzer {
             theirs
         );
 
-        let response = client.chat_completion(system_prompt, &user_prompt).await?;
+        let response = client.chat_completion(&system_prompt, &user_prompt).await?;
 
         // Attempt parsing JSON
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&response) {

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod branch;
 pub mod error;
+pub mod path;
 pub mod proxy;
 pub mod remote;
 pub mod repository;
@@ -10,6 +11,7 @@ pub mod status;
 pub use auth::KeyringManager;
 pub use branch::{BranchItem, StashItem, TagItem};
 pub use error::{GitbxError, Result};
+pub use path::path_for_display;
 pub use proxy::{proxy_options, set_proxy_config, ProxyConfig, ProxyMode};
 pub use remote::RemoteItem;
 pub use repository::{CommitDetail, Repository, RepositoryInfo};

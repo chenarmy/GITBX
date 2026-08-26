@@ -4,6 +4,7 @@ import { useAiStore } from '@/stores/ai';
 import { useRepoStore } from '@/stores/repo';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
+import { useSettingsStore } from '@/stores/settings';
 import { useI18n } from '@/i18n';
 import {
   Sparkles,
@@ -19,6 +20,7 @@ const aiStore = useAiStore();
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
+const settingsStore = useSettingsStore();
 const { t } = useI18n();
 
 const naturalCommand = ref('');
@@ -58,7 +60,11 @@ async function generate() {
     }
     aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
     if (aiStore.detectedSecrets.length > 0) return;
-    aiStore.generatedMessage = await gitApi.generateCommitMessage(diffText, aiStore.llmConfig);
+    aiStore.generatedMessage = await gitApi.generateCommitMessage(
+      diffText,
+      aiStore.llmConfig,
+      settingsStore.language,
+    );
   } catch (err: any) {
     aiStore.generatedMessage = null;
     throw err;
@@ -113,7 +119,7 @@ async function handleNaturalCommand() {
   aiStore.isGenerating = true;
   try {
     const prompt = `User instruction: ${query}\nRepo: ${repoStore.activeRepoPath}\nBranch: ${repoStore.repoInfo?.head_branch || 'main'}`;
-    const res = await gitApi.generateCommitMessage(prompt, aiStore.llmConfig);
+    const res = await gitApi.generateCommitMessage(prompt, aiStore.llmConfig, settingsStore.language);
     aiStore.generatedMessage = res;
     naturalCommand.value = '';
     notification.success(t('AI Response'), res.summary);

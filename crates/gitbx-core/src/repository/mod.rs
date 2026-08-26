@@ -1,4 +1,5 @@
 use crate::error::{GitbxError, Result};
+use crate::path_for_display;
 use git2::Repository as Git2Repo;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -147,7 +148,7 @@ impl Repository {
 
         Ok(RepositoryInfo {
             name,
-            path: self.path.to_string_lossy().to_string(),
+            path: path_for_display(&self.path),
             is_bare: self.inner.is_bare(),
             head_branch,
             head_commit_id,

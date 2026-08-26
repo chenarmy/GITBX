@@ -13,6 +13,12 @@ export interface ManagedRepo {
   lastOpened: number;
 }
 
+function normalizeStoredRepoPath(path: string): string {
+  if (path.startsWith('\\\\?\\UNC\\')) return `\\\\${path.slice(8)}`;
+  if (path.startsWith('\\\\?\\')) return path.slice(4);
+  return path;
+}
+
 function emptyStatusSummary(): RepoStatusSummary {
   return {
     staged_files: [],
@@ -28,7 +34,9 @@ function getInitialRepos(): ManagedRepo[] {
     const raw = localStorage.getItem(CONFIG_KEYS.repositories);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((repo) => ({ ...repo, path: normalizeStoredRepoPath(repo.path) }));
+      }
     }
   } catch {}
   return [];
@@ -37,7 +45,7 @@ function getInitialRepos(): ManagedRepo[] {
 function getInitialActiveRepo(): string {
   try {
     const saved = localStorage.getItem(CONFIG_KEYS.activeRepository);
-    if (saved) return saved;
+    if (saved) return normalizeStoredRepoPath(saved);
   } catch {}
   return '';
 }
@@ -169,7 +177,7 @@ export const useRepoStore = defineStore('repo', () => {
     if (!validation.valid) {
       throw new Error(validation.message || 'Invalid Git repository');
     }
-    const cleanPath = validation.path || newPath;
+    const cleanPath = normalizeStoredRepoPath(validation.path || newPath);
     const name = validation.name || cleanPath.split(/[\\/]/).pop() || 'Repo';
 
     const idx = repoList.value.findIndex((r) => r.path === cleanPath);
