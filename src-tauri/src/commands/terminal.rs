@@ -1,15 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use gitbx_core::GitService;
-
-#[cfg(target_os = "windows")]
-fn normalize_windows_path(path: String) -> String {
-    if let Some(unc_path) = path.strip_prefix(r"\\?\UNC\") {
-        return format!(r"\\{unc_path}");
-    }
-    path.strip_prefix(r"\\?\").unwrap_or(&path).to_string()
-}
+use gitbx_core::{path_for_display, GitService};
 
 /// Open a native terminal with the selected Git repository as its working directory.
 ///
@@ -32,9 +24,7 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
 
     let path = std::fs::canonicalize(path)
         .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
-    let path_string = path.to_string_lossy().into_owned();
-    #[cfg(target_os = "windows")]
-    let path_string = normalize_windows_path(path_string);
+    let path_string = path_for_display(&path);
 
     #[cfg(target_os = "windows")]
     {
@@ -93,12 +83,10 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        let script_path = path_string.replace('\\', "\\\\").replace('"', "\\\"");
-        let script = format!(
-            "tell application \"Terminal\" to do script \"cd -- \" & quoted form of \"{script_path}\""
-        );
-        Command::new("osascript")
-            .args(["-e", script.as_str()])
+        // `open` passes the directory as a distinct argument, so spaces and
+        // shell metacharacters never need AppleScript or shell escaping.
+        Command::new("open")
+            .args(["-a", "Terminal", path_string.as_str()])
             .spawn()
             .map_err(|error| format!("Failed to open a macOS terminal: {error}"))?;
         Ok(())
@@ -126,6 +114,14 @@ pub async fn open_system_terminal(repo_path: String) -> Result<(), String> {
 
         for (program, args) in candidates {
             if Command::new(program).args(args).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+
+        // Lightweight terminals generally inherit the launcher's current
+        // directory and do not share a standard working-directory option.
+        for program in ["mate-terminal", "tilix", "lxterminal", "xterm"] {
+            if Command::new(program).current_dir(&path).spawn().is_ok() {
                 return Ok(());
             }
         }
@@ -158,9 +154,7 @@ pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
         .map_err(|error| format!("The selected directory is not a Git repository: {error}"))?;
     let path = std::fs::canonicalize(path)
         .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
-    let path_string = path.to_string_lossy().into_owned();
-    #[cfg(target_os = "windows")]
-    let path_string = normalize_windows_path(path_string);
+    let path_string = path_for_display(&path);
 
     #[cfg(target_os = "windows")]
     {
@@ -198,19 +192,5 @@ pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
     {
         let _ = path_string;
         Err("Opening a file manager is not supported on this platform".to_string())
-    }
-}
-
-#[cfg(all(test, target_os = "windows"))]
-mod tests {
-    use super::normalize_windows_path;
-
-    #[test]
-    fn strips_windows_extended_path_prefixes() {
-        assert_eq!(normalize_windows_path(r"\\?\I:\GITBX".into()), r"I:\GITBX");
-        assert_eq!(
-            normalize_windows_path(r"\\?\UNC\server\share\repo".into()),
-            r"\\server\share\repo"
-        );
     }
 }

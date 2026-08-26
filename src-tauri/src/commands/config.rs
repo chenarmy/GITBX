@@ -1,4 +1,4 @@
-use gitbx_core::{set_proxy_config, KeyringManager, ProxyConfig};
+use gitbx_core::{path_for_display, set_proxy_config, KeyringManager, ProxyConfig};
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
@@ -94,12 +94,12 @@ pub async fn save_app_config(config: Value) -> Result<String, String> {
     apply_proxy_config(&config)?;
     let path = config_path()?;
     write_config(&path, &config)?;
-    Ok(path.to_string_lossy().to_string())
+    Ok(path_for_display(&path))
 }
 
 #[tauri::command]
 pub async fn get_app_config_path() -> Result<String, String> {
-    Ok(config_path()?.to_string_lossy().to_string())
+    Ok(path_for_display(&config_path()?))
 }
 
 #[cfg(test)]

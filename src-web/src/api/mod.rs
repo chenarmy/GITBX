@@ -116,7 +116,10 @@ async fn ai_commit(
             config.api_key = Some(key);
         }
     }
-    match CommitGenerator::generate_from_diff(&GenericOpenAiClient::new(config), diff).await {
+    let language = body.get("language").and_then(Value::as_str);
+    match CommitGenerator::generate_from_diff(&GenericOpenAiClient::new(config), diff, language)
+        .await
+    {
         Ok(value) => (StatusCode::OK, Json(json!(value))).into_response(),
         Err(error) => error_response(
             StatusCode::BAD_GATEWAY,
@@ -140,6 +143,7 @@ async fn ai_conflict(
     let ours = body.get("ours").and_then(Value::as_str).unwrap_or("");
     let theirs = body.get("theirs").and_then(Value::as_str).unwrap_or("");
     let base = body.get("base").and_then(Value::as_str);
+    let language = body.get("language").and_then(Value::as_str);
 
     let mut config = body
         .get("config")
@@ -157,6 +161,7 @@ async fn ai_conflict(
         ours,
         theirs,
         base,
+        language,
     )
     .await
     {
@@ -327,7 +332,9 @@ async fn repo_handler(
                 .get("path")
                 .and_then(Value::as_str)
                 .unwrap_or(&path);
-            git2::Repository::init(target).map(|repo| json!({ "success": true, "path": repo.path().parent().unwrap_or(repo.path()).to_string_lossy() })).map_err(GitbxError::from)
+            git2::Repository::init(target).map_err(GitbxError::from)?;
+            GitService::info(target)
+                .map(|info| json!({ "success": true, "path": info.path, "name": info.name }))
         }
         (Method::POST, "clone") => {
             let url = body_json.get("url").and_then(Value::as_str).unwrap_or("");
