@@ -20,6 +20,8 @@ import {
   Timer,
   FolderGit2,
   ListTodo,
+  MoreHorizontal,
+  ChevronDown,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
@@ -37,6 +39,8 @@ const isPushing = ref(false);
 const pullStrategy = ref<'merge' | 'rebase' | 'ff-only'>((localStorage.getItem('gitbx_pull_strategy') as any) || 'merge');
 const forceWithLease = ref(false);
 const autoFetchEnabled = ref(localStorage.getItem('gitbx_auto_fetch') === 'true');
+const moreActionsRef = ref<HTMLElement | null>(null);
+const isMoreActionsOpen = ref(false);
 let autoFetchTimer: number | undefined;
 
 function scheduleAutoFetch() {
@@ -53,8 +57,19 @@ function toggleAutoFetch() {
   scheduleAutoFetch();
 }
 
-onMounted(() => { scheduleAutoFetch(); if (repoStore.activeRepoPath) void repoStore.refreshSyncStatus().catch(() => undefined); });
-onUnmounted(() => { if (autoFetchTimer) window.clearInterval(autoFetchTimer); });
+function handleWindowClick(event: MouseEvent) {
+  if (!moreActionsRef.value?.contains(event.target as Node)) isMoreActionsOpen.value = false;
+}
+
+onMounted(() => {
+  scheduleAutoFetch();
+  if (repoStore.activeRepoPath) void repoStore.refreshSyncStatus().catch(() => undefined);
+  window.addEventListener('click', handleWindowClick);
+});
+onUnmounted(() => {
+  if (autoFetchTimer) window.clearInterval(autoFetchTimer);
+  window.removeEventListener('click', handleWindowClick);
+});
 
 async function handleFetch() {
   isFetching.value = true;
@@ -290,7 +305,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
 
     <!-- Main Toolbar Row -->
     <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3 text-xs select-none">
-      <div class="flex items-center space-x-1 min-w-0 overflow-x-auto">
+      <div class="flex items-center space-x-1 min-w-0">
         <!-- Fetch Button -->
         <button
           @click="handleFetch"
@@ -312,8 +327,6 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <ArrowDownCircle class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" :class="{ 'animate-bounce': isPulling }" />
           <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
-        <select v-model="pullStrategy" class="shrink-0 bg-background border border-border rounded px-1 py-1 text-[10px]" :title="t('Pull Strategy')"><option value="merge">merge</option><option value="rebase">rebase</option><option value="ff-only">ff-only</option></select>
-
         <!-- Push Button -->
         <button
           @click="handlePush"
@@ -324,8 +337,6 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
           <span>{{ isPushing ? t('Pushing...') : t('Push') }}</span>
         </button>
-        <label class="shrink-0 flex items-center gap-1 text-[10px] text-muted-foreground" :title="t('Force Push with Lease')"><input v-model="forceWithLease" type="checkbox" />lease</label>
-
         <div class="h-4 w-[1px] bg-border mx-1"></div>
 
         <!-- Branch Button -->
@@ -338,9 +349,6 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <span>{{ t('Branch') }}</span>
         </button>
 
-        <button @click="repoStore.isWorktreeManagerOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Manage Worktrees')"><FolderGit2 class="w-3.5 h-3.5 text-teal-500" /><span>{{ t('Worktrees') }}</span></button>
-        <button @click="changelistStore.isManagerOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Manage Changelists')"><ListTodo class="w-3.5 h-3.5 text-violet-500" /><span>{{ t('Changelists') }}</span></button>
-
         <!-- Merge Button -->
         <button
           @click="handleOpenMerge"
@@ -349,28 +357,6 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         >
           <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
           <span>{{ t('Merge') }}</span>
-        </button>
-
-        <!-- Rebase Button -->
-        <button
-          @click="handleOpenRebase"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          :title="t('Rebase current branch onto another branch')"
-        >
-          <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-          <span>{{ t('Rebase') }}</span>
-        </button>
-
-        <button @click="repoStore.isPullRequestOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Create Pull or Merge Request')"><GitPullRequest class="w-3.5 h-3.5 text-fuchsia-500" /><span>{{ t('PR/MR') }}</span></button>
-
-        <!-- Cherry-pick Button -->
-        <button
-          @click="handleCherryPick"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
-          :title="t('Cherry-pick selected commit into current branch')"
-        >
-          <GitCommit class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>{{ t('Cherry-pick') }}</span>
         </button>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>
@@ -385,16 +371,71 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <span>{{ t('Stash') }}</span>
         </button>
 
-        <!-- Discard All Button -->
-        <button
-          @click="handleDiscardAll"
-          :disabled="repoStore.statusSummary.total_changes === 0 || repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 active:scale-95 text-foreground transition font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          :title="t('Discard all uncommitted changes in working tree')"
-        >
-          <RotateCcw class="w-3.5 h-3.5 text-rose-500" />
-          <span>{{ t('Discard All') }}</span>
-        </button>
+        <div ref="moreActionsRef" class="relative">
+          <button
+            class="flex items-center space-x-1 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition font-medium"
+            :class="{ 'bg-secondary text-foreground': isMoreActionsOpen }"
+            :title="t('More actions')"
+            @click.stop="isMoreActionsOpen = !isMoreActionsOpen"
+          >
+            <MoreHorizontal class="w-3.5 h-3.5" />
+            <span>{{ t('More actions') }}</span>
+            <ChevronDown class="w-3 h-3" />
+          </button>
+
+          <div
+            v-if="isMoreActionsOpen"
+            class="absolute left-0 top-full mt-1 w-64 bg-popover text-popover-foreground border border-border rounded-md py-1 z-50"
+          >
+            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {{ t('Git Options') }}
+            </div>
+            <label class="flex items-center justify-between gap-3 px-2.5 py-1.5 hover:bg-accent cursor-pointer">
+              <span>{{ t('Pull Strategy') }}</span>
+              <select v-model="pullStrategy" class="bg-background border border-border rounded px-1.5 py-1 text-[10px]" @click.stop>
+                <option value="merge">merge</option>
+                <option value="rebase">rebase</option>
+                <option value="ff-only">ff-only</option>
+              </select>
+            </label>
+            <label class="flex items-center justify-between gap-3 px-2.5 py-1.5 hover:bg-accent cursor-pointer">
+              <span>{{ t('Force Push with Lease') }}</span>
+              <input v-model="forceWithLease" type="checkbox" />
+            </label>
+
+            <div class="my-1 border-t border-border"></div>
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; handleOpenRebase()">
+              <GitPullRequest class="w-3.5 h-3.5 text-sky-500" />
+              <span>{{ t('Rebase') }}</span>
+            </button>
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; handleCherryPick()">
+              <GitCommit class="w-3.5 h-3.5 text-indigo-500" />
+              <span>{{ t('Cherry-pick') }}</span>
+            </button>
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.isWorktreeManagerOpen = true">
+              <FolderGit2 class="w-3.5 h-3.5 text-teal-500" />
+              <span>{{ t('Worktrees') }}</span>
+            </button>
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; changelistStore.isManagerOpen = true">
+              <ListTodo class="w-3.5 h-3.5 text-violet-500" />
+              <span>{{ t('Changelists') }}</span>
+            </button>
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.isPullRequestOpen = true">
+              <GitPullRequest class="w-3.5 h-3.5 text-fuchsia-500" />
+              <span>{{ t('PR/MR') }}</span>
+            </button>
+
+            <div class="my-1 border-t border-border"></div>
+            <button
+              class="toolbar-menu-item text-rose-600 dark:text-rose-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="repoStore.statusSummary.total_changes === 0 || repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
+              @click="isMoreActionsOpen = false; handleDiscardAll()"
+            >
+              <RotateCcw class="w-3.5 h-3.5" />
+              <span>{{ t('Discard All') }}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Active Branch Badge -->
@@ -415,3 +456,19 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
     </div>
   </div>
 </template>
+
+<style scoped>
+.toolbar-menu-item {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  min-height: 28px;
+  padding: 0.35rem 0.625rem;
+  text-align: left;
+  width: 100%;
+}
+
+.toolbar-menu-item:hover:not(:disabled) {
+  background: hsl(var(--accent));
+}
+</style>

@@ -14,31 +14,78 @@ import {
   AlertTriangle,
   GitCommit,
   GitCompareArrows,
+  FolderTree,
+  List as ListIcon,
+  Layers,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
+import { useNotificationStore } from '@/stores/notification';
+import type { FileStatusItem } from '@/types/git';
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
 const changelistStore = useChangelistStore();
+const notification = useNotificationStore();
 
 // Keep the full status in the store, but progressively render large lists so
 // repositories with thousands of changes do not freeze the webview.
 const FILE_PAGE_SIZE = 200;
-const stagedLimit = ref(FILE_PAGE_SIZE);
-const unstagedLimit = ref(FILE_PAGE_SIZE);
-const untrackedLimit = ref(FILE_PAGE_SIZE);
+const changeLimit = ref(FILE_PAGE_SIZE);
 const conflictLimit = ref(FILE_PAGE_SIZE);
 const commitFileLimit = ref(FILE_PAGE_SIZE);
 const branchFileLimit = ref(FILE_PAGE_SIZE);
-const stagedFiles = computed(() => repoStore.statusSummary.staged_files.slice(0, stagedLimit.value));
-const unstagedFiles = computed(() => repoStore.statusSummary.unstaged_files.slice(0, unstagedLimit.value));
-const untrackedFiles = computed(() => repoStore.statusSummary.untracked_files.slice(0, untrackedLimit.value));
 const conflictedFiles = computed(() => repoStore.statusSummary.conflicted_files.slice(0, conflictLimit.value));
 const commitFiles = computed(() => repoStore.selectedCommitFiles.slice(0, commitFileLimit.value));
 const branchFiles = computed(() => repoStore.branchComparisonFiles.slice(0, branchFileLimit.value));
+const changeView = ref<'grouped' | 'flat'>((localStorage.getItem('gitbx_change_view') as 'grouped' | 'flat') || 'grouped');
+
+const workingFiles = computed(() => {
+  const files = new Map<string, FileStatusItem>();
+  for (const file of [
+    ...repoStore.statusSummary.staged_files,
+    ...repoStore.statusSummary.unstaged_files,
+    ...repoStore.statusSummary.untracked_files,
+  ]) {
+    const existing = files.get(file.path);
+    if (!existing) {
+      files.set(file.path, { ...file });
+      continue;
+    }
+    files.set(file.path, {
+      ...existing,
+      ...file,
+      staged_status: file.staged_status !== 'Unmodified' ? file.staged_status : existing.staged_status,
+      unstaged_status: file.unstaged_status !== 'Unmodified' ? file.unstaged_status : existing.unstaged_status,
+      is_staged: existing.is_staged || file.is_staged,
+    });
+  }
+  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+});
+const visibleWorkingFiles = computed(() => workingFiles.value.slice(0, changeLimit.value));
+const workingGroups = computed(() => {
+  const groups = new Map<string, FileStatusItem[]>();
+  for (const file of visibleWorkingFiles.value) {
+    const normalized = file.path.replace(/\\/g, '/');
+    const slash = normalized.lastIndexOf('/');
+    const directory = slash < 0 ? t('Repository Root') : normalized.slice(0, slash);
+    const group = groups.get(directory) || [];
+    group.push(file);
+    groups.set(directory, group);
+  }
+  return [...groups.entries()].map(([directory, files]) => ({ directory, files }));
+});
+const selectedCount = computed(() => repoStore.selectedChangePaths.length);
+const allChangesSelected = computed(() => workingFiles.value.length > 0 && selectedCount.value === workingFiles.value.length);
+const operationsLocked = computed(() => Boolean(
+  repoStore.statusSummary.conflicted_files.length
+  || repoStore.repoInfo?.is_merging
+  || repoStore.repoInfo?.is_rebasing
+  || repoStore.repoInfo?.is_cherry_picking
+  || repoStore.repoInfo?.is_reverting,
+));
 
 watch(
   () => [
@@ -50,25 +97,69 @@ watch(
     repoStore.branchComparisonFiles.length,
   ],
   () => {
-    stagedLimit.value = FILE_PAGE_SIZE;
-    unstagedLimit.value = FILE_PAGE_SIZE;
-    untrackedLimit.value = FILE_PAGE_SIZE;
+    changeLimit.value = FILE_PAGE_SIZE;
     conflictLimit.value = FILE_PAGE_SIZE;
     commitFileLimit.value = FILE_PAGE_SIZE;
     branchFileLimit.value = FILE_PAGE_SIZE;
   },
 );
 
-function showMore(section: 'staged' | 'unstaged' | 'untracked' | 'conflict' | 'commit' | 'branch') {
+function showMore(section: 'changes' | 'conflict' | 'commit' | 'branch') {
   const limits = {
-    staged: stagedLimit,
-    unstaged: unstagedLimit,
-    untracked: untrackedLimit,
+    changes: changeLimit,
     conflict: conflictLimit,
     commit: commitFileLimit,
     branch: branchFileLimit,
   };
   limits[section].value += FILE_PAGE_SIZE;
+}
+
+function setChangeView(view: 'grouped' | 'flat') {
+  changeView.value = view;
+  localStorage.setItem('gitbx_change_view', view);
+}
+
+function fileName(filePath: string) {
+  return filePath.replace(/\\/g, '/').split('/').pop() || filePath;
+}
+
+function fileStatus(file: FileStatusItem) {
+  return file.unstaged_status !== 'Unmodified' ? file.unstaged_status : file.staged_status;
+}
+
+function showStagedDiff(file: FileStatusItem) {
+  return file.is_staged && file.unstaged_status === 'Unmodified';
+}
+
+function selectWorkingFile(file: FileStatusItem) {
+  void diffStore.selectFile(file.path, showStagedDiff(file), repoStore.activeRepoPath);
+}
+
+function toggleAllChanges() {
+  if (allChangesSelected.value) repoStore.clearChangeSelection();
+  else repoStore.selectAllChanges();
+}
+
+async function handleStageSelected() {
+  if (!selectedCount.value) return;
+  await repoStore.stageFiles(repoStore.selectedChangePaths);
+  notification.success(t('Changes Staged'), t('{count} selected files were staged.', { count: selectedCount.value }));
+}
+
+async function handleUnstageSelected() {
+  const staged = repoStore.statusSummary.staged_files
+    .map((file) => file.path)
+    .filter((path) => repoStore.selectedChangePaths.includes(path));
+  if (!staged.length) return;
+  await repoStore.unstageFiles(staged);
+  notification.success(t('Changes Unstaged'), t('{count} selected files were unstaged.', { count: staged.length }));
+}
+
+async function handleStashSelected() {
+  if (!selectedCount.value) return;
+  const count = selectedCount.value;
+  await repoStore.createShelf(t('Selected changes'), repoStore.selectedChangePaths);
+  notification.success(t('Stash Created'), t('{count} selected files were stashed.', { count }));
 }
 
 function getStatusIcon(status: string) {
@@ -244,155 +335,113 @@ async function handleDiscardFile(e: Event, filePath: string) {
       </div>
     </div>
 
-    <!-- Staged Changes Section (Normal Working Tree) -->
-    <div v-else class="flex-1 flex flex-col min-h-0 border-b border-border">
-      <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
-        <div class="flex items-center space-x-1.5">
-          <span>{{ t('Staged Changes') }}</span>
-          <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-            {{ repoStore.statusSummary.staged_files.length }}
-          </span>
-        </div>
-        <button
-          v-if="repoStore.statusSummary.staged_files.length > 0 && !repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
-          @click="repoStore.unstageAll()"
-          class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
-          :title="t('Unstage All')"
-        >
-          <Minus class="w-3 h-3" />
-          <span>{{ t('Unstage All') }}</span>
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
-        <div
-          v-for="file in stagedFiles"
-          :key="file.path"
-          @click="diffStore.selectFile(file.path, true, repoStore.activeRepoPath)"
-          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
-          :class="diffStore.selectedFile === file.path && diffStore.isStaged ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
-        >
-          <div class="flex items-center space-x-1.5 truncate">
-            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
-            <span class="truncate">{{ file.path }}</span>
-          </div>
-          <button
-            v-if="!repoStore.repoInfo?.is_merging && !repoStore.repoInfo?.is_rebasing && !repoStore.repoInfo?.is_cherry_picking && !repoStore.repoInfo?.is_reverting"
-            @click.stop="repoStore.unstageFile(file.path)"
-            class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-            :title="t('Unstage File')"
-          >
-            <Minus class="w-3 h-3" />
-          </button>
-        </div>
-        <button
-          v-if="stagedFiles.length < repoStore.statusSummary.staged_files.length"
-          @click="showMore('staged')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
-        >
-          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.staged_files.length - stagedFiles.length }) }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Unstaged Changes & Untracked Files Section -->
-    <div v-if="!diffStore.commitId && !repoStore.branchComparison" class="flex-1 flex flex-col min-h-0">
-      <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
-        <div class="flex items-center space-x-1.5">
+    <!-- Unified working tree changes (normal working tree) -->
+    <div v-else class="flex-1 flex flex-col min-h-0">
+      <div class="dbx-pane-header min-h-8 bg-muted/40 px-2 flex items-center justify-between gap-2 font-bold text-muted-foreground border-b border-border">
+        <label class="flex items-center gap-1.5 min-w-0 cursor-pointer">
+          <input
+            type="checkbox"
+            :checked="allChangesSelected"
+            :disabled="workingFiles.length === 0"
+            @change="toggleAllChanges"
+          />
           <span>{{ t('Changes') }}</span>
-          <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-            {{ repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length }}
+          <span class="px-1.5 rounded text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+            {{ workingFiles.length }}
           </span>
+          <span class="truncate text-[10px] font-normal">{{ t('{count} selected', { count: selectedCount }) }}</span>
+        </label>
+        <div class="flex items-center shrink-0 border border-border rounded p-0.5 bg-background/70">
+          <button
+            class="p-1 rounded"
+            :class="changeView === 'grouped' ? 'bg-accent text-primary' : 'hover:bg-accent'"
+            :title="t('Group by Directory')"
+            @click="setChangeView('grouped')"
+          ><FolderTree class="w-3.5 h-3.5" /></button>
+          <button
+            class="p-1 rounded"
+            :class="changeView === 'flat' ? 'bg-accent text-primary' : 'hover:bg-accent'"
+            :title="t('Flat View')"
+            @click="setChangeView('flat')"
+          ><ListIcon class="w-3.5 h-3.5" /></button>
         </div>
-        <button
-          v-if="repoStore.statusSummary.unstaged_files.length + repoStore.statusSummary.untracked_files.length > 0 && repoStore.statusSummary.conflicted_files.length === 0"
-          @click="repoStore.stageAll()"
-          class="text-[11px] text-muted-foreground hover:text-foreground flex items-center space-x-0.5 font-medium"
-          :title="t('Stage All')"
-        >
-          <Plus class="w-3 h-3" />
-          <span>{{ t('Stage All') }}</span>
+      </div>
+
+      <div class="flex items-center gap-1 px-2 py-1 border-b border-border bg-card">
+        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleStageSelected">
+          <Plus class="w-3 h-3" />{{ t('Add') }}
+        </button>
+        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleUnstageSelected">
+          <Minus class="w-3 h-3" />{{ t('Unstage') }}
+        </button>
+        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleStashSelected">
+          <Layers class="w-3 h-3" />{{ t('Stash Selected') }}
         </button>
       </div>
 
       <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
-        <!-- Unstaged modified files -->
-        <div
-          v-for="file in unstagedFiles"
-          :key="file.path"
-          @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath)"
-          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
-          :class="diffStore.selectedFile === file.path && !diffStore.isStaged ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
-        >
-          <div class="flex items-center space-x-1.5 truncate">
-            <component :is="getStatusIcon(file.unstaged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.unstaged_status)" />
-            <span class="truncate">{{ file.path }}</span>
-            <span class="text-[9px] px-1 rounded bg-muted text-muted-foreground">{{ t(changelistStore.listFor(file.path).name) }}</span>
-          </div>
-          <div class="flex items-center space-x-1">
-            <button
-              @click="handleDiscardFile($event, file.path)"
-              class="p-0.5 rounded hover:bg-rose-100 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 opacity-0 group-hover:opacity-100 transition"
-              :title="t('Discard changes')"
+        <template v-if="changeView === 'grouped'">
+          <div v-for="group in workingGroups" :key="group.directory">
+            <div class="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-muted-foreground bg-muted/30 rounded">
+              <FolderTree class="w-3 h-3 shrink-0" />
+              <span class="truncate">{{ group.directory }}</span>
+              <span class="ml-auto">{{ group.files.length }}</span>
+            </div>
+            <div
+              v-for="file in group.files"
+              :key="file.path"
+              class="change-row pl-4"
+              :class="diffStore.selectedFile === file.path && diffStore.isStaged === showStagedDiff(file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+              @click="selectWorkingFile(file)"
             >
-              <RotateCcw class="w-3 h-3" />
-            </button>
-            <button
-              @click.stop="repoStore.stageFile(file.path)"
-              class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-              :title="t('Stage File')"
-            >
-              <Plus class="w-3 h-3" />
-            </button>
+              <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(file.path)" @click.stop="repoStore.toggleChangeSelection(file.path)" />
+              <component :is="getStatusIcon(fileStatus(file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(file))" />
+              <span class="truncate">{{ fileName(file.path) }}</span>
+              <span v-if="file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
+              <span class="status-badge">{{ t(changelistStore.listFor(file.path).name) }}</span>
+              <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, file.path)"><RotateCcw class="w-3 h-3" /></button>
+            </div>
           </div>
-        </div>
+        </template>
 
-        <button
-          v-if="unstagedFiles.length < repoStore.statusSummary.unstaged_files.length"
-          @click="showMore('unstaged')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
-        >
-          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.unstaged_files.length - unstagedFiles.length }) }}
-        </button>
-
-        <!-- Untracked files -->
-        <div
-          v-for="file in untrackedFiles"
-          :key="file.path"
-          @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath)"
-          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs group"
-          :class="diffStore.selectedFile === file.path && !diffStore.isStaged ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
-        >
-          <div class="flex items-center space-x-1.5 truncate">
-            <FileQuestion class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+        <template v-else>
+          <div
+            v-for="file in visibleWorkingFiles"
+            :key="file.path"
+            class="change-row"
+            :class="diffStore.selectedFile === file.path && diffStore.isStaged === showStagedDiff(file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+            @click="selectWorkingFile(file)"
+          >
+            <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(file.path)" @click.stop="repoStore.toggleChangeSelection(file.path)" />
+            <component :is="getStatusIcon(fileStatus(file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(file))" />
             <span class="truncate">{{ file.path }}</span>
-            <span class="text-[9px] px-1 rounded bg-muted text-muted-foreground">{{ t(changelistStore.listFor(file.path).name) }}</span>
+            <span v-if="file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
+            <span class="status-badge">{{ t(changelistStore.listFor(file.path).name) }}</span>
+            <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, file.path)"><RotateCcw class="w-3 h-3" /></button>
           </div>
-          <div class="flex items-center space-x-1">
-            <button
-              @click="handleDiscardFile($event, file.path)"
-              class="p-0.5 rounded hover:bg-rose-100 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 opacity-0 group-hover:opacity-100 transition"
-              :title="t('Delete untracked file')"
-            >
-              <RotateCcw class="w-3 h-3" />
-            </button>
-            <button
-              @click.stop="repoStore.stageFile(file.path)"
-              class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-              :title="t('Stage File')"
-            >
-              <Plus class="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-        <button
-          v-if="untrackedFiles.length < repoStore.statusSummary.untracked_files.length"
-          @click="showMore('untracked')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
-        >
-          {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.untracked_files.length - untrackedFiles.length }) }}
+        </template>
+
+        <div v-if="workingFiles.length === 0" class="p-8 text-center text-muted-foreground">{{ t('Working tree clean') }}</div>
+        <button v-if="visibleWorkingFiles.length < workingFiles.length" class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded" @click="showMore('changes')">
+          {{ t('Show more ({count} remaining)', { count: workingFiles.length - visibleWorkingFiles.length }) }}
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.change-action {
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+}
+.change-action:hover:not(:disabled) { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+.change-action:disabled { cursor: not-allowed; opacity: 0.4; }
+.change-row { align-items: center; border-radius: 0.375rem; cursor: pointer; display: flex; gap: 0.375rem; min-width: 0; padding: 0.3rem 0.5rem; }
+.change-row:hover button { opacity: 1; }
+.status-badge { background: hsl(var(--muted)); border-radius: 0.2rem; flex-shrink: 0; font-size: 9px; padding: 0 0.25rem; }
+</style>

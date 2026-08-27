@@ -53,6 +53,7 @@ async function handleCommit() {
   if (!commitMessage.value.trim()) return;
   isSubmitting.value = true;
   try {
+    if (!amend.value) await repoStore.prepareSelectedChanges();
     await repoStore.commit(
       commitMessage.value,
       settingsStore.authorName,
@@ -74,6 +75,7 @@ async function handleCommitAndPush() {
   if (!commitMessage.value.trim()) return;
   isSubmitting.value = true;
   try {
+    if (!amend.value) await repoStore.prepareSelectedChanges();
     await repoStore.commit(
       commitMessage.value,
       settingsStore.authorName,
@@ -139,12 +141,13 @@ async function handleCommitAndPush() {
     <div class="flex items-center justify-between mt-2 pt-1 border-t border-border gap-2">
       <div class="text-[11px] text-muted-foreground truncate flex-1">
         {{ t('Committer:') }} <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
+        <span v-if="!amend" class="ml-1">· {{ t('{count} selected', { count: repoStore.selectedChangePaths.length }) }}</span>
       </div>
 
       <div class="flex items-center space-x-1.5">
         <button
           @click="handleCommit"
-          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.statusSummary.staged_files.length === 0)"
+          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.selectedChangePaths.length === 0)"
           class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
           :title="t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' })"
         >
@@ -154,7 +157,7 @@ async function handleCommitAndPush() {
 
         <button
           @click="handleCommitAndPush"
-          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.statusSummary.staged_files.length === 0)"
+          :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.selectedChangePaths.length === 0)"
           class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
           :title="t('Commit and Push to remote')"
         >
