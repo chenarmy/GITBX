@@ -58,6 +58,9 @@ export const useRepoStore = defineStore('repo', () => {
   const activeRepoPath = ref<string>(getInitialActiveRepo());
   const repoInfo = ref<RepositoryInfo | null>(null);
   const statusSummary = ref<RepoStatusSummary>(emptyStatusSummary());
+  const selectedChangePaths = ref<string[]>([]);
+  const knownChangePaths = ref<string[]>([]);
+  const selectionRepoPath = ref('');
   const branches = ref<BranchItem[]>([]);
   const remotes = ref<RemoteItem[]>([]);
   const tags = ref<TagItem[]>([]);
@@ -121,6 +124,27 @@ export const useRepoStore = defineStore('repo', () => {
     branchComparisonFiles.value = [];
   };
 
+  const syncChangeSelection = (path: string, status: RepoStatusSummary) => {
+    const allPaths = [...new Set([
+      ...status.staged_files,
+      ...status.unstaged_files,
+      ...status.untracked_files,
+    ].map((file) => file.path))];
+
+    if (selectionRepoPath.value !== path) {
+      selectionRepoPath.value = path;
+      selectedChangePaths.value = allPaths;
+    } else {
+      const previousPaths = new Set(knownChangePaths.value);
+      const nextPaths = new Set(allPaths);
+      selectedChangePaths.value = [
+        ...selectedChangePaths.value.filter((filePath) => nextPaths.has(filePath)),
+        ...allPaths.filter((filePath) => !previousPaths.has(filePath)),
+      ];
+    }
+    knownChangePaths.value = allPaths;
+  };
+
   const loadRepo = async (targetPath?: string) => {
     const path = targetPath || activeRepoPath.value;
     if (!path) {
@@ -157,7 +181,10 @@ export const useRepoStore = defineStore('repo', () => {
       ]);
 
       const failures: string[] = [];
-      if (statusResult.status === 'fulfilled') statusSummary.value = statusResult.value;
+      if (statusResult.status === 'fulfilled') {
+        statusSummary.value = statusResult.value;
+        syncChangeSelection(path, statusResult.value);
+      }
       else failures.push(`status: ${formatGitError(statusResult.reason)}`);
       if (branchResult.status === 'fulfilled') branches.value = branchResult.value;
       else failures.push(`branches: ${formatGitError(branchResult.reason)}`);
@@ -236,6 +263,13 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
+  const stageFiles = async (filePaths: string[]) => {
+    for (const filePath of [...new Set(filePaths)]) {
+      await gitApi.stageFile(activeRepoPath.value, filePath);
+    }
+    await loadRepo(activeRepoPath.value);
+  };
+
   const unstageFile = async (filePath: string) => {
     await gitApi.unstageFile(activeRepoPath.value, filePath);
     await loadRepo(activeRepoPath.value);
@@ -243,6 +277,47 @@ export const useRepoStore = defineStore('repo', () => {
 
   const unstageAll = async () => {
     await gitApi.unstageAll(activeRepoPath.value);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const unstageFiles = async (filePaths: string[]) => {
+    for (const filePath of [...new Set(filePaths)]) {
+      await gitApi.unstageFile(activeRepoPath.value, filePath);
+    }
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const toggleChangeSelection = (filePath: string) => {
+    selectedChangePaths.value = selectedChangePaths.value.includes(filePath)
+      ? selectedChangePaths.value.filter((path) => path !== filePath)
+      : [...selectedChangePaths.value, filePath];
+  };
+
+  const selectAllChanges = () => {
+    selectedChangePaths.value = [...knownChangePaths.value];
+  };
+
+  const clearChangeSelection = () => {
+    selectedChangePaths.value = [];
+  };
+
+  const prepareSelectedChanges = async () => {
+    const selected = new Set(selectedChangePaths.value);
+    const stagedPaths = new Set(statusSummary.value.staged_files.map((file) => file.path));
+    const files = [...new Map([
+      ...statusSummary.value.staged_files,
+      ...statusSummary.value.unstaged_files,
+      ...statusSummary.value.untracked_files,
+    ].map((file) => [file.path, file])).values()];
+
+    for (const filePath of stagedPaths) {
+      if (!selected.has(filePath)) await gitApi.unstageFile(activeRepoPath.value, filePath);
+    }
+    for (const file of files) {
+      if (selected.has(file.path) && (!stagedPaths.has(file.path) || file.unstaged_status !== 'Unmodified')) {
+        await gitApi.stageFile(activeRepoPath.value, file.path);
+      }
+    }
     await loadRepo(activeRepoPath.value);
   };
 
@@ -541,6 +616,7 @@ export const useRepoStore = defineStore('repo', () => {
     activeRepoPath,
     repoInfo,
     statusSummary,
+    selectedChangePaths,
     branches,
     remotes,
     tags,
@@ -575,8 +651,14 @@ export const useRepoStore = defineStore('repo', () => {
     switchRepo,
     stageFile,
     stageAll,
+    stageFiles,
     unstageFile,
     unstageAll,
+    unstageFiles,
+    toggleChangeSelection,
+    selectAllChanges,
+    clearChangeSelection,
+    prepareSelectedChanges,
     discardFile,
     commit,
     commitAndPush,

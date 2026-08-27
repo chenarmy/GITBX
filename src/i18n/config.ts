@@ -1964,3 +1964,33 @@ const auditedUiTranslations: Record<Locale, MessageCatalog> = {
 for (const loc of Object.keys(auditedUiTranslations) as Locale[]) {
   Object.assign(messages[loc], auditedUiTranslations[loc]);
 }
+
+const toolbarTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Git Options': 'Git Options' },
+  ja: { 'Git Options': 'Git オプション' },
+  de: { 'Git Options': 'Git-Optionen' },
+  es: { 'Git Options': 'Opciones de Git' },
+  'zh-CN': { 'Git Options': 'Git 选项' },
+  'zh-TW': { 'Git Options': 'Git 選項' },
+  fr: { 'Git Options': 'Options Git' },
+  ar: { 'Git Options': 'خيارات Git' },
+};
+
+for (const loc of Object.keys(toolbarTranslations) as Locale[]) {
+  Object.assign(messages[loc], toolbarTranslations[loc]);
+}
+
+const unifiedChangesTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Group by Directory': 'Group by Directory', 'Flat View': 'Flat View', 'Repository Root': 'Repository Root', '{count} selected': '{count} selected', 'Unstage': 'Unstage', 'Stash Selected': 'Stash Selected', 'Selected changes': 'Selected changes', 'Changes Staged': 'Changes Staged', 'Changes Unstaged': 'Changes Unstaged', 'Stash Created': 'Stash Created', '{count} selected files were staged.': '{count} selected files were staged.', '{count} selected files were unstaged.': '{count} selected files were unstaged.', '{count} selected files were stashed.': '{count} selected files were stashed.', 'Staged': 'Staged' },
+  ja: { 'Group by Directory': 'ディレクトリでグループ化', 'Flat View': 'フラット表示', 'Repository Root': 'リポジトリルート', '{count} selected': '{count}件選択', 'Unstage': 'ステージ解除', 'Stash Selected': '選択をStash', 'Selected changes': '選択した変更', 'Changes Staged': '変更をステージしました', 'Changes Unstaged': 'ステージを解除しました', 'Stash Created': 'Stashを作成しました', '{count} selected files were staged.': '選択した{count}件をステージしました。', '{count} selected files were unstaged.': '選択した{count}件のステージを解除しました。', '{count} selected files were stashed.': '選択した{count}件をStashしました。', 'Staged': 'ステージ済み' },
+  de: { 'Group by Directory': 'Nach Verzeichnis gruppieren', 'Flat View': 'Flache Ansicht', 'Repository Root': 'Repository-Stamm', '{count} selected': '{count} ausgewählt', 'Unstage': 'Zurückstellen', 'Stash Selected': 'Auswahl stashen', 'Selected changes': 'Ausgewählte Änderungen', 'Changes Staged': 'Änderungen bereitgestellt', 'Changes Unstaged': 'Bereitstellung aufgehoben', 'Stash Created': 'Stash erstellt', '{count} selected files were staged.': '{count} ausgewählte Dateien wurden bereitgestellt.', '{count} selected files were unstaged.': '{count} ausgewählte Dateien wurden zurückgestellt.', '{count} selected files were stashed.': '{count} ausgewählte Dateien wurden gestasht.', 'Staged': 'Bereitgestellt' },
+  es: { 'Group by Directory': 'Agrupar por directorio', 'Flat View': 'Vista plana', 'Repository Root': 'Raíz del repositorio', '{count} selected': '{count} seleccionados', 'Unstage': 'Quitar del área', 'Stash Selected': 'Guardar selección', 'Selected changes': 'Cambios seleccionados', 'Changes Staged': 'Cambios preparados', 'Changes Unstaged': 'Cambios retirados', 'Stash Created': 'Stash creado', '{count} selected files were staged.': 'Se prepararon {count} archivos seleccionados.', '{count} selected files were unstaged.': 'Se retiraron {count} archivos seleccionados.', '{count} selected files were stashed.': 'Se guardaron {count} archivos seleccionados.', 'Staged': 'Preparado' },
+  'zh-CN': { 'Group by Directory': '按目录分组', 'Flat View': '平铺视图', 'Repository Root': '仓库根目录', '{count} selected': '已选 {count} 项', 'Unstage': '取消暂存', 'Stash Selected': '储藏所选', 'Selected changes': '所选更改', 'Changes Staged': '更改已暂存', 'Changes Unstaged': '已取消暂存', 'Stash Created': '储藏已创建', '{count} selected files were staged.': '已暂存所选的 {count} 个文件。', '{count} selected files were unstaged.': '已取消暂存所选的 {count} 个文件。', '{count} selected files were stashed.': '已储藏所选的 {count} 个文件。', 'Staged': '已暂存' },
+  'zh-TW': { 'Group by Directory': '依目錄分組', 'Flat View': '平鋪檢視', 'Repository Root': '儲存庫根目錄', '{count} selected': '已選 {count} 項', 'Unstage': '取消暫存', 'Stash Selected': '儲藏所選', 'Selected changes': '所選變更', 'Changes Staged': '變更已暫存', 'Changes Unstaged': '已取消暫存', 'Stash Created': '儲藏已建立', '{count} selected files were staged.': '已暫存所選的 {count} 個檔案。', '{count} selected files were unstaged.': '已取消暫存所選的 {count} 個檔案。', '{count} selected files were stashed.': '已儲藏所選的 {count} 個檔案。', 'Staged': '已暫存' },
+  fr: { 'Group by Directory': 'Grouper par dossier', 'Flat View': 'Vue à plat', 'Repository Root': 'Racine du dépôt', '{count} selected': '{count} sélectionné(s)', 'Unstage': 'Désindexer', 'Stash Selected': 'Remiser la sélection', 'Selected changes': 'Modifications sélectionnées', 'Changes Staged': 'Modifications indexées', 'Changes Unstaged': 'Modifications désindexées', 'Stash Created': 'Remisage créé', '{count} selected files were staged.': '{count} fichiers sélectionnés ont été indexés.', '{count} selected files were unstaged.': '{count} fichiers sélectionnés ont été désindexés.', '{count} selected files were stashed.': '{count} fichiers sélectionnés ont été remisés.', 'Staged': 'Indexé' },
+  ar: { 'Group by Directory': 'تجميع حسب المجلد', 'Flat View': 'عرض مسطح', 'Repository Root': 'جذر المستودع', '{count} selected': 'تم تحديد {count}', 'Unstage': 'إلغاء التجهيز', 'Stash Selected': 'تخزين المحدد', 'Selected changes': 'التغييرات المحددة', 'Changes Staged': 'تم تجهيز التغييرات', 'Changes Unstaged': 'تم إلغاء تجهيز التغييرات', 'Stash Created': 'تم إنشاء التخزين', '{count} selected files were staged.': 'تم تجهيز {count} من الملفات المحددة.', '{count} selected files were unstaged.': 'تم إلغاء تجهيز {count} من الملفات المحددة.', '{count} selected files were stashed.': 'تم تخزين {count} من الملفات المحددة.', 'Staged': 'مجهّز' },
+};
+
+for (const loc of Object.keys(unifiedChangesTranslations) as Locale[]) {
+  Object.assign(messages[loc], unifiedChangesTranslations[loc]);
+}
