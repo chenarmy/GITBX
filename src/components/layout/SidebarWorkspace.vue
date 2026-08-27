@@ -4,6 +4,7 @@ import { useRepoStore } from '@/stores/repo';
 import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
 import { useI18n } from '@/i18n';
+import { useNotificationStore } from '@/stores/notification';
 import {
   FolderGit2,
   GitBranch,
@@ -22,6 +23,12 @@ import {
 
 const repoStore = useRepoStore();
 const { t } = useI18n();
+const notification = useNotificationStore();
+
+async function discoverRoots() {
+  try { const count = await repoStore.discoverRoots(); notification.success(t('Git Roots Discovered'), t('Found {count} Git roots.', { count })); }
+  catch (error: any) { notification.error(t('Discovery Failed'), error?.message || String(error)); }
+}
 
 const isReposOpen = ref(true);
 const isBranchesOpen = ref(true);
@@ -63,6 +70,10 @@ function handleCheckout(name: string) {
   repoStore.checkoutBranch(name);
 }
 
+function handleLocateCommit(commitId: string) {
+  void repoStore.locateCommit(commitId);
+}
+
 function openContextMenu(e: MouseEvent, branch: BranchItem) {
   e.preventDefault();
   contextMenu.value = {
@@ -83,6 +94,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 mb-1 text-[10px] tracking-wider uppercase cursor-pointer hover:text-foreground"
       >
         <div class="flex items-center space-x-1">
+          <button @click.stop="discoverRoots" :disabled="!repoStore.activeRepoPath" class="p-0.5 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40" :title="t('Discover Nested Git Roots')"><FolderTree class="w-3.5 h-3.5" /></button>
           <component :is="isReposOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
           <span>{{ t('Repositories') }} ({{ repoStore.repoList.length }})</span>
         </div>
@@ -159,8 +171,9 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             v-for="branch in group.branches"
             :key="branch.name"
             @dblclick="handleCheckout(branch.name)"
-            @click="handleCheckout(branch.name)"
+            @click="handleLocateCommit(branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, branch)"
+            :title="t('Click to locate in log; double-click to checkout')"
             class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
             :class="[branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary', group.name ? 'pl-5' : '']"
           >
@@ -206,7 +219,9 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             v-for="branch in group.branches"
             :key="branch.name"
             @dblclick="handleCheckout(branch.name)"
+            @click="handleLocateCommit(branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, branch)"
+            :title="t('Click to locate in log; double-click to checkout')"
             class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
             :class="group.name ? 'pl-5' : ''"
           >
@@ -240,6 +255,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         <div
           v-for="tag in repoStore.tags"
           :key="tag.name"
+          @click="handleLocateCommit(tag.target_commit_id)"
           class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
         >
           <Tag class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 opacity-80 shrink-0" />
@@ -271,14 +287,14 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         <div
           v-for="stash in repoStore.stashes"
           :key="stash.index"
-          @click="repoStore.popStash(stash.index)"
+          @click="repoStore.isStashModalOpen = true"
           class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate group text-xs"
         >
           <div class="flex items-center space-x-1.5 truncate">
             <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 opacity-80 shrink-0" />
             <span class="truncate">{{ stash.message }}</span>
           </div>
-          <span class="text-[10px] text-primary font-bold opacity-0 group-hover:opacity-100">{{ t('Pop') }}</span>
+          <span class="text-[10px] text-primary font-bold opacity-0 group-hover:opacity-100">{{ t('Manage') }}</span>
         </div>
       </div>
     </div>

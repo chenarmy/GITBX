@@ -1,4 +1,4 @@
-use gitbx_core::GitService;
+use gitbx_core::{BlameLine, CommitDetail, GitService};
 use gitbx_diff::{
     load_conflict_file, resolve_conflict_file, ConflictChunk, ConflictFileContent, DiffEngine,
     FileDiff, Merge3Engine,
@@ -11,11 +11,38 @@ pub async fn get_file_diff(
     file_path: String,
     staged: bool,
     commit_id: Option<String>,
+    base_commit_id: Option<String>,
+    target_commit_id: Option<String>,
+    old_file_path: Option<String>,
 ) -> Result<FileDiff, String> {
     let repo = GitService::open(&repo_path).map_err(|e| e.to_string())?;
     GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
 
-    let (old_bytes, new_bytes) = if let Some(commit_id) = commit_id {
+    let (old_bytes, new_bytes) = if let (Some(base_id), Some(target_id)) =
+        (base_commit_id, target_commit_id)
+    {
+        let old_path = old_file_path.as_deref().unwrap_or(&file_path);
+        let read_revision_file = |revision: &str, path: &str| -> Vec<u8> {
+            repo.inner()
+                .revparse_single(revision)
+                .ok()
+                .and_then(|object| object.peel_to_commit().ok())
+                .and_then(|commit| {
+                    commit
+                        .tree()
+                        .ok()?
+                        .get_path(std::path::Path::new(path))
+                        .ok()
+                })
+                .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
+                .map(|blob| blob.content().to_vec())
+                .unwrap_or_default()
+        };
+        (
+            read_revision_file(&base_id, old_path),
+            read_revision_file(&target_id, &file_path),
+        )
+    } else if let Some(commit_id) = commit_id {
         let commit = repo
             .inner()
             .find_commit(git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?)
@@ -116,9 +143,40 @@ pub async fn get_file_diff(
     Ok(DiffEngine::diff_strings(
         &old_content,
         &new_content,
-        Some(&file_path),
+        Some(old_file_path.as_deref().unwrap_or(&file_path)),
         Some(&file_path),
     ))
+}
+
+#[tauri::command]
+pub async fn apply_partial_patch(
+    repo_path: String,
+    file_path: String,
+    patch: String,
+    target: String,
+) -> Result<(), String> {
+    GitService::apply_partial_patch(&repo_path, &file_path, &patch, &target)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_file_history(
+    repo_path: String,
+    file_path: String,
+    max_count: Option<usize>,
+) -> Result<Vec<CommitDetail>, String> {
+    GitService::get_file_history(&repo_path, &file_path, max_count.unwrap_or(100))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn get_file_blame(
+    repo_path: String,
+    file_path: String,
+    revision: Option<String>,
+) -> Result<Vec<BlameLine>, String> {
+    GitService::blame_file(&repo_path, &file_path, revision.as_deref())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -136,6 +194,9 @@ pub async fn write_file(
     content: String,
 ) -> Result<(), String> {
     let path = GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
+    if path.exists() {
+        let _ = GitService::create_local_history_snapshot(&repo_path, &file_path, "Before edit");
+    }
     fs::write(path, content).map_err(|e| e.to_string())
 }
 

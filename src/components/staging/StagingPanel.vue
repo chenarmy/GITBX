@@ -13,13 +13,16 @@ import {
   RotateCcw,
   AlertTriangle,
   GitCommit,
+  GitCompareArrows,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
+import { useChangelistStore } from '@/stores/changelist';
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
+const changelistStore = useChangelistStore();
 
 // Keep the full status in the store, but progressively render large lists so
 // repositories with thousands of changes do not freeze the webview.
@@ -29,11 +32,13 @@ const unstagedLimit = ref(FILE_PAGE_SIZE);
 const untrackedLimit = ref(FILE_PAGE_SIZE);
 const conflictLimit = ref(FILE_PAGE_SIZE);
 const commitFileLimit = ref(FILE_PAGE_SIZE);
+const branchFileLimit = ref(FILE_PAGE_SIZE);
 const stagedFiles = computed(() => repoStore.statusSummary.staged_files.slice(0, stagedLimit.value));
 const unstagedFiles = computed(() => repoStore.statusSummary.unstaged_files.slice(0, unstagedLimit.value));
 const untrackedFiles = computed(() => repoStore.statusSummary.untracked_files.slice(0, untrackedLimit.value));
 const conflictedFiles = computed(() => repoStore.statusSummary.conflicted_files.slice(0, conflictLimit.value));
 const commitFiles = computed(() => repoStore.selectedCommitFiles.slice(0, commitFileLimit.value));
+const branchFiles = computed(() => repoStore.branchComparisonFiles.slice(0, branchFileLimit.value));
 
 watch(
   () => [
@@ -42,6 +47,7 @@ watch(
     repoStore.statusSummary.untracked_files.length,
     repoStore.statusSummary.conflicted_files.length,
     repoStore.selectedCommitFiles.length,
+    repoStore.branchComparisonFiles.length,
   ],
   () => {
     stagedLimit.value = FILE_PAGE_SIZE;
@@ -49,16 +55,18 @@ watch(
     untrackedLimit.value = FILE_PAGE_SIZE;
     conflictLimit.value = FILE_PAGE_SIZE;
     commitFileLimit.value = FILE_PAGE_SIZE;
+    branchFileLimit.value = FILE_PAGE_SIZE;
   },
 );
 
-function showMore(section: 'staged' | 'unstaged' | 'untracked' | 'conflict' | 'commit') {
+function showMore(section: 'staged' | 'unstaged' | 'untracked' | 'conflict' | 'commit' | 'branch') {
   const limits = {
     staged: stagedLimit,
     unstaged: unstagedLimit,
     untracked: untrackedLimit,
     conflict: conflictLimit,
     commit: commitFileLimit,
+    branch: branchFileLimit,
   };
   limits[section].value += FILE_PAGE_SIZE;
 }
@@ -139,9 +147,56 @@ async function handleDiscardFile(e: Event, filePath: string) {
       </div>
     </div>
 
+    <!-- Branch Comparison Section -->
+    <div
+      v-if="repoStore.branchComparison"
+      class="flex-1 flex flex-col min-h-0 bg-muted/10"
+    >
+      <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
+        <div class="flex items-center space-x-1.5 min-w-0">
+          <GitCompareArrows class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="truncate text-[11px]">
+            {{ repoStore.branchComparison.baseBranch }} → {{ repoStore.branchComparison.targetBranch }}
+          </span>
+          <span class="text-[10px] text-muted-foreground shrink-0 font-normal">({{ repoStore.branchComparisonFiles.length }} {{ t('files') }})</span>
+        </div>
+        <button
+          @click="repoStore.clearBranchComparison()"
+          class="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
+        >
+          {{ t('Working Tree') }}
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+        <div
+          v-for="file in branchFiles"
+          :key="`${file.old_path || ''}:${file.path}`"
+          @click="diffStore.selectBranchComparisonFile(file.path, file.old_path, repoStore.activeRepoPath, repoStore.branchComparison!.baseCommitId, repoStore.branchComparison!.targetCommitId)"
+          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs"
+          :class="diffStore.selectedFile === file.path ? 'bg-primary/15 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+        >
+          <div class="flex items-center space-x-1.5 truncate">
+            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
+            <span class="truncate">{{ file.path }}</span>
+          </div>
+        </div>
+        <div v-if="repoStore.branchComparisonFiles.length === 0" class="p-6 text-center text-muted-foreground">
+          {{ t('No differences') }}
+        </div>
+        <button
+          v-if="branchFiles.length < repoStore.branchComparisonFiles.length"
+          @click="showMore('branch')"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+        >
+          {{ t('Show more ({count} remaining)', { count: repoStore.branchComparisonFiles.length - branchFiles.length }) }}
+        </button>
+      </div>
+    </div>
+
     <!-- Selected Commit Changes Section (when inspecting a historical commit) -->
     <div
-      v-if="repoStore.selectedCommit && diffStore.commitId"
+      v-else-if="repoStore.selectedCommit && diffStore.commitId"
       class="flex-1 flex flex-col min-h-0 bg-muted/10"
     >
       <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
@@ -241,7 +296,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
     </div>
 
     <!-- Unstaged Changes & Untracked Files Section -->
-    <div v-if="!diffStore.commitId" class="flex-1 flex flex-col min-h-0">
+    <div v-if="!diffStore.commitId && !repoStore.branchComparison" class="flex-1 flex flex-col min-h-0">
       <div class="dbx-pane-header h-7 bg-muted/40 px-2.5 flex items-center justify-between font-bold text-muted-foreground border-b border-border">
         <div class="flex items-center space-x-1.5">
           <span>{{ t('Changes') }}</span>
@@ -272,6 +327,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           <div class="flex items-center space-x-1.5 truncate">
             <component :is="getStatusIcon(file.unstaged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.unstaged_status)" />
             <span class="truncate">{{ file.path }}</span>
+            <span class="text-[9px] px-1 rounded bg-muted text-muted-foreground">{{ t(changelistStore.listFor(file.path).name) }}</span>
           </div>
           <div class="flex items-center space-x-1">
             <button
@@ -310,6 +366,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
           <div class="flex items-center space-x-1.5 truncate">
             <FileQuestion class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
             <span class="truncate">{{ file.path }}</span>
+            <span class="text-[9px] px-1 rounded bg-muted text-muted-foreground">{{ t(changelistStore.listFor(file.path).name) }}</span>
           </div>
           <div class="flex items-center space-x-1">
             <button

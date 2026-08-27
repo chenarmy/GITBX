@@ -94,7 +94,9 @@ impl Repository {
         let (commit, upstream_to_set) = if let Some(target_str) = target_commit_id {
             if let Ok(oid) = git2::Oid::from_str(target_str) {
                 (self.inner().find_commit(oid)?, None)
-            } else if let Ok(remote_branch) = self.inner().find_branch(target_str, BranchType::Remote) {
+            } else if let Ok(remote_branch) =
+                self.inner().find_branch(target_str, BranchType::Remote)
+            {
                 let c = remote_branch.get().peel_to_commit()?;
                 let upstream = remote_branch.name()?.map(|s| s.to_string());
                 (c, upstream)
@@ -155,7 +157,8 @@ impl Repository {
                 let reference = existing_local.get();
                 let object = reference.peel_to_commit()?.into_object();
                 self.inner().checkout_tree(&object, None)?;
-                self.inner().set_head(reference.name().unwrap_or(local_name))?;
+                self.inner()
+                    .set_head(reference.name().unwrap_or(local_name))?;
                 return Ok(());
             }
 
@@ -165,7 +168,8 @@ impl Repository {
 
             let object = commit.into_object();
             self.inner().checkout_tree(&object, None)?;
-            self.inner().set_head(&format!("refs/heads/{}", local_name))?;
+            self.inner()
+                .set_head(&format!("refs/heads/{}", local_name))?;
             return Ok(());
         }
 
@@ -173,13 +177,11 @@ impl Repository {
         if !name.contains('/') {
             if let Ok(remote_branches) = self.inner().branches(Some(BranchType::Remote)) {
                 let mut matched_remote = None;
-                for item in remote_branches {
-                    if let Ok((b, _)) = item {
-                        if let Ok(Some(b_name)) = b.name() {
-                            if b_name.ends_with(&format!("/{}", name)) {
-                                matched_remote = Some(b_name.to_string());
-                                break;
-                            }
+                for (b, _) in remote_branches.flatten() {
+                    if let Ok(Some(b_name)) = b.name() {
+                        if b_name.ends_with(&format!("/{}", name)) {
+                            matched_remote = Some(b_name.to_string());
+                            break;
                         }
                     }
                 }

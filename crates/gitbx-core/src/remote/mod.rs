@@ -86,7 +86,10 @@ fn create_git_command() -> std::process::Command {
             "git",
         ] {
             if *candidate == "git" || std::path::Path::new(candidate).exists() {
-                if let Ok(mut child) = std::process::Command::new(candidate).arg("--version").spawn() {
+                if let Ok(mut child) = std::process::Command::new(candidate)
+                    .arg("--version")
+                    .spawn()
+                {
                     let _ = child.wait();
                     return std::process::Command::new(candidate);
                 }
@@ -191,7 +194,10 @@ impl Repository {
                     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                     if !stderr.is_empty() {
                         let lower = stderr.to_ascii_lowercase();
-                        if lower.contains("permission to") || lower.contains("authentication failed") || lower.contains("denied") {
+                        if lower.contains("permission to")
+                            || lower.contains("authentication failed")
+                            || lower.contains("denied")
+                        {
                             return Err(crate::error::GitbxError::AuthFailed(stderr));
                         }
                         return Err(crate::error::GitbxError::General(stderr));

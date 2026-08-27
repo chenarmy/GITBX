@@ -1,6 +1,8 @@
 use gitbx_core::{
     BranchItem, GitService, RemoteItem, RepoStatusSummary, RepositoryInfo, StashItem, TagItem,
 };
+use tauri::AppHandle;
+use tauri_plugin_opener::OpenerExt;
 
 type CommandResult<T> = std::result::Result<T, String>;
 
@@ -98,11 +100,25 @@ pub async fn create_commit(
     message: String,
     author: String,
     email: String,
+    amend: Option<bool>,
+    sign: Option<bool>,
+    pre_commit_command: Option<String>,
 ) -> CommandResult<String> {
-    GitService::with_write_lock(&repo_path, |repo| {
-        repo.create_commit(&message, &author, &email)
-    })
+    GitService::create_commit_advanced(
+        &repo_path,
+        &message,
+        &author,
+        &email,
+        amend.unwrap_or(false),
+        sign.unwrap_or(false),
+        pre_commit_command.as_deref(),
+    )
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_commit_template(repo_path: String) -> CommandResult<Option<String>> {
+    GitService::get_commit_template(&repo_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -244,6 +260,53 @@ pub async fn get_commit_changes(
 }
 
 #[tauri::command]
+pub async fn apply_stash(repo_path: String, index: usize) -> CommandResult<()> {
+    GitService::apply_stash(&repo_path, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn drop_stash(repo_path: String, index: usize) -> CommandResult<()> {
+    GitService::drop_stash(&repo_path, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn rename_stash(repo_path: String, index: usize, message: String) -> CommandResult<()> {
+    GitService::rename_stash(&repo_path, index, &message).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_stash_changes(
+    repo_path: String,
+    commit_id: String,
+) -> CommandResult<Vec<gitbx_core::FileStatusItem>> {
+    GitService::get_stash_changes(&repo_path, &commit_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_shelf(
+    repo_path: String,
+    message: String,
+    file_paths: Vec<String>,
+) -> CommandResult<()> {
+    GitService::create_shelf(&repo_path, &message, &file_paths).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn resolve_revision(repo_path: String, revision: String) -> CommandResult<String> {
+    GitService::resolve_revision(&repo_path, &revision).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_branch_changes(
+    repo_path: String,
+    base_revision: String,
+    target_revision: String,
+) -> CommandResult<Vec<gitbx_core::FileStatusItem>> {
+    GitService::get_changes_between(&repo_path, &base_revision, &target_revision)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn fetch_remote(repo_path: String, remote_name: Option<String>) -> CommandResult<()> {
     if remote_name.is_some() {
         GitService::with_write_lock(&repo_path, |repo| {
@@ -256,18 +319,46 @@ pub async fn fetch_remote(repo_path: String, remote_name: Option<String>) -> Com
 }
 
 #[tauri::command]
-pub async fn pull(repo_path: String) -> CommandResult<()> {
-    GitService::pull(&repo_path, "origin").map_err(|e| e.to_string())
+pub async fn pull(repo_path: String, strategy: Option<String>) -> CommandResult<()> {
+    GitService::pull_with_strategy(&repo_path, "origin", strategy.as_deref().unwrap_or("merge"))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn push(repo_path: String) -> CommandResult<()> {
-    GitService::push(&repo_path, "origin").map_err(|e| e.to_string())
+pub async fn push(repo_path: String, force_with_lease: Option<bool>) -> CommandResult<()> {
+    if force_with_lease.unwrap_or(false) {
+        GitService::push_force_with_lease(&repo_path, "origin")
+    } else {
+        GitService::push(&repo_path, "origin")
+    }
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_sync_status(repo_path: String) -> CommandResult<gitbx_core::SyncStatus> {
+    GitService::get_sync_status(&repo_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn rebase(repo_path: String, upstream: String) -> CommandResult<()> {
     GitService::rebase(&repo_path, &upstream).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_interactive_rebase_commits(
+    repo_path: String,
+    upstream: String,
+) -> CommandResult<Vec<gitbx_core::RebaseCommit>> {
+    GitService::get_interactive_rebase_commits(&repo_path, &upstream).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn interactive_rebase(
+    repo_path: String,
+    upstream: String,
+    plan: Vec<gitbx_core::RebasePlanItem>,
+) -> CommandResult<()> {
+    GitService::interactive_rebase(&repo_path, &upstream, &plan).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -287,4 +378,91 @@ pub async fn worktree_add(
     branch: String,
 ) -> CommandResult<()> {
     GitService::worktree(&repo_path, &destination, &branch).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_worktrees(repo_path: String) -> CommandResult<Vec<gitbx_core::WorktreeInfo>> {
+    GitService::list_worktrees(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn remove_worktree(
+    repo_path: String,
+    worktree_path: String,
+    force: Option<bool>,
+) -> CommandResult<()> {
+    GitService::remove_worktree(&repo_path, &worktree_path, force.unwrap_or(false))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_worktree_locked(
+    repo_path: String,
+    worktree_path: String,
+    locked: bool,
+    reason: Option<String>,
+) -> CommandResult<()> {
+    GitService::set_worktree_locked(&repo_path, &worktree_path, locked, reason.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn prune_worktrees(repo_path: String) -> CommandResult<()> {
+    GitService::prune_worktrees(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn discover_git_roots(repo_path: String) -> CommandResult<Vec<String>> {
+    GitService::discover_git_roots(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn open_pull_request(
+    app: AppHandle,
+    repo_path: String,
+    base: String,
+    compare: String,
+) -> CommandResult<()> {
+    let url =
+        GitService::pull_request_url(&repo_path, &base, &compare).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_local_history(
+    repo_path: String,
+    file_path: String,
+) -> CommandResult<Vec<gitbx_core::LocalHistoryEntry>> {
+    GitService::list_local_history(&repo_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_local_history_snapshot(
+    repo_path: String,
+    file_path: String,
+    label: String,
+) -> CommandResult<gitbx_core::LocalHistoryEntry> {
+    GitService::create_local_history_snapshot(&repo_path, &file_path, &label)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn restore_local_history(
+    repo_path: String,
+    file_path: String,
+    snapshot_id: String,
+) -> CommandResult<()> {
+    GitService::restore_local_history(&repo_path, &file_path, &snapshot_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn read_local_history(
+    repo_path: String,
+    file_path: String,
+    snapshot_id: String,
+) -> CommandResult<String> {
+    GitService::read_local_history(&repo_path, &file_path, &snapshot_id).map_err(|e| e.to_string())
 }

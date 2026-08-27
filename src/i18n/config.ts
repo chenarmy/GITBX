@@ -440,10 +440,12 @@ Object.assign(messages['zh-CN'], {
   'Opened terminal in {path}': '已在 {path} 打开终端',
   'Failed to Open System Terminal': '打开系统终端失败',
   'Could not open a terminal for the current repository.': '无法为当前仓库打开终端',
+  'No differences': '两个分支没有差异',
 });
 
 Object.assign(messages.en, {
   'Conflicts': 'Conflicts',
+  'No differences': 'No differences between the branches',
   'Resolve before continuing': 'Resolve before continuing',
   'Resolve': 'Resolve',
   'Binary conflict': 'Binary conflict',
@@ -1572,4 +1574,393 @@ for (const loc of Object.keys(supplementaryTranslations) as Locale[]) {
   if (messages[loc]) {
     Object.assign(messages[loc], supplementaryTranslations[loc]);
   }
+}
+
+const graphFilterTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'Text or hash': 'Text or hash', 'User': 'User', 'Paths': 'Paths',
+    'All branches': 'All branches', 'All users': 'All users', 'Any time': 'Any time',
+    'Today': 'Today', 'Last 7 days': 'Last 7 days', 'Last 30 days': 'Last 30 days',
+    'Last 90 days': 'Last 90 days', 'Path contains': 'Path contains', 'Clear': 'Clear',
+    'Clear filters': 'Clear filters', '{visible} of {total} commits': '{visible} of {total} commits',
+    'No commits match the current filters.': 'No commits match the current filters.',
+  },
+  ja: {
+    'Text or hash': 'テキストまたはハッシュ', 'User': 'ユーザー', 'Paths': 'パス',
+    'All branches': 'すべてのブランチ', 'All users': 'すべてのユーザー', 'Any time': 'すべての期間',
+    'Today': '今日', 'Last 7 days': '過去7日間', 'Last 30 days': '過去30日間',
+    'Last 90 days': '過去90日間', 'Path contains': 'パスを含む', 'Clear': 'クリア',
+    'Clear filters': 'フィルターをクリア', '{visible} of {total} commits': '{total}件中{visible}件',
+    'No commits match the current filters.': '現在のフィルターに一致するコミットはありません。',
+  },
+  de: {
+    'Text or hash': 'Text oder Hash', 'User': 'Benutzer', 'Paths': 'Pfade',
+    'All branches': 'Alle Branches', 'All users': 'Alle Benutzer', 'Any time': 'Jeder Zeitraum',
+    'Today': 'Heute', 'Last 7 days': 'Letzte 7 Tage', 'Last 30 days': 'Letzte 30 Tage',
+    'Last 90 days': 'Letzte 90 Tage', 'Path contains': 'Pfad enthält', 'Clear': 'Leeren',
+    'Clear filters': 'Filter löschen', '{visible} of {total} commits': '{visible} von {total} Commits',
+    'No commits match the current filters.': 'Keine Commits entsprechen den aktuellen Filtern.',
+  },
+  es: {
+    'Text or hash': 'Texto o hash', 'User': 'Usuario', 'Paths': 'Rutas',
+    'All branches': 'Todas las ramas', 'All users': 'Todos los usuarios', 'Any time': 'Cualquier fecha',
+    'Today': 'Hoy', 'Last 7 days': 'Últimos 7 días', 'Last 30 days': 'Últimos 30 días',
+    'Last 90 days': 'Últimos 90 días', 'Path contains': 'La ruta contiene', 'Clear': 'Limpiar',
+    'Clear filters': 'Limpiar filtros', '{visible} of {total} commits': '{visible} de {total} commits',
+    'No commits match the current filters.': 'Ningún commit coincide con los filtros actuales.',
+  },
+  'zh-CN': {
+    'Text or hash': '文本或哈希', 'User': '用户', 'Paths': '路径',
+    'All branches': '所有分支', 'All users': '所有用户', 'Any time': '不限时间',
+    'Today': '今天', 'Last 7 days': '最近 7 天', 'Last 30 days': '最近 30 天',
+    'Last 90 days': '最近 90 天', 'Path contains': '路径包含', 'Clear': '清除',
+    'Clear filters': '清除筛选', '{visible} of {total} commits': '显示 {visible} / {total} 个提交',
+    'No commits match the current filters.': '没有符合当前筛选条件的提交。',
+  },
+  'zh-TW': {
+    'Text or hash': '文字或雜湊', 'User': '使用者', 'Paths': '路徑',
+    'All branches': '所有分支', 'All users': '所有使用者', 'Any time': '不限時間',
+    'Today': '今天', 'Last 7 days': '最近 7 天', 'Last 30 days': '最近 30 天',
+    'Last 90 days': '最近 90 天', 'Path contains': '路徑包含', 'Clear': '清除',
+    'Clear filters': '清除篩選', '{visible} of {total} commits': '顯示 {visible} / {total} 個提交',
+    'No commits match the current filters.': '沒有符合目前篩選條件的提交。',
+  },
+  fr: {
+    'Text or hash': 'Texte ou hash', 'User': 'Utilisateur', 'Paths': 'Chemins',
+    'All branches': 'Toutes les branches', 'All users': 'Tous les utilisateurs', 'Any time': 'Toute période',
+    'Today': "Aujourd'hui", 'Last 7 days': '7 derniers jours', 'Last 30 days': '30 derniers jours',
+    'Last 90 days': '90 derniers jours', 'Path contains': 'Le chemin contient', 'Clear': 'Effacer',
+    'Clear filters': 'Effacer les filtres', '{visible} of {total} commits': '{visible} sur {total} commits',
+    'No commits match the current filters.': 'Aucun commit ne correspond aux filtres actuels.',
+  },
+  ar: {
+    'Text or hash': 'نص أو تجزئة', 'User': 'المستخدم', 'Paths': 'المسارات',
+    'All branches': 'كل الفروع', 'All users': 'كل المستخدمين', 'Any time': 'أي وقت',
+    'Today': 'اليوم', 'Last 7 days': 'آخر 7 أيام', 'Last 30 days': 'آخر 30 يومًا',
+    'Last 90 days': 'آخر 90 يومًا', 'Path contains': 'المسار يحتوي على', 'Clear': 'مسح',
+    'Clear filters': 'مسح عوامل التصفية', '{visible} of {total} commits': '{visible} من {total} التزامات',
+    'No commits match the current filters.': 'لا توجد التزامات تطابق عوامل التصفية الحالية.',
+  },
+};
+
+for (const loc of Object.keys(graphFilterTranslations) as Locale[]) {
+  Object.assign(messages[loc], graphFilterTranslations[loc]);
+}
+
+const partialPatchTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'Unstage Hunk': 'Unstage Hunk', 'Unstage this line': 'Unstage this line', 'Unstage Line': 'Unstage Line',
+    'Hunk Unstaged': 'Hunk Unstaged', 'Line Staged': 'Line Staged', 'Line Unstaged': 'Line Unstaged',
+    'Unstage Failed': 'Unstage Failed',
+    'Discard only the selected hunk from {file}?': 'Discard only the selected hunk from {file}?',
+  },
+  ja: {
+    'Unstage Hunk': 'Hunkをアンステージ', 'Unstage this line': 'この行をアンステージ', 'Unstage Line': '行をアンステージ',
+    'Hunk Unstaged': 'Hunkをアンステージしました', 'Line Staged': '行をステージしました', 'Line Unstaged': '行をアンステージしました',
+    'Unstage Failed': 'アンステージに失敗しました',
+    'Discard only the selected hunk from {file}?': '{file} から選択したHunkだけを破棄しますか？',
+  },
+  de: {
+    'Unstage Hunk': 'Hunk zurücksetzen', 'Unstage this line': 'Diese Zeile zurücksetzen', 'Unstage Line': 'Zeile zurücksetzen',
+    'Hunk Unstaged': 'Hunk zurückgesetzt', 'Line Staged': 'Zeile bereitgestellt', 'Line Unstaged': 'Zeile zurückgesetzt',
+    'Unstage Failed': 'Zurücksetzen fehlgeschlagen',
+    'Discard only the selected hunk from {file}?': 'Nur den ausgewählten Hunk aus {file} verwerfen?',
+  },
+  es: {
+    'Unstage Hunk': 'Quitar bloque del área', 'Unstage this line': 'Quitar esta línea del área', 'Unstage Line': 'Quitar línea del área',
+    'Hunk Unstaged': 'Bloque retirado del área', 'Line Staged': 'Línea preparada', 'Line Unstaged': 'Línea retirada del área',
+    'Unstage Failed': 'No se pudo retirar del área',
+    'Discard only the selected hunk from {file}?': '¿Descartar solo el bloque seleccionado de {file}?',
+  },
+  'zh-CN': {
+    'Unstage Hunk': '取消暂存代码块', 'Unstage this line': '取消暂存此行', 'Unstage Line': '取消暂存行',
+    'Hunk Unstaged': '已取消暂存代码块', 'Line Staged': '已暂存行', 'Line Unstaged': '已取消暂存行',
+    'Unstage Failed': '取消暂存失败',
+    'Discard only the selected hunk from {file}?': '仅丢弃 {file} 中选中的代码块？',
+  },
+  'zh-TW': {
+    'Unstage Hunk': '取消暫存程式碼區塊', 'Unstage this line': '取消暫存此行', 'Unstage Line': '取消暫存行',
+    'Hunk Unstaged': '已取消暫存程式碼區塊', 'Line Staged': '已暫存行', 'Line Unstaged': '已取消暫存行',
+    'Unstage Failed': '取消暫存失敗',
+    'Discard only the selected hunk from {file}?': '僅捨棄 {file} 中選取的程式碼區塊？',
+  },
+  fr: {
+    'Unstage Hunk': 'Désindexer le bloc', 'Unstage this line': 'Désindexer cette ligne', 'Unstage Line': 'Désindexer la ligne',
+    'Hunk Unstaged': 'Bloc désindexé', 'Line Staged': 'Ligne indexée', 'Line Unstaged': 'Ligne désindexée',
+    'Unstage Failed': 'Échec de la désindexation',
+    'Discard only the selected hunk from {file}?': 'Abandonner uniquement le bloc sélectionné de {file} ?',
+  },
+  ar: {
+    'Unstage Hunk': 'إلغاء ترحيل المقطع', 'Unstage this line': 'إلغاء ترحيل هذا السطر', 'Unstage Line': 'إلغاء ترحيل السطر',
+    'Hunk Unstaged': 'تم إلغاء ترحيل المقطع', 'Line Staged': 'تم ترحيل السطر', 'Line Unstaged': 'تم إلغاء ترحيل السطر',
+    'Unstage Failed': 'فشل إلغاء الترحيل',
+    'Discard only the selected hunk from {file}?': 'هل تريد تجاهل المقطع المحدد فقط من {file}؟',
+  },
+};
+
+for (const loc of Object.keys(partialPatchTranslations) as Locale[]) {
+  Object.assign(messages[loc], partialPatchTranslations[loc]);
+}
+
+const logPaginationTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'Commit not found': 'Commit not found', 'Loading commits...': 'Loading commits...',
+    'Load more commits': 'Load more commits',
+    'Click to locate in log; double-click to checkout': 'Click to locate in log; double-click to checkout',
+  },
+  ja: {
+    'Commit not found': 'コミットが見つかりません', 'Loading commits...': 'コミットを読み込み中...',
+    'Load more commits': 'さらにコミットを読み込む',
+    'Click to locate in log; double-click to checkout': 'クリックでログに移動、ダブルクリックでチェックアウト',
+  },
+  de: {
+    'Commit not found': 'Commit nicht gefunden', 'Loading commits...': 'Commits werden geladen...',
+    'Load more commits': 'Weitere Commits laden',
+    'Click to locate in log; double-click to checkout': 'Klicken zum Anzeigen im Log; doppelklicken zum Auschecken',
+  },
+  es: {
+    'Commit not found': 'Commit no encontrado', 'Loading commits...': 'Cargando commits...',
+    'Load more commits': 'Cargar más commits',
+    'Click to locate in log; double-click to checkout': 'Clic para localizar en el historial; doble clic para cambiar de rama',
+  },
+  'zh-CN': {
+    'Commit not found': '未找到提交', 'Loading commits...': '正在加载提交...',
+    'Load more commits': '加载更多提交',
+    'Click to locate in log; double-click to checkout': '单击在日志中定位；双击检出',
+  },
+  'zh-TW': {
+    'Commit not found': '找不到提交', 'Loading commits...': '正在載入提交...',
+    'Load more commits': '載入更多提交',
+    'Click to locate in log; double-click to checkout': '按一下在記錄中定位；按兩下簽出',
+  },
+  fr: {
+    'Commit not found': 'Commit introuvable', 'Loading commits...': 'Chargement des commits...',
+    'Load more commits': 'Charger plus de commits',
+    'Click to locate in log; double-click to checkout': 'Cliquer pour localiser dans le journal ; double-cliquer pour extraire',
+  },
+  ar: {
+    'Commit not found': 'لم يتم العثور على الالتزام', 'Loading commits...': 'جارٍ تحميل الالتزامات...',
+    'Load more commits': 'تحميل المزيد من الالتزامات',
+    'Click to locate in log; double-click to checkout': 'انقر لتحديده في السجل؛ انقر مرتين للتبديل إليه',
+  },
+};
+
+for (const loc of Object.keys(logPaginationTranslations) as Locale[]) {
+  Object.assign(messages[loc], logPaginationTranslations[loc]);
+}
+
+const fileInvestigationTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'File Investigation': 'File Investigation', 'File History': 'File History', 'Blame': 'Blame',
+    'Compare Revisions': 'Compare Revisions', 'Loading...': 'Loading...', 'No file history found.': 'No file history found.',
+    'No blame information found.': 'No blame information found.', 'Compare this file between any two branches, tags, or commit hashes.': 'Compare this file between any two branches, tags, or commit hashes.',
+    'Base Revision': 'Base Revision', 'Target Revision': 'Target Revision', 'Compare Failed': 'Compare Failed',
+  },
+  ja: {
+    'File Investigation': 'ファイル調査', 'File History': 'ファイル履歴', 'Blame': '注釈',
+    'Compare Revisions': 'リビジョンを比較', 'Loading...': '読み込み中...', 'No file history found.': 'ファイル履歴が見つかりません。',
+    'No blame information found.': '注釈情報が見つかりません。', 'Compare this file between any two branches, tags, or commit hashes.': '任意の2つのブランチ、タグ、またはコミットハッシュ間でこのファイルを比較します。',
+    'Base Revision': '基準リビジョン', 'Target Revision': '対象リビジョン', 'Compare Failed': '比較に失敗しました',
+  },
+  de: {
+    'File Investigation': 'Dateiuntersuchung', 'File History': 'Dateiverlauf', 'Blame': 'Annotieren',
+    'Compare Revisions': 'Revisionen vergleichen', 'Loading...': 'Wird geladen...', 'No file history found.': 'Kein Dateiverlauf gefunden.',
+    'No blame information found.': 'Keine Blame-Informationen gefunden.', 'Compare this file between any two branches, tags, or commit hashes.': 'Diese Datei zwischen zwei Branches, Tags oder Commit-Hashes vergleichen.',
+    'Base Revision': 'Basisrevision', 'Target Revision': 'Zielrevision', 'Compare Failed': 'Vergleich fehlgeschlagen',
+  },
+  es: {
+    'File Investigation': 'Investigación de archivo', 'File History': 'Historial del archivo', 'Blame': 'Anotaciones',
+    'Compare Revisions': 'Comparar revisiones', 'Loading...': 'Cargando...', 'No file history found.': 'No se encontró historial del archivo.',
+    'No blame information found.': 'No se encontró información de autoría.', 'Compare this file between any two branches, tags, or commit hashes.': 'Compara este archivo entre dos ramas, etiquetas o hashes de commit.',
+    'Base Revision': 'Revisión base', 'Target Revision': 'Revisión de destino', 'Compare Failed': 'Error de comparación',
+  },
+  'zh-CN': {
+    'File Investigation': '文件调查', 'File History': '文件历史', 'Blame': '逐行追溯',
+    'Compare Revisions': '比较版本', 'Loading...': '正在加载...', 'No file history found.': '未找到文件历史。',
+    'No blame information found.': '未找到逐行追溯信息。', 'Compare this file between any two branches, tags, or commit hashes.': '在任意两个分支、标签或提交哈希之间比较此文件。',
+    'Base Revision': '基准版本', 'Target Revision': '目标版本', 'Compare Failed': '比较失败',
+  },
+  'zh-TW': {
+    'File Investigation': '檔案調查', 'File History': '檔案歷史', 'Blame': '逐行追溯',
+    'Compare Revisions': '比較版本', 'Loading...': '正在載入...', 'No file history found.': '找不到檔案歷史。',
+    'No blame information found.': '找不到逐行追溯資訊。', 'Compare this file between any two branches, tags, or commit hashes.': '在任意兩個分支、標籤或提交雜湊之間比較此檔案。',
+    'Base Revision': '基準版本', 'Target Revision': '目標版本', 'Compare Failed': '比較失敗',
+  },
+  fr: {
+    'File Investigation': 'Analyse du fichier', 'File History': 'Historique du fichier', 'Blame': 'Annotations',
+    'Compare Revisions': 'Comparer les révisions', 'Loading...': 'Chargement...', 'No file history found.': 'Aucun historique de fichier trouvé.',
+    'No blame information found.': 'Aucune information d’annotation trouvée.', 'Compare this file between any two branches, tags, or commit hashes.': 'Comparez ce fichier entre deux branches, tags ou hash de commit.',
+    'Base Revision': 'Révision de base', 'Target Revision': 'Révision cible', 'Compare Failed': 'Échec de la comparaison',
+  },
+  ar: {
+    'File Investigation': 'فحص الملف', 'File History': 'سجل الملف', 'Blame': 'تتبّع الأسطر',
+    'Compare Revisions': 'مقارنة المراجعات', 'Loading...': 'جارٍ التحميل...', 'No file history found.': 'لم يتم العثور على سجل للملف.',
+    'No blame information found.': 'لم يتم العثور على معلومات تتبّع.', 'Compare this file between any two branches, tags, or commit hashes.': 'قارن هذا الملف بين أي فرعين أو وسمين أو تجزئتي التزام.',
+    'Base Revision': 'المراجعة الأساسية', 'Target Revision': 'المراجعة الهدف', 'Compare Failed': 'فشلت المقارنة',
+  },
+};
+
+for (const loc of Object.keys(fileInvestigationTranslations) as Locale[]) {
+  Object.assign(messages[loc], fileInvestigationTranslations[loc]);
+}
+
+const stashManagerTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'Stash and Shelf Manager': 'Stash and Shelf Manager', 'Full Stash': 'Full Stash', 'Shelf Selected Files': 'Shelf Selected Files',
+    'Create Shelf': 'Create Shelf', 'Saved Stashes and Shelves': 'Saved Stashes and Shelves', 'No saved stashes or shelves.': 'No saved stashes or shelves.',
+    'Manage': 'Manage', 'Apply and Keep': 'Apply and Keep', 'Drop': 'Drop', 'Drop Stash': 'Drop Stash',
+    'Permanently delete the selected stash?': 'Permanently delete the selected stash?', 'Files in Stash': 'Files in Stash', 'This stash contains no file changes.': 'This stash contains no file changes.',
+  },
+  ja: {
+    'Stash and Shelf Manager': 'スタッシュとシェルフの管理', 'Full Stash': '完全スタッシュ', 'Shelf Selected Files': '選択ファイルをシェルフ',
+    'Create Shelf': 'シェルフを作成', 'Saved Stashes and Shelves': '保存済みスタッシュとシェルフ', 'No saved stashes or shelves.': '保存済みのスタッシュまたはシェルフはありません。',
+    'Manage': '管理', 'Apply and Keep': '適用して保持', 'Drop': '削除', 'Drop Stash': 'スタッシュを削除',
+    'Permanently delete the selected stash?': '選択したスタッシュを完全に削除しますか？', 'Files in Stash': 'スタッシュ内のファイル', 'This stash contains no file changes.': 'このスタッシュにファイル変更はありません。',
+  },
+  de: {
+    'Stash and Shelf Manager': 'Stash- und Shelf-Verwaltung', 'Full Stash': 'Vollständiger Stash', 'Shelf Selected Files': 'Ausgewählte Dateien ablegen',
+    'Create Shelf': 'Shelf erstellen', 'Saved Stashes and Shelves': 'Gespeicherte Stashes und Shelves', 'No saved stashes or shelves.': 'Keine gespeicherten Stashes oder Shelves.',
+    'Manage': 'Verwalten', 'Apply and Keep': 'Anwenden und behalten', 'Drop': 'Löschen', 'Drop Stash': 'Stash löschen',
+    'Permanently delete the selected stash?': 'Den ausgewählten Stash endgültig löschen?', 'Files in Stash': 'Dateien im Stash', 'This stash contains no file changes.': 'Dieser Stash enthält keine Dateiänderungen.',
+  },
+  es: {
+    'Stash and Shelf Manager': 'Gestor de stash y shelf', 'Full Stash': 'Stash completo', 'Shelf Selected Files': 'Guardar archivos seleccionados',
+    'Create Shelf': 'Crear shelf', 'Saved Stashes and Shelves': 'Stashes y shelves guardados', 'No saved stashes or shelves.': 'No hay stashes ni shelves guardados.',
+    'Manage': 'Gestionar', 'Apply and Keep': 'Aplicar y conservar', 'Drop': 'Eliminar', 'Drop Stash': 'Eliminar stash',
+    'Permanently delete the selected stash?': '¿Eliminar permanentemente el stash seleccionado?', 'Files in Stash': 'Archivos del stash', 'This stash contains no file changes.': 'Este stash no contiene cambios de archivos.',
+  },
+  'zh-CN': {
+    'Stash and Shelf Manager': '储藏与搁置管理', 'Full Stash': '完整储藏', 'Shelf Selected Files': '搁置选中文件',
+    'Create Shelf': '创建搁置', 'Saved Stashes and Shelves': '已保存的储藏与搁置', 'No saved stashes or shelves.': '没有已保存的储藏或搁置。',
+    'Manage': '管理', 'Apply and Keep': '应用并保留', 'Drop': '删除', 'Drop Stash': '删除储藏',
+    'Permanently delete the selected stash?': '永久删除选中的储藏？', 'Files in Stash': '储藏中的文件', 'This stash contains no file changes.': '此储藏不包含文件变更。',
+  },
+  'zh-TW': {
+    'Stash and Shelf Manager': '儲藏與擱置管理', 'Full Stash': '完整儲藏', 'Shelf Selected Files': '擱置選取檔案',
+    'Create Shelf': '建立擱置', 'Saved Stashes and Shelves': '已儲存的儲藏與擱置', 'No saved stashes or shelves.': '沒有已儲存的儲藏或擱置。',
+    'Manage': '管理', 'Apply and Keep': '套用並保留', 'Drop': '刪除', 'Drop Stash': '刪除儲藏',
+    'Permanently delete the selected stash?': '永久刪除選取的儲藏？', 'Files in Stash': '儲藏中的檔案', 'This stash contains no file changes.': '此儲藏不包含檔案變更。',
+  },
+  fr: {
+    'Stash and Shelf Manager': 'Gestionnaire de stash et shelf', 'Full Stash': 'Stash complet', 'Shelf Selected Files': 'Mettre les fichiers sélectionnés en shelf',
+    'Create Shelf': 'Créer un shelf', 'Saved Stashes and Shelves': 'Stash et shelves enregistrés', 'No saved stashes or shelves.': 'Aucun stash ni shelf enregistré.',
+    'Manage': 'Gérer', 'Apply and Keep': 'Appliquer et conserver', 'Drop': 'Supprimer', 'Drop Stash': 'Supprimer le stash',
+    'Permanently delete the selected stash?': 'Supprimer définitivement le stash sélectionné ?', 'Files in Stash': 'Fichiers du stash', 'This stash contains no file changes.': 'Ce stash ne contient aucune modification de fichier.',
+  },
+  ar: {
+    'Stash and Shelf Manager': 'مدير التخزين والرفوف', 'Full Stash': 'تخزين كامل', 'Shelf Selected Files': 'وضع الملفات المحددة على الرف',
+    'Create Shelf': 'إنشاء رف', 'Saved Stashes and Shelves': 'التخزينات والرفوف المحفوظة', 'No saved stashes or shelves.': 'لا توجد تخزينات أو رفوف محفوظة.',
+    'Manage': 'إدارة', 'Apply and Keep': 'تطبيق مع الاحتفاظ', 'Drop': 'حذف', 'Drop Stash': 'حذف التخزين',
+    'Permanently delete the selected stash?': 'هل تريد حذف التخزين المحدد نهائيًا؟', 'Files in Stash': 'ملفات التخزين', 'This stash contains no file changes.': 'لا يحتوي هذا التخزين على تغييرات ملفات.',
+  },
+};
+
+for (const loc of Object.keys(stashManagerTranslations) as Locale[]) {
+  Object.assign(messages[loc], stashManagerTranslations[loc]);
+}
+
+const commitWorkflowTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Apply Commit Template': 'Apply Commit Template', 'Commit Options': 'Commit Options', 'Amend Previous Commit': 'Amend Previous Commit', 'Sign Commit': 'Sign Commit', 'Pre-commit command (optional)': 'Pre-commit command (optional)' },
+  ja: { 'Apply Commit Template': 'コミットテンプレートを適用', 'Commit Options': 'コミットオプション', 'Amend Previous Commit': '直前のコミットを修正', 'Sign Commit': 'コミットに署名', 'Pre-commit command (optional)': 'コミット前コマンド（任意）' },
+  de: { 'Apply Commit Template': 'Commit-Vorlage anwenden', 'Commit Options': 'Commit-Optionen', 'Amend Previous Commit': 'Vorherigen Commit ändern', 'Sign Commit': 'Commit signieren', 'Pre-commit command (optional)': 'Befehl vor Commit (optional)' },
+  es: { 'Apply Commit Template': 'Aplicar plantilla de commit', 'Commit Options': 'Opciones de commit', 'Amend Previous Commit': 'Modificar commit anterior', 'Sign Commit': 'Firmar commit', 'Pre-commit command (optional)': 'Comando previo al commit (opcional)' },
+  'zh-CN': { 'Apply Commit Template': '应用提交模板', 'Commit Options': '提交选项', 'Amend Previous Commit': '修正上一次提交', 'Sign Commit': '签名提交', 'Pre-commit command (optional)': '提交前命令（可选）' },
+  'zh-TW': { 'Apply Commit Template': '套用提交範本', 'Commit Options': '提交選項', 'Amend Previous Commit': '修正上一次提交', 'Sign Commit': '簽署提交', 'Pre-commit command (optional)': '提交前命令（選填）' },
+  fr: { 'Apply Commit Template': 'Appliquer le modèle de commit', 'Commit Options': 'Options du commit', 'Amend Previous Commit': 'Modifier le commit précédent', 'Sign Commit': 'Signer le commit', 'Pre-commit command (optional)': 'Commande avant commit (facultative)' },
+  ar: { 'Apply Commit Template': 'تطبيق قالب الالتزام', 'Commit Options': 'خيارات الالتزام', 'Amend Previous Commit': 'تعديل الالتزام السابق', 'Sign Commit': 'توقيع الالتزام', 'Pre-commit command (optional)': 'أمر قبل الالتزام (اختياري)' },
+};
+
+for (const loc of Object.keys(commitWorkflowTranslations) as Locale[]) {
+  Object.assign(messages[loc], commitWorkflowTranslations[loc]);
+}
+
+const interactiveRebaseTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Rebase Branch': 'Rebase Branch', 'Upstream Branch to Rebase Onto': 'Upstream Branch to Rebase Onto', 'Interactive Rebase': 'Interactive Rebase', 'Reload': 'Reload', 'Action': 'Action', 'Message': 'Message', 'Author': 'Author', 'Order': 'Order', 'No commits to rebase.': 'No commits to rebase.', 'Rebase all unique commits onto the selected upstream branch.': 'Rebase all unique commits onto the selected upstream branch.', 'Start Rebase': 'Start Rebase', 'Failed to rebase': 'Failed to rebase' },
+  ja: { 'Rebase Branch': 'ブランチをリベース', 'Upstream Branch to Rebase Onto': 'リベース先の上流ブランチ', 'Interactive Rebase': '対話的リベース', 'Reload': '再読み込み', 'Action': '操作', 'Message': 'メッセージ', 'Author': '作成者', 'Order': '順序', 'No commits to rebase.': 'リベースするコミットはありません。', 'Rebase all unique commits onto the selected upstream branch.': '固有のコミットを選択した上流ブランチ上にリベースします。', 'Start Rebase': 'リベース開始', 'Failed to rebase': 'リベースに失敗しました' },
+  de: { 'Rebase Branch': 'Branch rebasen', 'Upstream Branch to Rebase Onto': 'Upstream-Branch als Rebase-Ziel', 'Interactive Rebase': 'Interaktiver Rebase', 'Reload': 'Neu laden', 'Action': 'Aktion', 'Message': 'Nachricht', 'Author': 'Autor', 'Order': 'Reihenfolge', 'No commits to rebase.': 'Keine Commits zum Rebasen.', 'Rebase all unique commits onto the selected upstream branch.': 'Alle eindeutigen Commits auf den ausgewählten Upstream-Branch rebasen.', 'Start Rebase': 'Rebase starten', 'Failed to rebase': 'Rebase fehlgeschlagen' },
+  es: { 'Rebase Branch': 'Rebase de rama', 'Upstream Branch to Rebase Onto': 'Rama superior de destino', 'Interactive Rebase': 'Rebase interactivo', 'Reload': 'Recargar', 'Action': 'Acción', 'Message': 'Mensaje', 'Author': 'Autor', 'Order': 'Orden', 'No commits to rebase.': 'No hay commits para reorganizar.', 'Rebase all unique commits onto the selected upstream branch.': 'Reorganiza todos los commits únicos sobre la rama superior seleccionada.', 'Start Rebase': 'Iniciar rebase', 'Failed to rebase': 'Error al hacer rebase' },
+  'zh-CN': { 'Rebase Branch': '变基分支', 'Upstream Branch to Rebase Onto': '变基到上游分支', 'Interactive Rebase': '交互式变基', 'Reload': '重新加载', 'Action': '操作', 'Message': '消息', 'Author': '作者', 'Order': '顺序', 'No commits to rebase.': '没有可变基的提交。', 'Rebase all unique commits onto the selected upstream branch.': '将所有独有提交变基到选中的上游分支。', 'Start Rebase': '开始变基', 'Failed to rebase': '变基失败' },
+  'zh-TW': { 'Rebase Branch': '變基分支', 'Upstream Branch to Rebase Onto': '變基到上游分支', 'Interactive Rebase': '互動式變基', 'Reload': '重新載入', 'Action': '操作', 'Message': '訊息', 'Author': '作者', 'Order': '順序', 'No commits to rebase.': '沒有可變基的提交。', 'Rebase all unique commits onto the selected upstream branch.': '將所有獨有提交變基到選取的上游分支。', 'Start Rebase': '開始變基', 'Failed to rebase': '變基失敗' },
+  fr: { 'Rebase Branch': 'Rebaser la branche', 'Upstream Branch to Rebase Onto': 'Branche amont de destination', 'Interactive Rebase': 'Rebase interactif', 'Reload': 'Recharger', 'Action': 'Action', 'Message': 'Message', 'Author': 'Auteur', 'Order': 'Ordre', 'No commits to rebase.': 'Aucun commit à rebaser.', 'Rebase all unique commits onto the selected upstream branch.': 'Rebasez tous les commits uniques sur la branche amont sélectionnée.', 'Start Rebase': 'Démarrer le rebase', 'Failed to rebase': 'Échec du rebase' },
+  ar: { 'Rebase Branch': 'إعادة تأسيس الفرع', 'Upstream Branch to Rebase Onto': 'الفرع الأعلى لإعادة التأسيس عليه', 'Interactive Rebase': 'إعادة تأسيس تفاعلية', 'Reload': 'إعادة تحميل', 'Action': 'الإجراء', 'Message': 'الرسالة', 'Author': 'المؤلف', 'Order': 'الترتيب', 'No commits to rebase.': 'لا توجد التزامات لإعادة تأسيسها.', 'Rebase all unique commits onto the selected upstream branch.': 'أعد تأسيس كل الالتزامات الفريدة على الفرع الأعلى المحدد.', 'Start Rebase': 'بدء إعادة التأسيس', 'Failed to rebase': 'فشلت إعادة التأسيس' },
+};
+
+for (const loc of Object.keys(interactiveRebaseTranslations) as Locale[]) {
+  Object.assign(messages[loc], interactiveRebaseTranslations[loc]);
+}
+
+const remoteSyncTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Pull Strategy': 'Pull Strategy', 'Force Push with Lease': 'Force Push with Lease', 'Rewrite the remote branch only if it has not changed since the last fetch?': 'Rewrite the remote branch only if it has not changed since the last fetch?', 'Force Push': 'Force Push', 'Incoming and Outgoing Commits': 'Incoming and Outgoing Commits', 'Background Fetch Enabled': 'Background Fetch Enabled', 'Background Fetch Disabled': 'Background Fetch Disabled', 'No upstream configured': 'No upstream configured', 'Incoming': 'Incoming', 'Outgoing': 'Outgoing', 'No incoming commits.': 'No incoming commits.', 'No outgoing commits.': 'No outgoing commits.' },
+  ja: { 'Pull Strategy': 'プル戦略', 'Force Push with Lease': 'lease付き強制プッシュ', 'Rewrite the remote branch only if it has not changed since the last fetch?': '最後のフェッチ以降に変更されていない場合のみリモートブランチを書き換えますか？', 'Force Push': '強制プッシュ', 'Incoming and Outgoing Commits': '受信・送信コミット', 'Background Fetch Enabled': 'バックグラウンドフェッチ有効', 'Background Fetch Disabled': 'バックグラウンドフェッチ無効', 'No upstream configured': '上流が未設定', 'Incoming': '受信', 'Outgoing': '送信', 'No incoming commits.': '受信コミットはありません。', 'No outgoing commits.': '送信コミットはありません。' },
+  de: { 'Pull Strategy': 'Pull-Strategie', 'Force Push with Lease': 'Force-Push mit Lease', 'Rewrite the remote branch only if it has not changed since the last fetch?': 'Remote-Branch nur umschreiben, wenn er seit dem letzten Fetch unverändert ist?', 'Force Push': 'Force-Push', 'Incoming and Outgoing Commits': 'Eingehende und ausgehende Commits', 'Background Fetch Enabled': 'Hintergrund-Fetch aktiviert', 'Background Fetch Disabled': 'Hintergrund-Fetch deaktiviert', 'No upstream configured': 'Kein Upstream konfiguriert', 'Incoming': 'Eingehend', 'Outgoing': 'Ausgehend', 'No incoming commits.': 'Keine eingehenden Commits.', 'No outgoing commits.': 'Keine ausgehenden Commits.' },
+  es: { 'Pull Strategy': 'Estrategia de pull', 'Force Push with Lease': 'Push forzado con lease', 'Rewrite the remote branch only if it has not changed since the last fetch?': '¿Reescribir la rama remota solo si no cambió desde el último fetch?', 'Force Push': 'Push forzado', 'Incoming and Outgoing Commits': 'Commits entrantes y salientes', 'Background Fetch Enabled': 'Fetch en segundo plano activado', 'Background Fetch Disabled': 'Fetch en segundo plano desactivado', 'No upstream configured': 'Sin rama superior configurada', 'Incoming': 'Entrantes', 'Outgoing': 'Salientes', 'No incoming commits.': 'No hay commits entrantes.', 'No outgoing commits.': 'No hay commits salientes.' },
+  'zh-CN': { 'Pull Strategy': '拉取策略', 'Force Push with Lease': '带租约强制推送', 'Rewrite the remote branch only if it has not changed since the last fetch?': '仅当远端分支自上次获取后未变化时才重写？', 'Force Push': '强制推送', 'Incoming and Outgoing Commits': '传入与传出提交', 'Background Fetch Enabled': '后台获取已启用', 'Background Fetch Disabled': '后台获取已禁用', 'No upstream configured': '未配置上游', 'Incoming': '传入', 'Outgoing': '传出', 'No incoming commits.': '没有传入提交。', 'No outgoing commits.': '没有传出提交。' },
+  'zh-TW': { 'Pull Strategy': '拉取策略', 'Force Push with Lease': '帶租約強制推送', 'Rewrite the remote branch only if it has not changed since the last fetch?': '僅當遠端分支自上次擷取後未變更時才重寫？', 'Force Push': '強制推送', 'Incoming and Outgoing Commits': '傳入與傳出提交', 'Background Fetch Enabled': '背景擷取已啟用', 'Background Fetch Disabled': '背景擷取已停用', 'No upstream configured': '未設定上游', 'Incoming': '傳入', 'Outgoing': '傳出', 'No incoming commits.': '沒有傳入提交。', 'No outgoing commits.': '沒有傳出提交。' },
+  fr: { 'Pull Strategy': 'Stratégie de pull', 'Force Push with Lease': 'Push forcé avec lease', 'Rewrite the remote branch only if it has not changed since the last fetch?': 'Réécrire la branche distante seulement si elle n’a pas changé depuis le dernier fetch ?', 'Force Push': 'Push forcé', 'Incoming and Outgoing Commits': 'Commits entrants et sortants', 'Background Fetch Enabled': 'Fetch en arrière-plan activé', 'Background Fetch Disabled': 'Fetch en arrière-plan désactivé', 'No upstream configured': 'Aucun upstream configuré', 'Incoming': 'Entrants', 'Outgoing': 'Sortants', 'No incoming commits.': 'Aucun commit entrant.', 'No outgoing commits.': 'Aucun commit sortant.' },
+  ar: { 'Pull Strategy': 'استراتيجية السحب', 'Force Push with Lease': 'دفع قسري مع حجز', 'Rewrite the remote branch only if it has not changed since the last fetch?': 'هل تريد إعادة كتابة الفرع البعيد فقط إذا لم يتغير منذ آخر جلب؟', 'Force Push': 'دفع قسري', 'Incoming and Outgoing Commits': 'الالتزامات الواردة والصادرة', 'Background Fetch Enabled': 'الجلب في الخلفية مفعّل', 'Background Fetch Disabled': 'الجلب في الخلفية معطّل', 'No upstream configured': 'لم يتم إعداد فرع أعلى', 'Incoming': 'واردة', 'Outgoing': 'صادرة', 'No incoming commits.': 'لا توجد التزامات واردة.', 'No outgoing commits.': 'لا توجد التزامات صادرة.' },
+};
+
+for (const loc of Object.keys(remoteSyncTranslations) as Locale[]) {
+  Object.assign(messages[loc], remoteSyncTranslations[loc]);
+}
+
+const worktreeTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Manage Worktrees': 'Manage Worktrees', 'Worktrees': 'Worktrees', 'Worktree Manager': 'Worktree Manager', 'Add Worktree': 'Add Worktree', 'Prune': 'Prune', 'HEAD': 'HEAD', 'Actions': 'Actions', 'Main Worktree': 'Main Worktree', 'Locked': 'Locked', 'Prunable': 'Prunable', 'Detached HEAD': 'Detached HEAD', 'Unlock': 'Unlock', 'Lock': 'Lock', 'Remove Worktree': 'Remove Worktree', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': 'Remove worktree at {path}? Uncommitted changes will prevent removal.', 'Locked by GITBX': 'Locked by GITBX' },
+  ja: { 'Manage Worktrees': 'ワークツリーを管理', 'Worktrees': 'ワークツリー', 'Worktree Manager': 'ワークツリー管理', 'Add Worktree': 'ワークツリーを追加', 'Prune': '整理', 'HEAD': 'HEAD', 'Actions': '操作', 'Main Worktree': 'メインワークツリー', 'Locked': 'ロック済み', 'Prunable': '整理可能', 'Detached HEAD': '切り離されたHEAD', 'Unlock': 'ロック解除', 'Lock': 'ロック', 'Remove Worktree': 'ワークツリーを削除', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': '{path} のワークツリーを削除しますか？未コミットの変更がある場合は削除されません。', 'Locked by GITBX': 'GITBXによりロック' },
+  de: { 'Manage Worktrees': 'Worktrees verwalten', 'Worktrees': 'Worktrees', 'Worktree Manager': 'Worktree-Verwaltung', 'Add Worktree': 'Worktree hinzufügen', 'Prune': 'Bereinigen', 'HEAD': 'HEAD', 'Actions': 'Aktionen', 'Main Worktree': 'Haupt-Worktree', 'Locked': 'Gesperrt', 'Prunable': 'Bereinigbar', 'Detached HEAD': 'Losgelöster HEAD', 'Unlock': 'Entsperren', 'Lock': 'Sperren', 'Remove Worktree': 'Worktree entfernen', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': 'Worktree unter {path} entfernen? Nicht eingecheckte Änderungen verhindern das Entfernen.', 'Locked by GITBX': 'Von GITBX gesperrt' },
+  es: { 'Manage Worktrees': 'Gestionar árboles de trabajo', 'Worktrees': 'Árboles de trabajo', 'Worktree Manager': 'Gestor de árboles de trabajo', 'Add Worktree': 'Añadir árbol', 'Prune': 'Limpiar', 'HEAD': 'HEAD', 'Actions': 'Acciones', 'Main Worktree': 'Árbol principal', 'Locked': 'Bloqueado', 'Prunable': 'Se puede limpiar', 'Detached HEAD': 'HEAD separado', 'Unlock': 'Desbloquear', 'Lock': 'Bloquear', 'Remove Worktree': 'Eliminar árbol de trabajo', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': '¿Eliminar el árbol en {path}? Los cambios sin confirmar impedirán la eliminación.', 'Locked by GITBX': 'Bloqueado por GITBX' },
+  'zh-CN': { 'Manage Worktrees': '管理工作树', 'Worktrees': '工作树', 'Worktree Manager': '工作树管理器', 'Add Worktree': '添加工作树', 'Prune': '清理失效记录', 'HEAD': 'HEAD', 'Actions': '操作', 'Main Worktree': '主工作树', 'Locked': '已锁定', 'Prunable': '可清理', 'Detached HEAD': '分离 HEAD', 'Unlock': '解锁', 'Lock': '锁定', 'Remove Worktree': '移除工作树', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': '移除位于 {path} 的工作树？存在未提交更改时将阻止移除。', 'Locked by GITBX': '由 GITBX 锁定' },
+  'zh-TW': { 'Manage Worktrees': '管理工作樹', 'Worktrees': '工作樹', 'Worktree Manager': '工作樹管理器', 'Add Worktree': '新增工作樹', 'Prune': '清理失效記錄', 'HEAD': 'HEAD', 'Actions': '操作', 'Main Worktree': '主工作樹', 'Locked': '已鎖定', 'Prunable': '可清理', 'Detached HEAD': '分離 HEAD', 'Unlock': '解鎖', 'Lock': '鎖定', 'Remove Worktree': '移除工作樹', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': '移除位於 {path} 的工作樹？存在未提交變更時將阻止移除。', 'Locked by GITBX': '由 GITBX 鎖定' },
+  fr: { 'Manage Worktrees': 'Gérer les worktrees', 'Worktrees': 'Worktrees', 'Worktree Manager': 'Gestionnaire de worktrees', 'Add Worktree': 'Ajouter un worktree', 'Prune': 'Nettoyer', 'HEAD': 'HEAD', 'Actions': 'Actions', 'Main Worktree': 'Worktree principal', 'Locked': 'Verrouillé', 'Prunable': 'Nettoyable', 'Detached HEAD': 'HEAD détaché', 'Unlock': 'Déverrouiller', 'Lock': 'Verrouiller', 'Remove Worktree': 'Supprimer le worktree', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': 'Supprimer le worktree situé à {path} ? Les modifications non validées empêcheront la suppression.', 'Locked by GITBX': 'Verrouillé par GITBX' },
+  ar: { 'Manage Worktrees': 'إدارة أشجار العمل', 'Worktrees': 'أشجار العمل', 'Worktree Manager': 'مدير أشجار العمل', 'Add Worktree': 'إضافة شجرة عمل', 'Prune': 'تنظيف', 'HEAD': 'HEAD', 'Actions': 'الإجراءات', 'Main Worktree': 'شجرة العمل الرئيسية', 'Locked': 'مقفل', 'Prunable': 'قابل للتنظيف', 'Detached HEAD': 'HEAD منفصل', 'Unlock': 'إلغاء القفل', 'Lock': 'قفل', 'Remove Worktree': 'إزالة شجرة العمل', 'Remove worktree at {path}? Uncommitted changes will prevent removal.': 'هل تريد إزالة شجرة العمل في {path}؟ ستمنع التغييرات غير الملتزم بها الإزالة.', 'Locked by GITBX': 'مقفل بواسطة GITBX' },
+};
+
+for (const loc of Object.keys(worktreeTranslations) as Locale[]) {
+  Object.assign(messages[loc], worktreeTranslations[loc]);
+}
+
+const ideaParityTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Discover Nested Git Roots': 'Discover Nested Git Roots', 'Git Roots Discovered': 'Git Roots Discovered', 'Found {count} Git roots.': 'Found {count} Git roots.', 'Discovery Failed': 'Discovery Failed', 'Manage Changelists': 'Manage Changelists', 'Changelists': 'Changelists', 'New Changelist': 'New Changelist', 'Changed File': 'Changed File', 'Changelist': 'Changelist', 'Default': 'Default', 'No local changes.': 'No local changes.', 'Create Pull or Merge Request': 'Create Pull or Merge Request', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'Open the remote provider with the source and target branches preselected.', 'Target Branch': 'Target Branch', 'Source Branch': 'Source Branch', 'Open PR/MR': 'Open PR/MR', 'Unable to Create PR/MR': 'Unable to Create PR/MR', 'Local History': 'Local History', 'Manual snapshot': 'Manual snapshot', 'Create Snapshot': 'Create Snapshot', 'Restore': 'Restore', 'Restore Local History': 'Restore Local History', 'Restore this snapshot? The current file will be saved as a new snapshot first.': 'Restore this snapshot? The current file will be saved as a new snapshot first.', 'Snapshot Restored': 'Snapshot Restored', 'No local history snapshots.': 'No local history snapshots.' },
+  ja: { 'Discover Nested Git Roots': 'ネストされたGitルートを検出', 'Git Roots Discovered': 'Gitルートを検出しました', 'Found {count} Git roots.': '{count}個のGitルートが見つかりました。', 'Discovery Failed': '検出に失敗しました', 'Manage Changelists': '変更リストを管理', 'Changelists': '変更リスト', 'New Changelist': '新しい変更リスト', 'Changed File': '変更ファイル', 'Changelist': '変更リスト', 'Default': 'デフォルト', 'No local changes.': 'ローカル変更はありません。', 'Create Pull or Merge Request': 'プル/マージリクエストを作成', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'ソースとターゲットブランチを選択した状態でリモートプロバイダーを開きます。', 'Target Branch': 'ターゲットブランチ', 'Source Branch': 'ソースブランチ', 'Open PR/MR': 'PR/MRを開く', 'Unable to Create PR/MR': 'PR/MRを作成できません', 'Local History': 'ローカル履歴', 'Manual snapshot': '手動スナップショット', 'Create Snapshot': 'スナップショットを作成', 'Restore': '復元', 'Restore Local History': 'ローカル履歴を復元', 'Restore this snapshot? The current file will be saved as a new snapshot first.': 'このスナップショットを復元しますか？現在のファイルは先に新しいスナップショットとして保存されます。', 'Snapshot Restored': 'スナップショットを復元しました', 'No local history snapshots.': 'ローカル履歴スナップショットはありません。' },
+  de: { 'Discover Nested Git Roots': 'Verschachtelte Git-Wurzeln finden', 'Git Roots Discovered': 'Git-Wurzeln gefunden', 'Found {count} Git roots.': '{count} Git-Wurzeln gefunden.', 'Discovery Failed': 'Erkennung fehlgeschlagen', 'Manage Changelists': 'Änderungslisten verwalten', 'Changelists': 'Änderungslisten', 'New Changelist': 'Neue Änderungsliste', 'Changed File': 'Geänderte Datei', 'Changelist': 'Änderungsliste', 'Default': 'Standard', 'No local changes.': 'Keine lokalen Änderungen.', 'Create Pull or Merge Request': 'Pull-/Merge-Request erstellen', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'Remote-Anbieter mit vorausgewählten Quell- und Zielbranches öffnen.', 'Target Branch': 'Zielbranch', 'Source Branch': 'Quellbranch', 'Open PR/MR': 'PR/MR öffnen', 'Unable to Create PR/MR': 'PR/MR kann nicht erstellt werden', 'Local History': 'Lokaler Verlauf', 'Manual snapshot': 'Manueller Snapshot', 'Create Snapshot': 'Snapshot erstellen', 'Restore': 'Wiederherstellen', 'Restore Local History': 'Lokalen Verlauf wiederherstellen', 'Restore this snapshot? The current file will be saved as a new snapshot first.': 'Diesen Snapshot wiederherstellen? Die aktuelle Datei wird zuvor als neuer Snapshot gespeichert.', 'Snapshot Restored': 'Snapshot wiederhergestellt', 'No local history snapshots.': 'Keine lokalen Verlaufs-Snapshots.' },
+  es: { 'Discover Nested Git Roots': 'Descubrir raíces Git anidadas', 'Git Roots Discovered': 'Raíces Git descubiertas', 'Found {count} Git roots.': 'Se encontraron {count} raíces Git.', 'Discovery Failed': 'Error de descubrimiento', 'Manage Changelists': 'Gestionar listas de cambios', 'Changelists': 'Listas de cambios', 'New Changelist': 'Nueva lista de cambios', 'Changed File': 'Archivo modificado', 'Changelist': 'Lista de cambios', 'Default': 'Predeterminada', 'No local changes.': 'No hay cambios locales.', 'Create Pull or Merge Request': 'Crear solicitud pull o merge', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'Abre el proveedor remoto con las ramas de origen y destino preseleccionadas.', 'Target Branch': 'Rama de destino', 'Source Branch': 'Rama de origen', 'Open PR/MR': 'Abrir PR/MR', 'Unable to Create PR/MR': 'No se pudo crear PR/MR', 'Local History': 'Historial local', 'Manual snapshot': 'Instantánea manual', 'Create Snapshot': 'Crear instantánea', 'Restore': 'Restaurar', 'Restore Local History': 'Restaurar historial local', 'Restore this snapshot? The current file will be saved as a new snapshot first.': '¿Restaurar esta instantánea? El archivo actual se guardará primero como una nueva instantánea.', 'Snapshot Restored': 'Instantánea restaurada', 'No local history snapshots.': 'No hay instantáneas del historial local.' },
+  'zh-CN': { 'Discover Nested Git Roots': '发现嵌套 Git 根目录', 'Git Roots Discovered': '已发现 Git 根目录', 'Found {count} Git roots.': '发现 {count} 个 Git 根目录。', 'Discovery Failed': '发现失败', 'Manage Changelists': '管理变更列表', 'Changelists': '变更列表', 'New Changelist': '新建变更列表', 'Changed File': '变更文件', 'Changelist': '变更列表', 'Default': '默认', 'No local changes.': '没有本地变更。', 'Create Pull or Merge Request': '创建拉取或合并请求', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': '打开远端服务商页面，并预先选择源分支和目标分支。', 'Target Branch': '目标分支', 'Source Branch': '源分支', 'Open PR/MR': '打开 PR/MR', 'Unable to Create PR/MR': '无法创建 PR/MR', 'Local History': '本地历史', 'Manual snapshot': '手动快照', 'Create Snapshot': '创建快照', 'Restore': '恢复', 'Restore Local History': '恢复本地历史', 'Restore this snapshot? The current file will be saved as a new snapshot first.': '恢复此快照？当前文件会先保存为一个新快照。', 'Snapshot Restored': '快照已恢复', 'No local history snapshots.': '没有本地历史快照。' },
+  'zh-TW': { 'Discover Nested Git Roots': '探索巢狀 Git 根目錄', 'Git Roots Discovered': '已探索 Git 根目錄', 'Found {count} Git roots.': '探索到 {count} 個 Git 根目錄。', 'Discovery Failed': '探索失敗', 'Manage Changelists': '管理變更清單', 'Changelists': '變更清單', 'New Changelist': '新增變更清單', 'Changed File': '變更檔案', 'Changelist': '變更清單', 'Default': '預設', 'No local changes.': '沒有本機變更。', 'Create Pull or Merge Request': '建立拉取或合併請求', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': '開啟遠端服務商頁面，並預先選取來源與目標分支。', 'Target Branch': '目標分支', 'Source Branch': '來源分支', 'Open PR/MR': '開啟 PR/MR', 'Unable to Create PR/MR': '無法建立 PR/MR', 'Local History': '本機歷史', 'Manual snapshot': '手動快照', 'Create Snapshot': '建立快照', 'Restore': '還原', 'Restore Local History': '還原本機歷史', 'Restore this snapshot? The current file will be saved as a new snapshot first.': '還原此快照？目前檔案會先儲存為新快照。', 'Snapshot Restored': '快照已還原', 'No local history snapshots.': '沒有本機歷史快照。' },
+  fr: { 'Discover Nested Git Roots': 'Découvrir les racines Git imbriquées', 'Git Roots Discovered': 'Racines Git découvertes', 'Found {count} Git roots.': '{count} racines Git trouvées.', 'Discovery Failed': 'Échec de la découverte', 'Manage Changelists': 'Gérer les listes de modifications', 'Changelists': 'Listes de modifications', 'New Changelist': 'Nouvelle liste', 'Changed File': 'Fichier modifié', 'Changelist': 'Liste de modifications', 'Default': 'Par défaut', 'No local changes.': 'Aucune modification locale.', 'Create Pull or Merge Request': 'Créer une pull/merge request', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'Ouvrez le fournisseur distant avec les branches source et cible présélectionnées.', 'Target Branch': 'Branche cible', 'Source Branch': 'Branche source', 'Open PR/MR': 'Ouvrir PR/MR', 'Unable to Create PR/MR': 'Impossible de créer la PR/MR', 'Local History': 'Historique local', 'Manual snapshot': 'Instantané manuel', 'Create Snapshot': 'Créer un instantané', 'Restore': 'Restaurer', 'Restore Local History': 'Restaurer l’historique local', 'Restore this snapshot? The current file will be saved as a new snapshot first.': 'Restaurer cet instantané ? Le fichier actuel sera d’abord enregistré dans un nouvel instantané.', 'Snapshot Restored': 'Instantané restauré', 'No local history snapshots.': 'Aucun instantané d’historique local.' },
+  ar: { 'Discover Nested Git Roots': 'اكتشاف جذور Git المتداخلة', 'Git Roots Discovered': 'تم اكتشاف جذور Git', 'Found {count} Git roots.': 'تم العثور على {count} من جذور Git.', 'Discovery Failed': 'فشل الاكتشاف', 'Manage Changelists': 'إدارة قوائم التغييرات', 'Changelists': 'قوائم التغييرات', 'New Changelist': 'قائمة تغييرات جديدة', 'Changed File': 'ملف متغير', 'Changelist': 'قائمة التغييرات', 'Default': 'افتراضي', 'No local changes.': 'لا توجد تغييرات محلية.', 'Create Pull or Merge Request': 'إنشاء طلب سحب أو دمج', 'PR/MR': 'PR/MR', 'Open the remote provider with the source and target branches preselected.': 'افتح موفر المستودع مع تحديد فرعي المصدر والهدف مسبقًا.', 'Target Branch': 'الفرع الهدف', 'Source Branch': 'الفرع المصدر', 'Open PR/MR': 'فتح PR/MR', 'Unable to Create PR/MR': 'تعذر إنشاء PR/MR', 'Local History': 'السجل المحلي', 'Manual snapshot': 'لقطة يدوية', 'Create Snapshot': 'إنشاء لقطة', 'Restore': 'استعادة', 'Restore Local History': 'استعادة السجل المحلي', 'Restore this snapshot? The current file will be saved as a new snapshot first.': 'هل تريد استعادة هذه اللقطة؟ سيُحفظ الملف الحالي كلقطة جديدة أولًا.', 'Snapshot Restored': 'تمت استعادة اللقطة', 'No local history snapshots.': 'لا توجد لقطات للسجل المحلي.' },
+};
+
+for (const loc of Object.keys(ideaParityTranslations) as Locale[]) {
+  Object.assign(messages[loc], ideaParityTranslations[loc]);
+}
+
+const auditedUiTranslations: Record<Locale, MessageCatalog> = {
+  en: {
+    'GITBX AI Assistant': 'GITBX AI Assistant', 'Security Warning: Secrets Detected!': 'Security Warning: Secrets Detected!', 'Generated Conventional Commit': 'Generated Conventional Commit', 'Regenerate': 'Regenerate', 'Summary': 'Summary', 'Body (Optional)': 'Body (Optional)', 'Rebasing...': 'Rebasing...', 'Rename': 'Rename', 'Status': 'Status', 'Remove': 'Remove', 'Path': 'Path', 'Open in File Manager': 'Open in File Manager', 'Failed to Open File Explorer': 'Failed to Open File Explorer', 'Could not open the file manager for the current repository.': 'Could not open the file manager for the current repository.', 'Open File Explorer': 'Open File Explorer', 'Git Fetch': 'Git Fetch', 'Fetching references from all remotes...': 'Fetching references from all remotes...', 'Fetch Completed': 'Fetch Completed', 'Remote branches and tags are up to date.': 'Remote branches and tags are up to date.', 'Fetch Failed': 'Fetch Failed', 'Remote fetch error': 'Remote fetch error', 'Git Pull': 'Git Pull', "Pulling latest changes for '{branch}'...": "Pulling latest changes for '{branch}'...", 'Pull Completed': 'Pull Completed', 'Working branch updated with upstream commits.': 'Working branch updated with upstream commits.', 'Pull Failed': 'Pull Failed', 'Failed to pull from remote': 'Failed to pull from remote', 'Git Push': 'Git Push', "Pushing commits on '{branch}' to remote...": "Pushing commits on '{branch}' to remote...", 'Push Failed': 'Push Failed', 'Failed to push to remote': 'Failed to push to remote', 'Discard All Changes': 'Discard All Changes', 'Discard all uncommitted working tree changes? This cannot be undone.': 'Discard all uncommitted working tree changes? This cannot be undone.', 'Changes Discarded': 'Changes Discarded', 'Clean working tree restored.': 'Clean working tree restored.', 'File Explorer Opened': 'File Explorer Opened', 'Opened file manager in {path}': 'Opened file manager in {path}', 'Pushing commits to remote...': 'Pushing commits to remote...', 'Show more ({count} remaining)': 'Show more ({count} remaining)', 'No differences': 'No differences',
+  },
+  ja: {
+    'GITBX AI Assistant': 'GITBX AIアシスタント', 'Security Warning: Secrets Detected!': 'セキュリティ警告：機密情報を検出しました！', 'Generated Conventional Commit': '生成されたConventional Commit', 'Regenerate': '再生成', 'Summary': '概要', 'Body (Optional)': '本文（任意）', 'Rebasing...': 'リベース中...', 'Rename': '名前を変更', 'Status': '状態', 'Remove': '削除', 'Path': 'パス', 'Open in File Manager': 'ファイルマネージャーで開く', 'Failed to Open File Explorer': 'ファイルエクスプローラーを開けませんでした', 'Could not open the file manager for the current repository.': '現在のリポジトリのファイルマネージャーを開けませんでした。', 'Open File Explorer': 'ファイルエクスプローラーを開く', 'Git Fetch': 'Gitフェッチ', 'Fetching references from all remotes...': 'すべてのリモートから参照を取得中...', 'Fetch Completed': 'フェッチ完了', 'Remote branches and tags are up to date.': 'リモートブランチとタグは最新です。', 'Fetch Failed': 'フェッチ失敗', 'Remote fetch error': 'リモートフェッチエラー', 'Git Pull': 'Gitプル', "Pulling latest changes for '{branch}'...": "'{branch}' の最新変更をプル中...", 'Pull Completed': 'プル完了', 'Working branch updated with upstream commits.': '作業ブランチを上流コミットで更新しました。', 'Pull Failed': 'プル失敗', 'Failed to pull from remote': 'リモートからのプルに失敗しました', 'Git Push': 'Gitプッシュ', "Pushing commits on '{branch}' to remote...": "'{branch}' のコミットをリモートへプッシュ中...", 'Push Failed': 'プッシュ失敗', 'Failed to push to remote': 'リモートへのプッシュに失敗しました', 'Discard All Changes': 'すべての変更を破棄', 'Discard all uncommitted working tree changes? This cannot be undone.': '未コミットの作業ツリー変更をすべて破棄しますか？元に戻せません。', 'Changes Discarded': '変更を破棄しました', 'Clean working tree restored.': 'クリーンな作業ツリーを復元しました。', 'File Explorer Opened': 'ファイルエクスプローラーを開きました', 'Opened file manager in {path}': '{path} をファイルマネージャーで開きました', 'Pushing commits to remote...': 'コミットをリモートへプッシュ中...', 'Show more ({count} remaining)': 'さらに表示（残り{count}件）', 'No differences': '差分はありません',
+  },
+  de: {
+    'GITBX AI Assistant': 'GITBX KI-Assistent', 'Security Warning: Secrets Detected!': 'Sicherheitswarnung: Geheimnisse erkannt!', 'Generated Conventional Commit': 'Generierter Conventional Commit', 'Regenerate': 'Neu erzeugen', 'Summary': 'Zusammenfassung', 'Body (Optional)': 'Text (optional)', 'Rebasing...': 'Rebase läuft...', 'Rename': 'Umbenennen', 'Status': 'Status', 'Remove': 'Entfernen', 'Path': 'Pfad', 'Open in File Manager': 'Im Dateimanager öffnen', 'Failed to Open File Explorer': 'Dateiexplorer konnte nicht geöffnet werden', 'Could not open the file manager for the current repository.': 'Der Dateimanager für das aktuelle Repository konnte nicht geöffnet werden.', 'Open File Explorer': 'Dateiexplorer öffnen', 'Git Fetch': 'Git Fetch', 'Fetching references from all remotes...': 'Referenzen von allen Remotes werden abgerufen...', 'Fetch Completed': 'Fetch abgeschlossen', 'Remote branches and tags are up to date.': 'Remote-Branches und Tags sind aktuell.', 'Fetch Failed': 'Fetch fehlgeschlagen', 'Remote fetch error': 'Remote-Fetch-Fehler', 'Git Pull': 'Git Pull', "Pulling latest changes for '{branch}'...": "Neueste Änderungen für '{branch}' werden gepullt...", 'Pull Completed': 'Pull abgeschlossen', 'Working branch updated with upstream commits.': 'Arbeitsbranch mit Upstream-Commits aktualisiert.', 'Pull Failed': 'Pull fehlgeschlagen', 'Failed to pull from remote': 'Pull vom Remote fehlgeschlagen', 'Git Push': 'Git Push', "Pushing commits on '{branch}' to remote...": "Commits von '{branch}' werden zum Remote gepusht...", 'Push Failed': 'Push fehlgeschlagen', 'Failed to push to remote': 'Push zum Remote fehlgeschlagen', 'Discard All Changes': 'Alle Änderungen verwerfen', 'Discard all uncommitted working tree changes? This cannot be undone.': 'Alle nicht eingecheckten Änderungen verwerfen? Dies kann nicht rückgängig gemacht werden.', 'Changes Discarded': 'Änderungen verworfen', 'Clean working tree restored.': 'Sauberer Arbeitsbaum wiederhergestellt.', 'File Explorer Opened': 'Dateiexplorer geöffnet', 'Opened file manager in {path}': 'Dateimanager in {path} geöffnet', 'Pushing commits to remote...': 'Commits werden zum Remote gepusht...', 'Show more ({count} remaining)': 'Mehr anzeigen ({count} verbleibend)', 'No differences': 'Keine Unterschiede',
+  },
+  es: {
+    'GITBX AI Assistant': 'Asistente de IA de GITBX', 'Security Warning: Secrets Detected!': '¡Advertencia de seguridad: se detectaron secretos!', 'Generated Conventional Commit': 'Commit convencional generado', 'Regenerate': 'Regenerar', 'Summary': 'Resumen', 'Body (Optional)': 'Cuerpo (opcional)', 'Rebasing...': 'Aplicando rebase...', 'Rename': 'Renombrar', 'Status': 'Estado', 'Remove': 'Eliminar', 'Path': 'Ruta', 'Open in File Manager': 'Abrir en el gestor de archivos', 'Failed to Open File Explorer': 'No se pudo abrir el explorador de archivos', 'Could not open the file manager for the current repository.': 'No se pudo abrir el gestor de archivos del repositorio actual.', 'Open File Explorer': 'Abrir explorador de archivos', 'Git Fetch': 'Git Fetch', 'Fetching references from all remotes...': 'Obteniendo referencias de todos los remotos...', 'Fetch Completed': 'Fetch completado', 'Remote branches and tags are up to date.': 'Las ramas y etiquetas remotas están actualizadas.', 'Fetch Failed': 'Error de fetch', 'Remote fetch error': 'Error de fetch remoto', 'Git Pull': 'Git Pull', "Pulling latest changes for '{branch}'...": "Extrayendo los últimos cambios de '{branch}'...", 'Pull Completed': 'Pull completado', 'Working branch updated with upstream commits.': 'Rama de trabajo actualizada con commits superiores.', 'Pull Failed': 'Error de pull', 'Failed to pull from remote': 'No se pudo extraer del remoto', 'Git Push': 'Git Push', "Pushing commits on '{branch}' to remote...": "Enviando commits de '{branch}' al remoto...", 'Push Failed': 'Error de push', 'Failed to push to remote': 'No se pudo enviar al remoto', 'Discard All Changes': 'Descartar todos los cambios', 'Discard all uncommitted working tree changes? This cannot be undone.': '¿Descartar todos los cambios no confirmados? No se puede deshacer.', 'Changes Discarded': 'Cambios descartados', 'Clean working tree restored.': 'Se restauró un árbol de trabajo limpio.', 'File Explorer Opened': 'Explorador de archivos abierto', 'Opened file manager in {path}': 'Gestor de archivos abierto en {path}', 'Pushing commits to remote...': 'Enviando commits al remoto...', 'Show more ({count} remaining)': 'Mostrar más ({count} restantes)', 'No differences': 'Sin diferencias',
+  },
+  'zh-CN': {
+    'GITBX AI Assistant': 'GITBX AI 助手', 'Security Warning: Secrets Detected!': '安全警告：检测到敏感信息！', 'Generated Conventional Commit': '生成的规范提交', 'Regenerate': '重新生成', 'Summary': '摘要', 'Body (Optional)': '正文（可选）', 'Rebasing...': '正在变基...', 'Rename': '重命名', 'Status': '状态', 'Remove': '移除', 'Path': '路径', 'Open in File Manager': '在文件管理器中打开', 'Failed to Open File Explorer': '无法打开文件资源管理器', 'Could not open the file manager for the current repository.': '无法打开当前仓库的文件管理器。', 'Open File Explorer': '打开文件资源管理器', 'Git Fetch': 'Git 获取', 'Fetching references from all remotes...': '正在从所有远端获取引用...', 'Fetch Completed': '获取完成', 'Remote branches and tags are up to date.': '远端分支和标签已是最新。', 'Fetch Failed': '获取失败', 'Remote fetch error': '远端获取错误', 'Git Pull': 'Git 拉取', "Pulling latest changes for '{branch}'...": "正在拉取 '{branch}' 的最新更改...", 'Pull Completed': '拉取完成', 'Working branch updated with upstream commits.': '工作分支已使用上游提交更新。', 'Pull Failed': '拉取失败', 'Failed to pull from remote': '从远端拉取失败', 'Git Push': 'Git 推送', "Pushing commits on '{branch}' to remote...": "正在将 '{branch}' 的提交推送到远端...", 'Push Failed': '推送失败', 'Failed to push to remote': '推送到远端失败', 'Discard All Changes': '丢弃所有更改', 'Discard all uncommitted working tree changes? This cannot be undone.': '丢弃工作树中所有未提交的更改？此操作无法撤销。', 'Changes Discarded': '更改已丢弃', 'Clean working tree restored.': '已恢复干净的工作树。', 'File Explorer Opened': '文件资源管理器已打开', 'Opened file manager in {path}': '已在 {path} 打开文件管理器', 'Pushing commits to remote...': '正在向远端推送提交...', 'Show more ({count} remaining)': '显示更多（剩余 {count} 个）', 'No differences': '没有差异',
+  },
+  'zh-TW': {
+    'GITBX AI Assistant': 'GITBX AI 助手', 'Security Warning: Secrets Detected!': '安全警告：偵測到敏感資訊！', 'Generated Conventional Commit': '產生的規範提交', 'Regenerate': '重新產生', 'Summary': '摘要', 'Body (Optional)': '正文（選填）', 'Rebasing...': '正在變基...', 'Rename': '重新命名', 'Status': '狀態', 'Remove': '移除', 'Path': '路徑', 'Open in File Manager': '在檔案管理器中開啟', 'Failed to Open File Explorer': '無法開啟檔案總管', 'Could not open the file manager for the current repository.': '無法開啟目前儲存庫的檔案管理器。', 'Open File Explorer': '開啟檔案總管', 'Git Fetch': 'Git 擷取', 'Fetching references from all remotes...': '正在從所有遠端擷取參照...', 'Fetch Completed': '擷取完成', 'Remote branches and tags are up to date.': '遠端分支與標籤已是最新。', 'Fetch Failed': '擷取失敗', 'Remote fetch error': '遠端擷取錯誤', 'Git Pull': 'Git 拉取', "Pulling latest changes for '{branch}'...": "正在拉取 '{branch}' 的最新變更...", 'Pull Completed': '拉取完成', 'Working branch updated with upstream commits.': '工作分支已使用上游提交更新。', 'Pull Failed': '拉取失敗', 'Failed to pull from remote': '從遠端拉取失敗', 'Git Push': 'Git 推送', "Pushing commits on '{branch}' to remote...": "正在將 '{branch}' 的提交推送到遠端...", 'Push Failed': '推送失敗', 'Failed to push to remote': '推送到遠端失敗', 'Discard All Changes': '捨棄所有變更', 'Discard all uncommitted working tree changes? This cannot be undone.': '捨棄工作樹中所有未提交的變更？此操作無法復原。', 'Changes Discarded': '變更已捨棄', 'Clean working tree restored.': '已還原乾淨的工作樹。', 'File Explorer Opened': '檔案總管已開啟', 'Opened file manager in {path}': '已在 {path} 開啟檔案管理器', 'Pushing commits to remote...': '正在向遠端推送提交...', 'Show more ({count} remaining)': '顯示更多（剩餘 {count} 個）', 'No differences': '沒有差異',
+  },
+  fr: {
+    'GITBX AI Assistant': 'Assistant IA GITBX', 'Security Warning: Secrets Detected!': 'Avertissement de sécurité : secrets détectés !', 'Generated Conventional Commit': 'Commit conventionnel généré', 'Regenerate': 'Régénérer', 'Summary': 'Résumé', 'Body (Optional)': 'Corps (facultatif)', 'Rebasing...': 'Rebase en cours...', 'Rename': 'Renommer', 'Status': 'État', 'Remove': 'Supprimer', 'Path': 'Chemin', 'Open in File Manager': 'Ouvrir dans le gestionnaire de fichiers', 'Failed to Open File Explorer': 'Échec de l’ouverture de l’explorateur de fichiers', 'Could not open the file manager for the current repository.': 'Impossible d’ouvrir le gestionnaire de fichiers du dépôt actuel.', 'Open File Explorer': 'Ouvrir l’explorateur de fichiers', 'Git Fetch': 'Git Fetch', 'Fetching references from all remotes...': 'Récupération des références de tous les dépôts distants...', 'Fetch Completed': 'Fetch terminé', 'Remote branches and tags are up to date.': 'Les branches et tags distants sont à jour.', 'Fetch Failed': 'Échec du fetch', 'Remote fetch error': 'Erreur de fetch distant', 'Git Pull': 'Git Pull', "Pulling latest changes for '{branch}'...": "Récupération des dernières modifications de '{branch}'...", 'Pull Completed': 'Pull terminé', 'Working branch updated with upstream commits.': 'Branche de travail mise à jour avec les commits amont.', 'Pull Failed': 'Échec du pull', 'Failed to pull from remote': 'Échec du pull depuis le dépôt distant', 'Git Push': 'Git Push', "Pushing commits on '{branch}' to remote...": "Envoi des commits de '{branch}' vers le dépôt distant...", 'Push Failed': 'Échec du push', 'Failed to push to remote': 'Échec du push vers le dépôt distant', 'Discard All Changes': 'Abandonner toutes les modifications', 'Discard all uncommitted working tree changes? This cannot be undone.': 'Abandonner toutes les modifications non validées ? Cette action est irréversible.', 'Changes Discarded': 'Modifications abandonnées', 'Clean working tree restored.': 'Arbre de travail propre restauré.', 'File Explorer Opened': 'Explorateur de fichiers ouvert', 'Opened file manager in {path}': 'Gestionnaire de fichiers ouvert dans {path}', 'Pushing commits to remote...': 'Envoi des commits vers le dépôt distant...', 'Show more ({count} remaining)': 'Afficher plus ({count} restants)', 'No differences': 'Aucune différence',
+  },
+  ar: {
+    'GITBX AI Assistant': 'مساعد GITBX الذكي', 'Security Warning: Secrets Detected!': 'تحذير أمني: تم اكتشاف أسرار!', 'Generated Conventional Commit': 'التزام تقليدي مولّد', 'Regenerate': 'إعادة التوليد', 'Summary': 'الملخص', 'Body (Optional)': 'النص (اختياري)', 'Rebasing...': 'جارٍ إعادة التأسيس...', 'Rename': 'إعادة تسمية', 'Status': 'الحالة', 'Remove': 'إزالة', 'Path': 'المسار', 'Open in File Manager': 'فتح في مدير الملفات', 'Failed to Open File Explorer': 'فشل فتح مستكشف الملفات', 'Could not open the file manager for the current repository.': 'تعذر فتح مدير الملفات للمستودع الحالي.', 'Open File Explorer': 'فتح مستكشف الملفات', 'Git Fetch': 'جلب Git', 'Fetching references from all remotes...': 'جارٍ جلب المراجع من جميع المستودعات البعيدة...', 'Fetch Completed': 'اكتمل الجلب', 'Remote branches and tags are up to date.': 'الفروع والوسوم البعيدة محدّثة.', 'Fetch Failed': 'فشل الجلب', 'Remote fetch error': 'خطأ في الجلب البعيد', 'Git Pull': 'سحب Git', "Pulling latest changes for '{branch}'...": "جارٍ سحب أحدث تغييرات '{branch}'...", 'Pull Completed': 'اكتمل السحب', 'Working branch updated with upstream commits.': 'تم تحديث فرع العمل بالتزامات الفرع الأعلى.', 'Pull Failed': 'فشل السحب', 'Failed to pull from remote': 'فشل السحب من المستودع البعيد', 'Git Push': 'دفع Git', "Pushing commits on '{branch}' to remote...": "جارٍ دفع التزامات '{branch}' إلى المستودع البعيد...", 'Push Failed': 'فشل الدفع', 'Failed to push to remote': 'فشل الدفع إلى المستودع البعيد', 'Discard All Changes': 'تجاهل كل التغييرات', 'Discard all uncommitted working tree changes? This cannot be undone.': 'هل تريد تجاهل كل تغييرات شجرة العمل غير الملتزم بها؟ لا يمكن التراجع.', 'Changes Discarded': 'تم تجاهل التغييرات', 'Clean working tree restored.': 'تمت استعادة شجرة عمل نظيفة.', 'File Explorer Opened': 'تم فتح مستكشف الملفات', 'Opened file manager in {path}': 'تم فتح مدير الملفات في {path}', 'Pushing commits to remote...': 'جارٍ دفع الالتزامات إلى المستودع البعيد...', 'Show more ({count} remaining)': 'إظهار المزيد ({count} متبقية)', 'No differences': 'لا توجد اختلافات',
+  },
+};
+
+for (const loc of Object.keys(auditedUiTranslations) as Locale[]) {
+  Object.assign(messages[loc], auditedUiTranslations[loc]);
 }

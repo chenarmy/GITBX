@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
@@ -17,18 +17,44 @@ import {
   AlertTriangle,
   Play,
   XCircle,
+  Timer,
+  FolderGit2,
+  ListTodo,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
+import { useChangelistStore } from '@/stores/changelist';
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
 const diffStore = useDiffStore();
 const { t } = useI18n();
+const changelistStore = useChangelistStore();
 
 const isFetching = ref(false);
 const isPulling = ref(false);
 const isPushing = ref(false);
+const pullStrategy = ref<'merge' | 'rebase' | 'ff-only'>((localStorage.getItem('gitbx_pull_strategy') as any) || 'merge');
+const forceWithLease = ref(false);
+const autoFetchEnabled = ref(localStorage.getItem('gitbx_auto_fetch') === 'true');
+let autoFetchTimer: number | undefined;
+
+function scheduleAutoFetch() {
+  if (autoFetchTimer) window.clearInterval(autoFetchTimer);
+  autoFetchTimer = undefined;
+  if (autoFetchEnabled.value) {
+    autoFetchTimer = window.setInterval(() => { if (!isFetching.value && repoStore.activeRepoPath) void repoStore.fetchRemote(); }, 5 * 60 * 1000);
+  }
+}
+
+function toggleAutoFetch() {
+  autoFetchEnabled.value = !autoFetchEnabled.value;
+  localStorage.setItem('gitbx_auto_fetch', String(autoFetchEnabled.value));
+  scheduleAutoFetch();
+}
+
+onMounted(() => { scheduleAutoFetch(); if (repoStore.activeRepoPath) void repoStore.refreshSyncStatus().catch(() => undefined); });
+onUnmounted(() => { if (autoFetchTimer) window.clearInterval(autoFetchTimer); });
 
 async function handleFetch() {
   isFetching.value = true;
@@ -47,7 +73,8 @@ async function handlePull() {
   isPulling.value = true;
   notification.info(t('Git Pull'), t("Pulling latest changes for '{branch}'...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
-    await repoStore.pullRemote();
+    localStorage.setItem('gitbx_pull_strategy', pullStrategy.value);
+    await repoStore.pullRemote(pullStrategy.value);
     notification.success(t('Pull Completed'), t('Working branch updated with upstream commits.'));
   } catch (err: any) {
     const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
@@ -66,7 +93,11 @@ async function handlePush() {
   isPushing.value = true;
   notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
-    await repoStore.pushRemote();
+    if (forceWithLease.value) {
+      const approved = await confirmation.confirm({ title: t('Force Push with Lease'), message: t('Rewrite the remote branch only if it has not changed since the last fetch?'), danger: true, confirmText: t('Force Push') });
+      if (!approved) return;
+    }
+    await repoStore.pushRemote(forceWithLease.value);
     notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
     notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
@@ -259,7 +290,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
 
     <!-- Main Toolbar Row -->
     <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3 text-xs select-none">
-      <div class="flex items-center space-x-1">
+      <div class="flex items-center space-x-1 min-w-0 overflow-x-auto">
         <!-- Fetch Button -->
         <button
           @click="handleFetch"
@@ -281,6 +312,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <ArrowDownCircle class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" :class="{ 'animate-bounce': isPulling }" />
           <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
+        <select v-model="pullStrategy" class="shrink-0 bg-background border border-border rounded px-1 py-1 text-[10px]" :title="t('Pull Strategy')"><option value="merge">merge</option><option value="rebase">rebase</option><option value="ff-only">ff-only</option></select>
 
         <!-- Push Button -->
         <button
@@ -292,6 +324,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
           <span>{{ isPushing ? t('Pushing...') : t('Push') }}</span>
         </button>
+        <label class="shrink-0 flex items-center gap-1 text-[10px] text-muted-foreground" :title="t('Force Push with Lease')"><input v-model="forceWithLease" type="checkbox" />lease</label>
 
         <div class="h-4 w-[1px] bg-border mx-1"></div>
 
@@ -304,6 +337,9 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
           <span>{{ t('Branch') }}</span>
         </button>
+
+        <button @click="repoStore.isWorktreeManagerOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Manage Worktrees')"><FolderGit2 class="w-3.5 h-3.5 text-teal-500" /><span>{{ t('Worktrees') }}</span></button>
+        <button @click="changelistStore.isManagerOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Manage Changelists')"><ListTodo class="w-3.5 h-3.5 text-violet-500" /><span>{{ t('Changelists') }}</span></button>
 
         <!-- Merge Button -->
         <button
@@ -324,6 +360,8 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
           <span>{{ t('Rebase') }}</span>
         </button>
+
+        <button @click="repoStore.isPullRequestOpen = true" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary text-foreground font-medium" :title="t('Create Pull or Merge Request')"><GitPullRequest class="w-3.5 h-3.5 text-fuchsia-500" /><span>{{ t('PR/MR') }}</span></button>
 
         <!-- Cherry-pick Button -->
         <button
@@ -361,6 +399,10 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
 
       <!-- Active Branch Badge -->
       <div class="flex items-center space-x-2">
+        <button class="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-secondary text-[10px]" :title="t('Incoming and Outgoing Commits')" @click="repoStore.isSyncStatusOpen = true">
+          <span class="text-sky-500">↓{{ repoStore.syncStatus.incoming.length }}</span><span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
+        </button>
+        <button class="p-1 rounded hover:bg-secondary" :class="autoFetchEnabled ? 'text-primary' : 'text-muted-foreground'" :title="t(autoFetchEnabled ? 'Background Fetch Enabled' : 'Background Fetch Disabled')" @click="toggleAutoFetch"><Timer class="w-3.5 h-3.5" /></button>
         <div
           @click="handleOpenBranch"
           class="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-secondary/80 hover:bg-secondary border border-border font-mono text-[11px] cursor-pointer transition active:scale-95 shadow-sm"

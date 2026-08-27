@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { RepositoryInfo, RepoStatusSummary, FileStatusItem, BranchItem, RemoteItem, TagItem, StashItem } from '@/types/git';
+import type { RepositoryInfo, RepoStatusSummary, FileStatusItem, BranchItem, RemoteItem, TagItem, StashItem, SyncStatus } from '@/types/git';
 import type { GraphCommitNode } from '@/types/graph';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useConsoleStore } from '@/stores/console';
@@ -62,9 +62,22 @@ export const useRepoStore = defineStore('repo', () => {
   const remotes = ref<RemoteItem[]>([]);
   const tags = ref<TagItem[]>([]);
   const stashes = ref<StashItem[]>([]);
+  const syncStatus = ref<SyncStatus>({ incoming: [], outgoing: [] });
+  const isSyncStatusOpen = ref(false);
+  const isWorktreeManagerOpen = ref(false);
+  const isPullRequestOpen = ref(false);
   const commitNodes = ref<GraphCommitNode[]>([]);
+  const graphHasMore = ref(false);
+  const isLoadingMoreCommits = ref(false);
   const selectedCommit = ref<GraphCommitNode | null>(null);
   const selectedCommitFiles = ref<FileStatusItem[]>([]);
+  const branchComparison = ref<{
+    baseBranch: string;
+    targetBranch: string;
+    baseCommitId: string;
+    targetCommitId: string;
+  } | null>(null);
+  const branchComparisonFiles = ref<FileStatusItem[]>([]);
   const isLoading = ref<boolean>(false);
   const errorMessage = ref<string | null>(null);
 
@@ -101,7 +114,11 @@ export const useRepoStore = defineStore('repo', () => {
     tags.value = [];
     stashes.value = [];
     commitNodes.value = [];
+    graphHasMore.value = false;
     selectedCommit.value = null;
+    selectedCommitFiles.value = [];
+    branchComparison.value = null;
+    branchComparisonFiles.value = [];
   };
 
   const loadRepo = async (targetPath?: string) => {
@@ -136,7 +153,7 @@ export const useRepoStore = defineStore('repo', () => {
         gitApi.listRemotes(path),
         gitApi.listTags(path),
         gitApi.listStashes(path),
-        gitApi.getCommitGraph(path, 150),
+        gitApi.getCommitGraph(path, 0, 150),
       ]);
 
       const failures: string[] = [];
@@ -151,8 +168,9 @@ export const useRepoStore = defineStore('repo', () => {
       if (stashResult.status === 'fulfilled') stashes.value = stashResult.value;
       else failures.push(`stashes: ${formatGitError(stashResult.reason)}`);
       if (graphResult.status === 'fulfilled') {
-        commitNodes.value = graphResult.value;
-        selectedCommit.value = graphResult.value[0] || null;
+        commitNodes.value = graphResult.value.nodes;
+        graphHasMore.value = graphResult.value.has_more;
+        selectedCommit.value = graphResult.value.nodes[0] || null;
       } else {
         failures.push(`commit graph: ${formatGitError(graphResult.reason)}`);
       }
@@ -233,8 +251,8 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
-  const commit = async (message: string, author: string, email: string) => {
-    await gitApi.createCommit(activeRepoPath.value, message, author, email);
+  const commit = async (message: string, author: string, email: string, options: { amend?: boolean; sign?: boolean; preCommitCommand?: string } = {}) => {
+    await gitApi.createCommit(activeRepoPath.value, message, author, email, options);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -340,6 +358,8 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const selectCommit = async (commit: GraphCommitNode | null) => {
+    branchComparison.value = null;
+    branchComparisonFiles.value = [];
     selectedCommit.value = commit;
     if (!commit || !activeRepoPath.value) {
       selectedCommitFiles.value = [];
@@ -360,6 +380,112 @@ export const useRepoStore = defineStore('repo', () => {
     }
   };
 
+  const interactiveRebase = async (upstream: string, plan: import('@/types/git').RebasePlanItem[]) => {
+    await gitApi.interactiveRebase(activeRepoPath.value, upstream, plan);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const applyStash = async (index: number) => {
+    await gitApi.applyStash(activeRepoPath.value, index);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const dropStash = async (index: number) => {
+    await gitApi.dropStash(activeRepoPath.value, index);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const renameStash = async (index: number, message: string) => {
+    await gitApi.renameStash(activeRepoPath.value, index, message);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const createShelf = async (message: string, filePaths: string[]) => {
+    await gitApi.createShelf(activeRepoPath.value, message, filePaths);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const loadMoreCommits = async () => {
+    if (!activeRepoPath.value || !graphHasMore.value || isLoadingMoreCommits.value) return [];
+    isLoadingMoreCommits.value = true;
+    try {
+      const page = await gitApi.getCommitGraph(activeRepoPath.value, commitNodes.value.length, 150);
+      const existing = new Set(commitNodes.value.map((commit) => commit.id));
+      const additions = page.nodes.filter((commit) => !existing.has(commit.id));
+      commitNodes.value.push(...additions);
+      graphHasMore.value = page.has_more;
+      return additions;
+    } finally {
+      isLoadingMoreCommits.value = false;
+    }
+  };
+
+  const locateCommit = async (commitId: string) => {
+    let commit = commitNodes.value.find((item) => item.id === commitId);
+    while (!commit && graphHasMore.value) {
+      const additions = await loadMoreCommits();
+      commit = additions.find((item) => item.id === commitId);
+      if (additions.length === 0 && graphHasMore.value) break;
+    }
+    if (!commit) return false;
+    await selectCommit(commit);
+    return true;
+  };
+
+  const locateRevision = async (revision: string) => {
+    const commitId = await gitApi.resolveRevision(activeRepoPath.value, revision);
+    return await locateCommit(commitId);
+  };
+
+  const compareBranch = async (branch: BranchItem) => {
+    const baseCommitId = repoInfo.value?.head_commit_id;
+    const baseBranch = repoInfo.value?.head_branch || 'HEAD';
+    if (!activeRepoPath.value || !baseCommitId) {
+      throw new Error('The current branch has no commit to compare.');
+    }
+
+    selectedCommit.value = null;
+    selectedCommitFiles.value = [];
+    diffStore.clearSelection();
+    branchComparison.value = {
+      baseBranch,
+      targetBranch: branch.name,
+      baseCommitId,
+      targetCommitId: branch.target_commit_id,
+    };
+
+    try {
+      const files = await gitApi.getBranchChanges(
+        activeRepoPath.value,
+        baseCommitId,
+        branch.target_commit_id,
+      );
+      branchComparisonFiles.value = files;
+      if (files.length > 0) {
+        const first = files[0];
+        await diffStore.selectBranchComparisonFile(
+          first.path,
+          first.old_path,
+          activeRepoPath.value,
+          baseCommitId,
+          branch.target_commit_id,
+        );
+      }
+      return files;
+    } catch (error) {
+      branchComparison.value = null;
+      branchComparisonFiles.value = [];
+      diffStore.clearSelection();
+      throw error;
+    }
+  };
+
+  const clearBranchComparison = () => {
+    branchComparison.value = null;
+    branchComparisonFiles.value = [];
+    diffStore.clearSelection();
+  };
+
   const continueRevert = async () => {
     await gitApi.continueRevert(activeRepoPath.value);
     await loadRepo(activeRepoPath.value);
@@ -378,19 +504,36 @@ export const useRepoStore = defineStore('repo', () => {
   const fetchRemote = async () => {
     await gitApi.fetchRemote(activeRepoPath.value);
     await loadRepo(activeRepoPath.value);
+    syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value).catch(() => ({ incoming: [], outgoing: [] }));
   };
 
-  const pullRemote = async () => {
+  const pullRemote = async (strategy: 'merge' | 'rebase' | 'ff-only' = 'merge') => {
     try {
-      await gitApi.pullRemote(activeRepoPath.value);
+      await gitApi.pullRemote(activeRepoPath.value, strategy);
     } finally {
       await loadRepo(activeRepoPath.value);
     }
   };
 
-  const pushRemote = async () => {
-    await gitApi.pushRemote(activeRepoPath.value);
+  const pushRemote = async (forceWithLease = false) => {
+    await gitApi.pushRemote(activeRepoPath.value, forceWithLease);
     await loadRepo(activeRepoPath.value);
+    syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value).catch(() => ({ incoming: [], outgoing: [] }));
+  };
+
+  const refreshSyncStatus = async () => {
+    syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value);
+  };
+
+  const discoverRoots = async () => {
+    const roots = await gitApi.discoverGitRoots(activeRepoPath.value);
+    for (const path of roots) {
+      if (repoList.value.some((repo) => repo.path === path)) continue;
+      const validation = await gitApi.validateRepo(path);
+      if (validation.valid) repoList.value.push({ path, name: validation.name || path.split(/[\\/]/).pop() || path, lastOpened: Date.now() });
+    }
+    saveReposToStorage();
+    return roots.length;
   };
 
   return {
@@ -402,9 +545,17 @@ export const useRepoStore = defineStore('repo', () => {
     remotes,
     tags,
     stashes,
+    syncStatus,
+    isSyncStatusOpen,
+    isWorktreeManagerOpen,
+    isPullRequestOpen,
     commitNodes,
+    graphHasMore,
+    isLoadingMoreCommits,
     selectedCommit,
     selectedCommitFiles,
+    branchComparison,
+    branchComparisonFiles,
     isLoading,
     errorMessage,
     isAddRepoModalOpen,
@@ -437,11 +588,21 @@ export const useRepoStore = defineStore('repo', () => {
     createTag,
     createStash,
     popStash,
+    applyStash,
+    dropStash,
+    renameStash,
+    createShelf,
     selectCommit,
+    loadMoreCommits,
+    locateCommit,
+    locateRevision,
+    compareBranch,
+    clearBranchComparison,
     mergeBranch,
     abortMerge,
     continueMerge,
     rebase,
+    interactiveRebase,
     continueRebase,
     abortRebase,
     cherryPick,
@@ -454,5 +615,7 @@ export const useRepoStore = defineStore('repo', () => {
     fetchRemote,
     pullRemote,
     pushRemote,
+    refreshSyncStatus,
+    discoverRoots,
   };
 });

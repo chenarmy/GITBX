@@ -3,11 +3,17 @@ import { ref } from 'vue';
 import { useDiffStore } from '@/stores/diff';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
+import { useGitApi } from '@/composables/useGitApi';
+import { buildPartialPatch } from '@/utils/partialPatch';
 import {
   FileCode,
   Plus,
   Minus,
   RotateCcw,
+  History,
+  ListTree,
+  Clock3,
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 import type { DiffHunk, DiffLine } from '@/types/diff';
@@ -15,6 +21,8 @@ import type { DiffHunk, DiffLine } from '@/types/diff';
 const diffStore = useDiffStore();
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
+const gitApi = useGitApi();
 const viewMode = ref<'unified' | 'split'>('unified');
 const { t } = useI18n();
 
@@ -38,22 +46,56 @@ async function handleStageToggle() {
 async function handleStageHunk(hunk: DiffHunk) {
   if (!diffStore.selectedFile || !repoStore.activeRepoPath) return;
   try {
-    await repoStore.stageFile(diffStore.selectedFile);
-    diffStore.isStaged = true;
-    notification.success(t('Hunk Staged'), `${diffStore.selectedFile} (${hunk.header})`);
+    const wasStaged = diffStore.isStaged;
+    const patch = buildPartialPatch(diffStore.selectedFile, hunk, { reverse: wasStaged });
+    await gitApi.applyPartialPatch(repoStore.activeRepoPath, diffStore.selectedFile, patch, 'index');
+    await refreshSelectedDiff(wasStaged);
+    notification.success(t(wasStaged ? 'Hunk Unstaged' : 'Hunk Staged'), `${diffStore.selectedFile} (${hunk.header})`);
   } catch (error: any) {
-    notification.error(t('Stage Failed'), error?.message || String(error));
+    notification.error(t(diffStore.isStaged ? 'Unstage Failed' : 'Stage Failed'), error?.message || String(error));
   }
 }
 
 async function handleDiscardHunk(hunk: DiffHunk) {
   if (!diffStore.selectedFile || !repoStore.activeRepoPath) return;
+  const approved = await confirmation.confirm({
+    title: t('Discard Hunk'),
+    message: t('Discard only the selected hunk from {file}?', { file: diffStore.selectedFile }),
+    danger: true,
+    confirmText: t('Discard Hunk'),
+  });
+  if (!approved) return;
   try {
-    await repoStore.discardFile(diffStore.selectedFile);
+    const patch = buildPartialPatch(diffStore.selectedFile, hunk, { reverse: true });
+    await gitApi.applyPartialPatch(repoStore.activeRepoPath, diffStore.selectedFile, patch, 'workdir');
+    await refreshSelectedDiff(false);
     notification.warning(t('Hunk Discarded'), `${diffStore.selectedFile} (${hunk.header})`);
   } catch (error: any) {
     notification.error(t('Discard Failed'), error?.message || String(error));
   }
+}
+
+async function handleStageLine(hunk: DiffHunk, lineIndex: number) {
+  if (!diffStore.selectedFile || !repoStore.activeRepoPath) return;
+  try {
+    const wasStaged = diffStore.isStaged;
+    const patch = buildPartialPatch(diffStore.selectedFile, hunk, {
+      selectedLineIndex: lineIndex,
+      reverse: wasStaged,
+    });
+    await gitApi.applyPartialPatch(repoStore.activeRepoPath, diffStore.selectedFile, patch, 'index');
+    await refreshSelectedDiff(wasStaged);
+    notification.success(t(wasStaged ? 'Line Unstaged' : 'Line Staged'), diffStore.selectedFile);
+  } catch (error: any) {
+    notification.error(t(diffStore.isStaged ? 'Unstage Failed' : 'Stage Failed'), error?.message || String(error));
+  }
+}
+
+async function refreshSelectedDiff(staged: boolean) {
+  const repoPath = repoStore.activeRepoPath;
+  const filePath = diffStore.selectedFile;
+  await repoStore.loadRepo(repoPath);
+  if (filePath) await diffStore.selectFile(filePath, staged, repoPath);
 }
 
 function getSplitRows(hunk: DiffHunk) {
@@ -110,8 +152,11 @@ function getSplitRows(hunk: DiffHunk) {
 
       <!-- Action Buttons & Mode Switcher -->
       <div class="flex items-center space-x-2 shrink-0">
+        <button v-if="diffStore.selectedFile" class="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground" :title="t('File History')" @click="diffStore.openFileInvestigation('history')"><History class="w-3.5 h-3.5" /></button>
+        <button v-if="diffStore.selectedFile" class="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground" :title="t('Blame')" @click="diffStore.openFileInvestigation('blame')"><ListTree class="w-3.5 h-3.5" /></button>
+        <button v-if="diffStore.selectedFile" class="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground" :title="t('Local History')" @click="diffStore.isLocalHistoryOpen = true"><Clock3 class="w-3.5 h-3.5" /></button>
         <button
-          v-if="diffStore.selectedFile && !diffStore.commitId"
+          v-if="diffStore.selectedFile && !diffStore.commitId && !diffStore.branchComparison"
           @click="handleStageToggle"
           class="px-2 py-0.5 rounded text-[11px] font-semibold flex items-center space-x-1 transition active:scale-95 cursor-pointer"
           :class="diffStore.isStaged ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30' : 'bg-primary/10 text-primary hover:bg-primary/20'"
@@ -152,15 +197,17 @@ function getSplitRows(hunk: DiffHunk) {
           <!-- Hunk Header Bar -->
           <div class="bg-muted/60 text-muted-foreground px-3 py-1 flex items-center justify-between select-none text-[11px] font-semibold sticky top-0 z-10 backdrop-blur-sm">
             <span>{{ hunk.header }}</span>
-            <div v-if="!diffStore.commitId" class="flex items-center space-x-2">
+            <div v-if="!diffStore.commitId && !diffStore.branchComparison" class="flex items-center space-x-2">
               <button
                 @click="handleStageHunk(hunk)"
                 class="hover:text-emerald-600 dark:hover:text-emerald-400 transition flex items-center space-x-1 cursor-pointer"
               >
-                <Plus class="w-3 h-3" />
-                <span>{{ t('Stage Hunk') }}</span>
+                <Minus v-if="diffStore.isStaged" class="w-3 h-3" />
+                <Plus v-else class="w-3 h-3" />
+                <span>{{ t(diffStore.isStaged ? 'Unstage Hunk' : 'Stage Hunk') }}</span>
               </button>
               <button
+                v-if="!diffStore.isStaged"
                 @click="handleDiscardHunk(hunk)"
                 class="hover:text-rose-600 dark:hover:text-rose-400 transition flex items-center space-x-1 cursor-pointer"
               >
@@ -203,13 +250,13 @@ function getSplitRows(hunk: DiffHunk) {
               </div>
 
               <!-- Line Action Button -->
-              <div v-if="!diffStore.commitId" class="hidden group-hover:flex items-center space-x-1 px-2 select-none">
+              <div v-if="!diffStore.commitId && !diffStore.branchComparison && line.line_type !== 'Context'" class="hidden group-hover:flex items-center space-x-1 px-2 select-none">
                 <button
-                  @click="handleStageHunk(hunk)"
+                  @click="handleStageLine(hunk, lIdx)"
                   class="px-1.5 py-0.5 rounded bg-secondary hover:bg-muted text-foreground text-[10px] font-semibold shadow-2xs cursor-pointer"
-                  :title="t('Stage this line')"
+                  :title="t(diffStore.isStaged ? 'Unstage this line' : 'Stage this line')"
                 >
-                  {{ t('Stage Line') }}
+                  {{ t(diffStore.isStaged ? 'Unstage Line' : 'Stage Line') }}
                 </button>
               </div>
             </div>
@@ -223,15 +270,17 @@ function getSplitRows(hunk: DiffHunk) {
           <!-- Hunk Header Bar -->
           <div class="bg-muted/60 text-muted-foreground px-3 py-1 flex items-center justify-between select-none text-[11px] font-semibold sticky top-0 z-10 backdrop-blur-sm">
             <span>{{ hunk.header }}</span>
-            <div v-if="!diffStore.commitId" class="flex items-center space-x-2">
+            <div v-if="!diffStore.commitId && !diffStore.branchComparison" class="flex items-center space-x-2">
               <button
                 @click="handleStageHunk(hunk)"
                 class="hover:text-emerald-600 dark:hover:text-emerald-400 transition flex items-center space-x-1 cursor-pointer"
               >
-                <Plus class="w-3 h-3" />
-                <span>{{ t('Stage Hunk') }}</span>
+                <Minus v-if="diffStore.isStaged" class="w-3 h-3" />
+                <Plus v-else class="w-3 h-3" />
+                <span>{{ t(diffStore.isStaged ? 'Unstage Hunk' : 'Stage Hunk') }}</span>
               </button>
               <button
+                v-if="!diffStore.isStaged"
                 @click="handleDiscardHunk(hunk)"
                 class="hover:text-rose-600 dark:hover:text-rose-400 transition flex items-center space-x-1 cursor-pointer"
               >

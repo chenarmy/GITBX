@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue';
+import { computed, ref, nextTick, onMounted, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
-import type { GraphCommitNode } from '@/types/graph';
+import { useNotificationStore } from '@/stores/notification';
+import type { GraphCommitNode, GraphFilters } from '@/types/graph';
 import CommitContextMenu from '@/components/menus/CommitContextMenu.vue';
+import GraphFilterBar from '@/components/graph/GraphFilterBar.vue';
 import { Tag } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
 import { arSA, de, enUS, es, fr, ja, zhCN, zhTW } from 'date-fns/locale';
@@ -11,8 +13,16 @@ import type { Locale as AppLocale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
+const notification = useNotificationStore();
 const { locale, t } = useI18n();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const filters = ref<GraphFilters>({
+  query: '',
+  branch: '',
+  author: '',
+  dateRange: 'any',
+  path: '',
+});
 
 const commitContextMenu = ref<{ commit: GraphCommitNode; x: number; y: number } | null>(null);
 
@@ -40,6 +50,41 @@ const DATE_LOCALES: Record<AppLocale, DateFnsLocale> = {
   ar: arSA,
 };
 
+const visibleCommits = computed(() => {
+  const query = filters.value.query.trim().toLocaleLowerCase();
+  const pathQuery = filters.value.path.trim().replace(/\\/g, '/').toLocaleLowerCase();
+  const now = Date.now();
+  let minimumTime = 0;
+
+  if (filters.value.dateRange === 'today') {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    minimumTime = startOfToday.getTime();
+  } else if (filters.value.dateRange !== 'any') {
+    const days = Number.parseInt(filters.value.dateRange, 10);
+    minimumTime = now - days * 24 * 60 * 60 * 1000;
+  }
+
+  return repoStore.commitNodes.filter((commit) => {
+    const searchableText = [
+      commit.summary,
+      commit.id,
+      commit.short_id,
+      commit.author_name,
+      ...commit.branch_refs,
+      ...commit.tag_refs,
+    ].join(' ').toLocaleLowerCase();
+    const branchRefs = commit.containing_branch_refs ?? commit.branch_refs;
+    const changedPaths = commit.changed_paths ?? [];
+
+    return (!query || searchableText.includes(query))
+      && (!filters.value.branch || branchRefs.includes(filters.value.branch))
+      && (!filters.value.author || commit.author_name === filters.value.author)
+      && (!minimumTime || commit.author_time * 1000 >= minimumTime)
+      && (!pathQuery || changedPaths.some((path) => path.replace(/\\/g, '/').toLocaleLowerCase().includes(pathQuery)));
+  });
+});
+
 function getLaneColor(lane: number) {
   return LANE_COLORS[lane % LANE_COLORS.length];
 }
@@ -50,7 +95,7 @@ function drawGraph() {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const commits = repoStore.commitNodes;
+  const commits = visibleCommits.value;
   const height = commits.length * ROW_HEIGHT;
   canvas.height = height;
 
@@ -108,6 +153,16 @@ function handleSelectCommit(commit: GraphCommitNode) {
   repoStore.selectCommit(commit);
 }
 
+async function handleSearchAll(query: string) {
+  if (!/^[0-9a-f]{4,40}$/i.test(query)) return;
+  try {
+    const found = await repoStore.locateRevision(query);
+    if (!found) notification.warning(t('Commit not found'), query);
+  } catch {
+    notification.warning(t('Commit not found'), query);
+  }
+}
+
 function openCommitContextMenu(e: MouseEvent, commit: GraphCommitNode) {
   e.preventDefault();
   handleSelectCommit(commit);
@@ -123,7 +178,7 @@ onMounted(() => {
 });
 
 watch(
-  () => repoStore.commitNodes,
+  visibleCommits,
   async () => {
     await nextTick();
     drawGraph();
@@ -136,6 +191,8 @@ watch(
   async () => {
     await nextTick();
     drawGraph();
+    const selectedId = repoStore.selectedCommit?.id;
+    if (selectedId) document.getElementById(`commit-${selectedId}`)?.scrollIntoView({ block: 'nearest' });
   },
   { flush: 'post' }
 );
@@ -155,6 +212,13 @@ function formatTime(timestamp: number) {
 
 <template>
   <div class="dbx-graph flex-1 flex flex-col bg-card overflow-hidden border-b border-border text-xs">
+    <GraphFilterBar
+      v-model="filters"
+      :commits="repoStore.commitNodes"
+      :result-count="visibleCommits.length"
+      @search-all="handleSearchAll"
+    />
+
     <!-- Header row -->
     <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
       <div class="w-20 pl-2">{{ t('Graph') }}</div>
@@ -170,6 +234,10 @@ function formatTime(timestamp: number) {
         {{ t('No commits in this repository yet. Make your first commit below!') }}
       </div>
 
+      <div v-else-if="visibleCommits.length === 0" class="p-8 text-center text-muted-foreground">
+        {{ t('No commits match the current filters.') }}
+      </div>
+
       <div v-else class="relative flex">
         <!-- Canvas overlay for graph lines -->
         <canvas
@@ -181,8 +249,9 @@ function formatTime(timestamp: number) {
         <!-- Rows list -->
         <div class="w-full">
           <div
-            v-for="commit in repoStore.commitNodes"
+            v-for="commit in visibleCommits"
             :key="commit.id"
+            :id="`commit-${commit.id}`"
             @click="handleSelectCommit(commit)"
             @contextmenu.prevent="openCommitContextMenu($event, commit)"
             class="h-7 flex items-center px-2 cursor-pointer transition select-none border-b border-border/40 hover:bg-secondary/70"
@@ -223,6 +292,15 @@ function formatTime(timestamp: number) {
 
             <!-- Short ID -->
             <div class="w-20 font-mono text-[11px] text-muted-foreground opacity-75">{{ commit.short_id }}</div>
+          </div>
+          <div v-if="repoStore.graphHasMore" class="flex justify-center p-2 border-b border-border/40">
+            <button
+              class="px-3 py-1 rounded border border-border bg-secondary hover:bg-muted disabled:opacity-50"
+              :disabled="repoStore.isLoadingMoreCommits"
+              @click="repoStore.loadMoreCommits()"
+            >
+              {{ t(repoStore.isLoadingMoreCommits ? 'Loading commits...' : 'Load more commits') }}
+            </button>
           </div>
         </div>
       </div>
