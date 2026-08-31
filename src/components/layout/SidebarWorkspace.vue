@@ -19,6 +19,8 @@ import {
   MoreVertical,
   GitFork,
   FolderTree,
+  Folder,
+  FolderOpen,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
@@ -35,36 +37,83 @@ const isBranchesOpen = ref(true);
 const isRemotesOpen = ref(true);
 const isTagsOpen = ref(true);
 const isStashesOpen = ref(true);
+const collapsedLocalBranchDirectories = ref(new Set<string>());
+const collapsedRemoteBranchDirectories = ref(new Set<string>());
 
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
 
-interface BranchGroup {
+interface BranchTreeNode {
   name: string;
+  path: string;
+  children: BranchTreeNode[];
   branches: BranchItem[];
 }
 
-function groupBranches(branches: BranchItem[]): BranchGroup[] {
-  const groups = new Map<string, BranchItem[]>();
+type BranchTreeRow =
+  | { type: 'directory'; depth: number; node: BranchTreeNode }
+  | { type: 'branch'; depth: number; branch: BranchItem };
+
+function buildBranchTree(branches: BranchItem[]): BranchTreeNode {
+  type MutableBranchTreeNode = Omit<BranchTreeNode, 'children'> & { childMap: Map<string, MutableBranchTreeNode> };
+  const root: MutableBranchTreeNode = { name: '', path: '', childMap: new Map(), branches: [] };
+
   for (const branch of branches) {
-    const slash = branch.name.indexOf('/');
-    const groupName = slash > 0 ? branch.name.slice(0, slash) : '';
-    const items = groups.get(groupName) || [];
-    items.push(branch);
-    groups.set(groupName, items);
+    const parts = branch.name.split('/').filter(Boolean);
+    let current = root;
+    for (const part of parts.slice(0, -1)) {
+      const path = current.path ? `${current.path}/${part}` : part;
+      let child = current.childMap.get(part);
+      if (!child) {
+        child = { name: part, path, childMap: new Map(), branches: [] };
+        current.childMap.set(part, child);
+      }
+      current = child;
+    }
+    current.branches.push(branch);
   }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, items]) => ({ name, branches: items.sort((a, b) => a.name.localeCompare(b.name)) }));
+
+  const finalize = (node: MutableBranchTreeNode): BranchTreeNode => ({
+    name: node.name,
+    path: node.path,
+    children: [...node.childMap.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(finalize),
+    branches: [...node.branches].sort((a, b) => a.name.localeCompare(b.name)),
+  });
+  return finalize(root);
 }
 
-const localBranchGroups = computed(() => groupBranches(repoStore.branches.filter((branch) => !branch.is_remote)));
-const remoteBranchGroups = computed(() =>
-  groupBranches(
-    repoStore.branches.filter(
-      (branch) => branch.is_remote && !branch.name.endsWith('/HEAD') && branch.name !== 'HEAD'
-    )
-  )
-);
+function flattenBranchTree(root: BranchTreeNode, collapsed: Set<string>): BranchTreeRow[] {
+  const rows: BranchTreeRow[] = [];
+  const visit = (node: BranchTreeNode, depth: number) => {
+    for (const child of node.children) {
+      rows.push({ type: 'directory', depth, node: child });
+      if (!collapsed.has(child.path)) visit(child, depth + 1);
+    }
+    for (const branch of node.branches) rows.push({ type: 'branch', depth, branch });
+  };
+  visit(root, 0);
+  return rows;
+}
+
+const localBranches = computed(() => repoStore.branches.filter((branch) => !branch.is_remote));
+const remoteBranches = computed(() => repoStore.branches.filter(
+  (branch) => branch.is_remote && !branch.name.endsWith('/HEAD') && branch.name !== 'HEAD'
+));
+const localBranchRows = computed(() => flattenBranchTree(buildBranchTree(localBranches.value), collapsedLocalBranchDirectories.value));
+const remoteBranchRows = computed(() => flattenBranchTree(buildBranchTree(remoteBranches.value), collapsedRemoteBranchDirectories.value));
+
+function toggleBranchDirectory(kind: 'local' | 'remote', path: string) {
+  const source = kind === 'local' ? collapsedLocalBranchDirectories : collapsedRemoteBranchDirectories;
+  const next = new Set(source.value);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  source.value = next;
+}
+
+function branchLeafName(branchName: string) {
+  return branchName.split('/').pop() || branchName;
+}
 
 function handleCheckout(name: string) {
   repoStore.checkoutBranch(name);
@@ -150,7 +199,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isBranchesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Local Branches') }} ({{ repoStore.branches.filter(b => !b.is_remote).length }})</span>
+          <span>{{ t('Local Branches') }} ({{ localBranches.length }})</span>
         </div>
         <button
           @click.stop="repoStore.isBranchModalOpen = true"
@@ -161,31 +210,37 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         </button>
       </div>
 
-      <div v-if="isBranchesOpen" class="mt-1 space-y-1">
-        <div v-for="group in localBranchGroups" :key="group.name || '__root'">
-          <div v-if="group.name" class="flex items-center space-x-1 px-2 text-[10px] text-muted-foreground/80 font-semibold">
-            <FolderTree class="w-3 h-3" />
-            <span class="truncate">{{ group.name }}/</span>
+      <div v-if="isBranchesOpen" class="mt-1 space-y-0.5">
+        <template v-for="row in localBranchRows" :key="row.type === 'directory' ? `local-directory:${row.node.path}` : `local-branch:${row.branch.name}`">
+          <div
+            v-if="row.type === 'directory'"
+            class="branch-directory-row"
+            :style="{ paddingLeft: `${0.35 + row.depth * 0.8}rem` }"
+            @click="toggleBranchDirectory('local', row.node.path)"
+          >
+            <component :is="collapsedLocalBranchDirectories.has(row.node.path) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
+            <component :is="collapsedLocalBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+            <span class="truncate">{{ row.node.name }}</span>
           </div>
           <div
-            v-for="branch in group.branches"
-            :key="branch.name"
-            @dblclick="handleCheckout(branch.name)"
-            @click="handleLocateCommit(branch.target_commit_id)"
-            @contextmenu.prevent="openContextMenu($event, branch)"
+            v-else
+            @dblclick="handleCheckout(row.branch.name)"
+            @click="handleLocateCommit(row.branch.target_commit_id)"
+            @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"
             class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-            :class="[branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary', group.name ? 'pl-5' : '']"
+            :class="row.branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary'"
+            :style="{ paddingLeft: `${0.5 + row.depth * 0.8}rem` }"
           >
             <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
-              <GitBranch class="w-3.5 h-3.5 shrink-0" :class="branch.is_head ? 'text-primary' : 'text-muted-foreground'" />
-              <span class="min-w-0 truncate">{{ group.name ? branch.name.slice(group.name.length + 1) : branch.name }}</span>
+              <GitBranch class="w-3.5 h-3.5 shrink-0" :class="row.branch.is_head ? 'text-primary' : 'text-muted-foreground'" />
+              <span class="min-w-0 truncate">{{ branchLeafName(row.branch.name) }}</span>
             </div>
 
             <div class="ml-1 flex shrink-0 items-center space-x-1">
-              <Check v-if="branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
+              <Check v-if="row.branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
               <button
-                @click.stop="openContextMenu($event, branch)"
+                @click.stop="openContextMenu($event, row.branch)"
                 class="shrink-0 p-0.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
                 :title="t('More actions')"
               >
@@ -193,7 +248,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
               </button>
             </div>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -205,30 +260,35 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       >
         <div class="flex items-center space-x-1">
           <component :is="isRemotesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Remote Branches') }} ({{ repoStore.branches.filter(b => b.is_remote && !b.name.endsWith('/HEAD') && b.name !== 'HEAD').length }})</span>
+          <span>{{ t('Remote Branches') }} ({{ remoteBranches.length }})</span>
         </div>
       </div>
 
-      <div v-if="isRemotesOpen" class="mt-1 space-y-1 text-muted-foreground">
-        <div v-for="group in remoteBranchGroups" :key="group.name || '__root'">
-          <div v-if="group.name" class="flex items-center space-x-1 px-2 text-[10px] text-muted-foreground/80 font-semibold">
-            <FolderTree class="w-3 h-3" />
-            <span class="truncate">{{ group.name }}/</span>
+      <div v-if="isRemotesOpen" class="mt-1 space-y-0.5 text-muted-foreground">
+        <template v-for="row in remoteBranchRows" :key="row.type === 'directory' ? `remote-directory:${row.node.path}` : `remote-branch:${row.branch.name}`">
+          <div
+            v-if="row.type === 'directory'"
+            class="branch-directory-row"
+            :style="{ paddingLeft: `${0.35 + row.depth * 0.8}rem` }"
+            @click="toggleBranchDirectory('remote', row.node.path)"
+          >
+            <component :is="collapsedRemoteBranchDirectories.has(row.node.path) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
+            <component :is="collapsedRemoteBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+            <span class="truncate">{{ row.node.name }}</span>
           </div>
           <div
-            v-for="branch in group.branches"
-            :key="branch.name"
-            @dblclick="handleCheckout(branch.name)"
-            @click="handleLocateCommit(branch.target_commit_id)"
-            @contextmenu.prevent="openContextMenu($event, branch)"
+            v-else
+            @dblclick="handleCheckout(row.branch.name)"
+            @click="handleLocateCommit(row.branch.target_commit_id)"
+            @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"
             class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
-            :class="group.name ? 'pl-5' : ''"
+            :style="{ paddingLeft: `${0.5 + row.depth * 0.8}rem` }"
           >
             <Globe class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 opacity-80 shrink-0" />
-            <span class="truncate">{{ group.name ? branch.name.slice(group.name.length + 1) : branch.name }}</span>
+            <span class="truncate">{{ branchLeafName(row.branch.name) }}</span>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -311,3 +371,24 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
     />
   </aside>
 </template>
+
+<style scoped>
+.branch-directory-row {
+  align-items: center;
+  border-radius: 0.375rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  display: flex;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 0.25rem;
+  min-width: 0;
+  padding-bottom: 0.25rem;
+  padding-right: 0.5rem;
+  padding-top: 0.25rem;
+}
+.branch-directory-row:hover {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+</style>

@@ -15,6 +15,10 @@ import {
   GitCommit,
   GitCompareArrows,
   FolderTree,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
   List as ListIcon,
   Layers,
 } from 'lucide-vue-next';
@@ -37,6 +41,7 @@ const changeLimit = ref(FILE_PAGE_SIZE);
 const conflictLimit = ref(FILE_PAGE_SIZE);
 const commitFileLimit = ref(FILE_PAGE_SIZE);
 const branchFileLimit = ref(FILE_PAGE_SIZE);
+const collapsedDirectories = ref(new Set<string>());
 const conflictedFiles = computed(() => repoStore.statusSummary.conflicted_files.slice(0, conflictLimit.value));
 const commitFiles = computed(() => repoStore.selectedCommitFiles.slice(0, commitFileLimit.value));
 const branchFiles = computed(() => repoStore.branchComparisonFiles.slice(0, branchFileLimit.value));
@@ -65,17 +70,71 @@ const workingFiles = computed(() => {
   return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
 });
 const visibleWorkingFiles = computed(() => workingFiles.value.slice(0, changeLimit.value));
-const workingGroups = computed(() => {
-  const groups = new Map<string, FileStatusItem[]>();
-  for (const file of visibleWorkingFiles.value) {
-    const normalized = file.path.replace(/\\/g, '/');
-    const slash = normalized.lastIndexOf('/');
-    const directory = slash < 0 ? t('Repository Root') : normalized.slice(0, slash);
-    const group = groups.get(directory) || [];
-    group.push(file);
-    groups.set(directory, group);
+
+interface ChangeTreeNode {
+  name: string;
+  path: string;
+  directories: ChangeTreeNode[];
+  files: FileStatusItem[];
+  descendantFiles: FileStatusItem[];
+}
+
+type ChangeTreeRow =
+  | { type: 'directory'; depth: number; node: ChangeTreeNode }
+  | { type: 'file'; depth: number; file: FileStatusItem };
+
+const changeTree = computed<ChangeTreeNode>(() => {
+  type MutableTreeNode = Omit<ChangeTreeNode, 'directories'> & { directoryMap: Map<string, MutableTreeNode> };
+  const root: MutableTreeNode = { name: '', path: '', directoryMap: new Map(), files: [], descendantFiles: [] };
+
+  for (const file of workingFiles.value) {
+    const parts = file.path.replace(/\\/g, '/').split('/').filter(Boolean);
+    let current = root;
+    current.descendantFiles.push(file);
+    for (const part of parts.slice(0, -1)) {
+      const path = current.path ? `${current.path}/${part}` : part;
+      let child = current.directoryMap.get(part);
+      if (!child) {
+        child = { name: part, path, directoryMap: new Map(), files: [], descendantFiles: [] };
+        current.directoryMap.set(part, child);
+      }
+      child.descendantFiles.push(file);
+      current = child;
+    }
+    current.files.push(file);
   }
-  return [...groups.entries()].map(([directory, files]) => ({ directory, files }));
+
+  const finalize = (node: MutableTreeNode): ChangeTreeNode => ({
+    name: node.name,
+    path: node.path,
+    directories: [...node.directoryMap.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(finalize),
+    files: [...node.files].sort((a, b) => fileName(a.path).localeCompare(fileName(b.path))),
+    descendantFiles: node.descendantFiles,
+  });
+  return finalize(root);
+});
+
+const visibleTreeRows = computed<ChangeTreeRow[]>(() => {
+  const rows: ChangeTreeRow[] = [];
+  let renderedFiles = 0;
+
+  const visit = (node: ChangeTreeNode, depth: number) => {
+    for (const directory of node.directories) {
+      if (renderedFiles >= changeLimit.value) return;
+      rows.push({ type: 'directory', depth, node: directory });
+      if (!collapsedDirectories.value.has(directory.path)) visit(directory, depth + 1);
+    }
+    for (const file of node.files) {
+      if (renderedFiles >= changeLimit.value) return;
+      rows.push({ type: 'file', depth, file });
+      renderedFiles += 1;
+    }
+  };
+
+  visit(changeTree.value, 0);
+  return rows;
 });
 const selectedCount = computed(() => repoStore.selectedChangePaths.length);
 const allChangesSelected = computed(() => workingFiles.value.length > 0 && selectedCount.value === workingFiles.value.length);
@@ -117,6 +176,31 @@ function showMore(section: 'changes' | 'conflict' | 'commit' | 'branch') {
 function setChangeView(view: 'grouped' | 'flat') {
   changeView.value = view;
   localStorage.setItem('gitbx_change_view', view);
+}
+
+function toggleDirectory(path: string) {
+  const next = new Set(collapsedDirectories.value);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  collapsedDirectories.value = next;
+}
+
+function directorySelectionState(files: FileStatusItem[]) {
+  const selected = new Set(repoStore.selectedChangePaths);
+  const selectedInDirectory = files.reduce((count, file) => count + Number(selected.has(file.path)), 0);
+  if (selectedInDirectory === 0) return 'none';
+  if (selectedInDirectory === files.length) return 'all';
+  return 'partial';
+}
+
+function toggleDirectorySelection(files: FileStatusItem[]) {
+  const selected = new Set(repoStore.selectedChangePaths);
+  const shouldSelect = files.some((file) => !selected.has(file.path));
+  for (const file of files) {
+    if (shouldSelect) selected.add(file.path);
+    else selected.delete(file.path);
+  }
+  repoStore.selectedChangePaths = [...selected];
 }
 
 function fileName(filePath: string) {
@@ -381,27 +465,39 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
       <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
         <template v-if="changeView === 'grouped'">
-          <div v-for="group in workingGroups" :key="group.directory">
-            <div class="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-muted-foreground bg-muted/30 rounded">
-              <FolderTree class="w-3 h-3 shrink-0" />
-              <span class="truncate">{{ group.directory }}</span>
-              <span class="ml-auto">{{ group.files.length }}</span>
+          <template v-for="row in visibleTreeRows" :key="row.type === 'directory' ? `directory:${row.node.path}` : `file:${row.file.path}`">
+            <div
+              v-if="row.type === 'directory'"
+              class="tree-directory-row"
+              :style="{ paddingLeft: `${0.4 + row.depth * 0.85}rem` }"
+              @click="toggleDirectory(row.node.path)"
+            >
+              <component :is="collapsedDirectories.has(row.node.path) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
+              <input
+                type="checkbox"
+                :checked="directorySelectionState(row.node.descendantFiles) === 'all'"
+                :indeterminate="directorySelectionState(row.node.descendantFiles) === 'partial'"
+                @click.stop="toggleDirectorySelection(row.node.descendantFiles)"
+              />
+              <component :is="collapsedDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500" />
+              <span class="truncate">{{ row.node.name }}</span>
+              <span class="ml-auto text-[9px] font-normal text-muted-foreground">{{ row.node.descendantFiles.length }}</span>
             </div>
             <div
-              v-for="file in group.files"
-              :key="file.path"
-              class="change-row pl-4"
-              :class="diffStore.selectedFile === file.path && diffStore.isStaged === showStagedDiff(file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
-              @click="selectWorkingFile(file)"
+              v-else
+              class="change-row"
+              :style="{ paddingLeft: `${1.65 + row.depth * 0.85}rem` }"
+              :class="diffStore.selectedFile === row.file.path && diffStore.isStaged === showStagedDiff(row.file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+              @click="selectWorkingFile(row.file)"
             >
-              <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(file.path)" @click.stop="repoStore.toggleChangeSelection(file.path)" />
-              <component :is="getStatusIcon(fileStatus(file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(file))" />
-              <span class="truncate">{{ fileName(file.path) }}</span>
-              <span v-if="file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
-              <span class="status-badge">{{ t(changelistStore.listFor(file.path).name) }}</span>
-              <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, file.path)"><RotateCcw class="w-3 h-3" /></button>
+              <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(row.file.path)" @click.stop="repoStore.toggleChangeSelection(row.file.path)" />
+              <component :is="getStatusIcon(fileStatus(row.file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(row.file))" />
+              <span class="truncate">{{ fileName(row.file.path) }}</span>
+              <span v-if="row.file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
+              <span class="status-badge">{{ t(changelistStore.listFor(row.file.path).name) }}</span>
+              <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, row.file.path)"><RotateCcw class="w-3 h-3" /></button>
             </div>
-          </div>
+          </template>
         </template>
 
         <template v-else>
@@ -443,5 +539,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 .change-action:disabled { cursor: not-allowed; opacity: 0.4; }
 .change-row { align-items: center; border-radius: 0.375rem; cursor: pointer; display: flex; gap: 0.375rem; min-width: 0; padding: 0.3rem 0.5rem; }
 .change-row:hover button { opacity: 1; }
+.tree-directory-row { align-items: center; background: hsl(var(--muted) / 0.3); border-radius: 0.375rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: flex; font-size: 10px; font-weight: 600; gap: 0.3rem; min-width: 0; padding-bottom: 0.25rem; padding-right: 0.5rem; padding-top: 0.25rem; }
+.tree-directory-row:hover { background: hsl(var(--muted) / 0.65); color: hsl(var(--foreground)); }
 .status-badge { background: hsl(var(--muted)); border-radius: 0.2rem; flex-shrink: 0; font-size: 9px; padding: 0 0.25rem; }
 </style>

@@ -19,7 +19,7 @@ impl CommitGenerator {
         language: Option<&str>,
     ) -> anyhow::Result<GeneratedCommitMessage> {
         if diff_text.trim().is_empty() {
-            anyhow::bail!("No staged diff is available for commit message generation");
+            anyhow::bail!("No diff is available for commit message generation");
         }
 
         let system_prompt = format!(
