@@ -41,23 +41,52 @@ watch(() => aiStore.generatedMessage, (val) => {
 async function generate() {
   aiStore.isGenerating = true;
   try {
-    const files = repoStore.statusSummary.staged_files;
-    if (files.length === 0) {
+    const selectedPaths = repoStore.selectedChangePaths;
+    if (selectedPaths.length === 0) {
       aiStore.generatedMessage = null;
-      notification.warning(t('No staged changes'), t('Stage at least one file before generating a commit message.'));
+      notification.warning(t('No changes selected'), t('Select at least one file before generating a commit message.'));
       return;
     }
 
-    const diffs = await Promise.all(files.map((file) => gitApi.getFileDiff(repoStore.activeRepoPath, file.path, true)));
-    const diffText = diffs
-      .map((diff, index) => formatDiffForAi(diff, files[index].path))
+    const stagedPathSet = new Set(repoStore.statusSummary.staged_files.map((file) => file.path));
+    const unstagedPathSet = new Set([
+      ...repoStore.statusSummary.unstaged_files.map((file) => file.path),
+      ...repoStore.statusSummary.untracked_files.map((file) => file.path),
+    ]);
+
+    const diffPromises: Promise<{ path: string; diff: any }>[] = [];
+    for (const path of selectedPaths) {
+      const isStaged = stagedPathSet.has(path);
+      const isUnstaged = unstagedPathSet.has(path);
+
+      if (isStaged) {
+        diffPromises.push(
+          gitApi.getFileDiff(repoStore.activeRepoPath, path, true)
+            .then((diff) => ({ path, diff }))
+            .catch(() => ({ path, diff: null })),
+        );
+      }
+      if (isUnstaged || !isStaged) {
+        diffPromises.push(
+          gitApi.getFileDiff(repoStore.activeRepoPath, path, false)
+            .then((diff) => ({ path, diff }))
+            .catch(() => ({ path, diff: null })),
+        );
+      }
+    }
+
+    const results = await Promise.all(diffPromises);
+    const diffText = results
+      .map(({ path, diff }) => (diff ? formatDiffForAi(diff, path) : ''))
       .filter(Boolean)
       .join('\n');
+
     if (!diffText.trim()) {
       aiStore.generatedMessage = null;
-      notification.warning(t('Empty staged diff'), t('The staged files have no readable changes to analyze.'));
+      notification.warning(t('Empty diff'), t('The selected files have no readable changes to analyze.'));
       return;
     }
+
     aiStore.detectedSecrets = await gitApi.scanSecrets(diffText);
     if (aiStore.detectedSecrets.length > 0) return;
     aiStore.generatedMessage = await gitApi.generateCommitMessage(
@@ -106,7 +135,7 @@ function getFullMessage(): string {
 
 function applyToCommitBox() {
   if (!hasGeneratedMessage.value) {
-    notification.warning(t('Nothing to apply'), t('Generate a commit message from staged changes first.'));
+    notification.warning(t('Nothing to apply'), t('Generate a commit message from changes first.'));
     return;
   }
   aiStore.applyCommitMessage(getFullMessage());
@@ -177,7 +206,7 @@ function copyMessage() {
             <span>{{ t('Security Warning: Secrets Detected!') }}</span>
           </div>
           <p class="text-[11px] text-muted-foreground">
-            GITBX detected sensitive tokens in your staged diff. Please review and remove them before committing.
+            {{ t('GITBX detected sensitive tokens in your selected diff. Please review and remove them before committing.') }}
           </p>
           <div class="space-y-1 mt-2">
             <div
