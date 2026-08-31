@@ -99,7 +99,7 @@ async function handleCommitAndPush() {
 </script>
 
 <template>
-  <div class="dbx-commit-box bg-card border-t border-border flex flex-col p-2.5 text-xs select-none shrink-0" :class="showAdvanced ? 'h-64' : 'h-44'">
+  <div class="dbx-commit-box h-full min-h-0 overflow-hidden bg-card flex flex-col p-2.5 text-xs select-none">
     <!-- Conventional Commit shortcuts & AI Trigger -->
     <div class="flex items-center justify-between mb-1.5 gap-1">
       <div class="flex items-center flex-wrap gap-1 overflow-hidden">

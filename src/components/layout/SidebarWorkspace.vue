@@ -134,7 +134,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
 </script>
 
 <template>
-  <aside class="dbx-sidebar w-60 h-full max-h-full min-h-0 self-stretch shrink-0 bg-muted/30 dark:bg-card border-r border-border flex flex-col select-none overflow-hidden text-xs">
+  <aside class="dbx-sidebar w-full h-full max-h-full min-h-0 self-stretch bg-muted/30 dark:bg-card flex flex-col select-none overflow-hidden text-xs">
     <div class="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-contain">
     <!-- Repositories Section (SourceTree style) -->
     <div class="p-2 border-b border-border">
