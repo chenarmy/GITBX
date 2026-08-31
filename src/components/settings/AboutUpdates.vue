@@ -14,6 +14,13 @@ import { renderReleaseMarkdown, useUpdatesStore } from '@/stores/updates';
 const updates = useUpdatesStore();
 const { locale, t } = useI18n();
 const expandedVersion = ref<string | null>(null);
+const RELEASES_PER_PAGE = 10;
+const visibleReleaseCount = ref(RELEASES_PER_PAGE);
+
+const visibleReleases = computed(() => updates.releaseHistory.slice(0, visibleReleaseCount.value));
+const canLoadMore = computed(() => (
+  visibleReleaseCount.value < updates.releaseHistory.length || updates.hasMoreReleaseNotes
+));
 
 const runtimeLabel = computed(() => updates.isDesktop ? t('Desktop') : t('Web'));
 const platformLabel = computed(() => {
@@ -41,9 +48,23 @@ function toggleRelease(version: string) {
   expandedVersion.value = expandedVersion.value === version ? null : version;
 }
 
+async function loadMoreReleases() {
+  const targetCount = visibleReleaseCount.value + RELEASES_PER_PAGE;
+  if (updates.releaseHistory.length < targetCount && updates.hasMoreReleaseNotes) {
+    await updates.loadMoreReleaseHistory();
+  }
+  visibleReleaseCount.value = Math.min(targetCount, updates.releaseHistory.length);
+}
+
+async function refreshReleases() {
+  visibleReleaseCount.value = RELEASES_PER_PAGE;
+  expandedVersion.value = null;
+  await updates.refreshReleaseHistory();
+}
+
 onMounted(async () => {
   await updates.initialize();
-  if (!updates.releaseHistory.length) await updates.loadReleaseHistory();
+  await updates.loadReleaseHistory();
 });
 </script>
 
@@ -107,7 +128,7 @@ onMounted(async () => {
             class="rounded border border-border bg-card p-1.5 hover:bg-accent disabled:opacity-50"
             :title="t('Refresh release notes')"
             :disabled="updates.releaseHistoryLoading"
-            @click="updates.refreshReleaseHistory()"
+            @click="refreshReleases"
           >
             <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': updates.releaseHistoryLoading }" />
           </button>
@@ -115,7 +136,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="updates.releaseHistory.length" class="divide-y divide-border">
-        <article v-for="(release, index) in updates.releaseHistory" :key="release.version">
+        <article v-for="(release, index) in visibleReleases" :key="release.version">
           <button
             class="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-accent/60"
             @click="toggleRelease(release.version)"
@@ -169,10 +190,10 @@ onMounted(async () => {
       </div>
 
       <button
-        v-if="updates.releaseHistory.length && updates.hasMoreReleaseNotes"
+        v-if="updates.releaseHistory.length && canLoadMore"
         class="w-full border-t border-border py-2 text-center hover:bg-accent disabled:opacity-50"
         :disabled="updates.releaseHistoryLoading"
-        @click="updates.loadMoreReleaseHistory()"
+        @click="loadMoreReleases"
       >
         {{ updates.releaseHistoryLoading ? t('Loading...') : t('Load more') }}
       </button>

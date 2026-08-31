@@ -40,7 +40,7 @@ const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPOSITORY}/releases`;
 const RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases`;
 const RELEASE_CACHE_KEY = 'gitbx_release_notes_cache_v1';
 const RELEASE_CACHE_TTL = 60 * 60 * 1000;
-const RELEASE_PAGE_SIZE = 6;
+const RELEASE_PAGE_SIZE = 10;
 
 let pendingUpdate: Update | null = null;
 

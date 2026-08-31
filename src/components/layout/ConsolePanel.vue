@@ -68,10 +68,7 @@ watch(
 </script>
 
 <template>
-  <div
-    v-if="consoleStore.isOpen"
-    class="dbx-console h-60 bg-card border-t border-border flex flex-col select-none text-xs z-20"
-  >
+  <div class="dbx-console h-full min-h-0 bg-card flex flex-col select-none text-xs z-20">
     <!-- Console Toolbar Header -->
     <div class="dbx-pane-header h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
       <div class="flex items-center space-x-2">
