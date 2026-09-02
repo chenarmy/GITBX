@@ -152,6 +152,7 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   const isDesktop = computed(isTauriRuntime);
   const isBusy = computed(() => status.value === 'checking' || status.value === 'downloading');
+  const lastUpdateCheckAt = computed(() => settings.lastUpdateCheckAt);
   const hasUpdateAvailable = computed(() => Boolean(
     latestVersion.value
       && latestVersion.value !== currentVersion.value
@@ -167,7 +168,9 @@ export const useUpdatesStore = defineStore('updates', () => {
     }
   };
 
-  const checkForUpdates = async (manual = false) => {
+  const checkForUpdates = async (manual = false, showDialog = true) => {
+    if (status.value === 'checking' || status.value === 'downloading' || status.value === 'ready') return;
+    status.value = 'checking';
     await initialize();
     error.value = null;
 
@@ -186,7 +189,6 @@ export const useUpdatesStore = defineStore('updates', () => {
       return;
     }
 
-    status.value = 'checking';
     progress.value = 0;
 
     try {
@@ -222,7 +224,7 @@ export const useUpdatesStore = defineStore('updates', () => {
 
       pendingUpdate = candidate;
       status.value = 'available';
-      isDialogOpen.value = true;
+      if (showDialog) isDialogOpen.value = true;
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
       error.value = message;
@@ -388,6 +390,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     hasMoreReleaseNotes,
     isDesktop,
     isBusy,
+    lastUpdateCheckAt,
     hasUpdateAvailable,
     initialize,
     checkForUpdates,

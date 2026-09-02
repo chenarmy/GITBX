@@ -42,6 +42,8 @@ const updatesStore = useUpdatesStore();
 const diffStore = useDiffStore();
 const { t } = useI18n();
 let updateCheckTimer: number | undefined;
+let updateCheckInterval: number | undefined;
+const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 type ResizeTarget = 'sidebar' | 'graph' | 'staging' | 'commit' | 'console';
 
@@ -127,12 +129,26 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 }
 
+function checkForUpdatesInBackground() {
+  void updatesStore.checkForUpdates(false, false);
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible') return;
+  const lastCheckAt = updatesStore.lastUpdateCheckAt ?? 0;
+  if (Date.now() - lastCheckAt >= UPDATE_CHECK_INTERVAL_MS) {
+    checkForUpdatesInBackground();
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   void updatesStore.initialize();
   updateCheckTimer = window.setTimeout(() => {
     void updatesStore.checkForUpdates(false);
   }, 3500);
+  updateCheckInterval = window.setInterval(checkForUpdatesInBackground, UPDATE_CHECK_INTERVAL_MS);
   if (repoStore.activeRepoPath) {
     await repoStore.loadRepo();
   } else {
@@ -142,7 +158,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   if (updateCheckTimer !== undefined) window.clearTimeout(updateCheckTimer);
+  if (updateCheckInterval !== undefined) window.clearInterval(updateCheckInterval);
 });
 </script>
 
