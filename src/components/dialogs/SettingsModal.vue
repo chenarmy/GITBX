@@ -4,6 +4,7 @@ import { AI_PROVIDER_PRESETS, useAiStore } from '@/stores/ai';
 import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
+import { useUpdatesStore } from '@/stores/updates';
 import { Settings, X, User, Cpu, Info, Globe2 } from 'lucide-vue-next';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
@@ -15,6 +16,7 @@ const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
+const updatesStore = useUpdatesStore();
 const { t } = useI18n();
 const activeTab = ref<'settings' | 'about'>('settings');
 const proxyPassword = ref('');
@@ -158,12 +160,18 @@ function closeSettings() {
           {{ t('Settings') }}
         </button>
         <button
-          class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
+          class="relative inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
           :class="activeTab === 'about' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
           @click="activeTab = 'about'"
         >
           <Info class="h-3.5 w-3.5" />
           {{ t('About GITBX') }}
+          <span
+            v-if="updatesStore.hasUpdateAvailable"
+            class="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-card"
+            :title="t('New version available')"
+            aria-label="New version available"
+          />
         </button>
       </div>
 

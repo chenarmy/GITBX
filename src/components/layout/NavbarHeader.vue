@@ -4,6 +4,7 @@ import { useRepoStore } from '@/stores/repo';
 import { useSettingsStore } from '@/stores/settings';
 import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
+import { useUpdatesStore } from '@/stores/updates';
 import { useI18n } from '@/i18n';
 import {
   FolderGit2,
@@ -17,6 +18,7 @@ import {
   Trash2,
   FolderOpen,
   Terminal,
+  Code2,
 } from 'lucide-vue-next';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
 
@@ -24,12 +26,15 @@ const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
+const updatesStore = useUpdatesStore();
 const { t } = useI18n();
 const gitApi = useGitApi();
 
 const isRepoDropdownOpen = ref(false);
+const isEditorDropdownOpen = ref(false);
 const isOpeningTerminal = ref(false);
 const isOpeningFileManager = ref(false);
+const isOpeningEditor = ref<'vscode' | 'idea' | null>(null);
 
 function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
@@ -78,6 +83,23 @@ async function handleOpenFileManager() {
   }
 }
 
+async function handleOpenInEditor(editor: 'vscode' | 'idea') {
+  const repoPath = repoStore.activeRepoPath;
+  if (!repoPath || isOpeningEditor.value) return;
+
+  isEditorDropdownOpen.value = false;
+  isOpeningEditor.value = editor;
+  const editorName = editor === 'vscode' ? 'Visual Studio Code' : 'IntelliJ IDEA';
+  try {
+    await gitApi.openInEditor(repoPath, editor);
+    notification.success(t('Editor Opened'), t('Opened {path} in {editor}', { path: repoPath, editor: editorName }));
+  } catch (error) {
+    notification.error(t('Failed to Open Editor'), formatGitError(error, t('Could not open {editor}. Make sure it is installed.', { editor: editorName })));
+  } finally {
+    isOpeningEditor.value = null;
+  }
+}
+
 function handleToggleTheme() {
   settingsStore.toggleTheme();
   notification.info(settingsStore.isDark ? 'Dark Theme Activated' : 'Light Theme Activated');
@@ -87,6 +109,9 @@ function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (!target.closest('#repo-dropdown-container')) {
     isRepoDropdownOpen.value = false;
+  }
+  if (!target.closest('#editor-dropdown-container')) {
+    isEditorDropdownOpen.value = false;
   }
 }
 
@@ -176,6 +201,37 @@ onUnmounted(() => {
       </button>
 
       <!-- Repository-scoped escape hatch for advanced Git commands. -->
+      <div id="editor-dropdown-container" class="relative">
+        <button
+          @click.stop="isEditorDropdownOpen = !isEditorDropdownOpen"
+          :disabled="!repoStore.activeRepoPath || Boolean(isOpeningEditor)"
+          class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
+          :title="t('Open Repository in Editor')"
+        >
+          <Code2 class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningEditor }" />
+          <ChevronDown class="w-3 h-3 transition-transform" :class="{ 'rotate-180': isEditorDropdownOpen }" />
+        </button>
+        <div
+          v-if="isEditorDropdownOpen"
+          class="absolute left-0 top-full mt-1.5 w-48 rounded-lg border border-border bg-card py-1 shadow-xl z-50"
+        >
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-secondary transition"
+            @click="handleOpenInEditor('vscode')"
+          >
+            <Code2 class="h-3.5 w-3.5 text-sky-500" />
+            <span>Visual Studio Code</span>
+          </button>
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-secondary transition"
+            @click="handleOpenInEditor('idea')"
+          >
+            <Code2 class="h-3.5 w-3.5 text-violet-500" />
+            <span>IntelliJ IDEA</span>
+          </button>
+        </div>
+      </div>
+
       <button
         @click="handleOpenTerminal"
         :disabled="!repoStore.activeRepoPath || isOpeningTerminal"
@@ -240,10 +296,16 @@ onUnmounted(() => {
 
       <button
         @click="settingsStore.isSettingsModalOpen = true"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+        class="relative p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
         :title="t('Open Settings')"
       >
         <Settings class="w-3.5 h-3.5" />
+        <span
+          v-if="updatesStore.hasUpdateAvailable"
+          class="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-card"
+          :title="t('New version available')"
+          aria-label="New version available"
+        />
       </button>
     </div>
   </header>

@@ -1067,6 +1067,14 @@ export function useGitApi() {
     getConsole().logInfo(`Opened the file manager in ${repoPath}.`);
   };
 
+  const openInEditor = async (repoPath: string, editor: 'vscode' | 'idea'): Promise<void> => {
+    if (!isTauri()) {
+      throw new Error('Opening a code editor is only available in the desktop app.');
+    }
+    await invoke('open_in_editor', { repoPath, editor });
+    getConsole().logInfo(`Opened ${repoPath} in ${editor === 'vscode' ? 'Visual Studio Code' : 'IntelliJ IDEA'}.`);
+  };
+
   const generateCommitMessage = async (
     diffText: string,
     config: LlmConfig,
@@ -1379,6 +1387,7 @@ export function useGitApi() {
     getSyncStatus,
     openSystemTerminal,
     openFileManager,
+    openInEditor,
     generateCommitMessage,
     scanSecrets,
     analyzeConflict,
