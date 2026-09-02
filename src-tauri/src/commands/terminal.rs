@@ -310,6 +310,9 @@ fn open_intellij_idea(path: &Path) -> Result<(), String> {
     {
         let mut candidates = vec![PathBuf::from("idea64.exe"), PathBuf::from("idea.exe")];
         candidates.extend(windows_app_path_candidates(&[
+            "Programs\\IntelliJ IDEA\\bin\\idea64.exe",
+            "Programs\\IntelliJ IDEA Community Edition\\bin\\idea64.exe",
+            "Programs\\IntelliJ IDEA Ultimate\\bin\\idea64.exe",
             "JetBrains\\Toolbox\\scripts\\idea.exe",
             "JetBrains\\Toolbox\\scripts\\idea64.exe",
         ]));
