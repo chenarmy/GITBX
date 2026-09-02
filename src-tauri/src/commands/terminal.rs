@@ -1,4 +1,6 @@
 use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 use std::process::Command;
 
 use gitbx_core::{path_for_display, GitService};
@@ -193,4 +195,186 @@ pub async fn open_file_manager(repo_path: String) -> Result<(), String> {
         let _ = path_string;
         Err("Opening a file manager is not supported on this platform".to_string())
     }
+}
+
+/// Open the selected Git repository in a supported code editor.
+#[tauri::command]
+pub async fn open_in_editor(repo_path: String, editor: String) -> Result<(), String> {
+    let repo_path = repo_path.trim();
+    if repo_path.is_empty() {
+        return Err("No repository is currently open".to_string());
+    }
+
+    let path = Path::new(repo_path);
+    if !path.is_dir() {
+        return Err(format!("Repository directory does not exist: {repo_path}"));
+    }
+    GitService::open(repo_path)
+        .map_err(|error| format!("The selected directory is not a Git repository: {error}"))?;
+    let path = std::fs::canonicalize(path)
+        .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
+
+    match editor.trim().to_ascii_lowercase().as_str() {
+        "vscode" => open_vscode(&path),
+        "idea" => open_intellij_idea(&path),
+        _ => Err(format!("Unsupported editor: {editor}")),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_app_path_candidates(relative_paths: &[&str]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
+        if let Ok(root) = std::env::var(variable) {
+            candidates.extend(
+                relative_paths
+                    .iter()
+                    .map(|relative| Path::new(&root).join(relative)),
+            );
+        }
+    }
+    candidates
+}
+
+#[cfg(target_os = "windows")]
+fn find_jetbrains_idea(root: &Path, depth: usize) -> Option<PathBuf> {
+    if depth == 0 || !root.is_dir() {
+        return None;
+    }
+    let mut entries = std::fs::read_dir(root)
+        .ok()?
+        .filter_map(Result::ok)
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.file_name()));
+
+    for entry in &entries {
+        let candidate = entry.path();
+        if candidate.is_file()
+            && candidate
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("idea64.exe"))
+        {
+            return Some(candidate);
+        }
+    }
+    entries
+        .into_iter()
+        .find_map(|entry| find_jetbrains_idea(&entry.path(), depth - 1))
+}
+
+fn open_vscode(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = vec![PathBuf::from("code.exe")];
+        candidates.extend(windows_app_path_candidates(&[
+            "Programs\\Microsoft VS Code\\Code.exe",
+            "Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe",
+            "Microsoft VS Code\\Code.exe",
+            "Microsoft VS Code Insiders\\Code - Insiders.exe",
+        ]));
+        for program in candidates {
+            if Command::new(program).arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for application in ["Visual Studio Code", "Visual Studio Code - Insiders"] {
+            if Command::new("open")
+                .args(["-a", application, "--args"])
+                .arg(path)
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for program in ["code", "code-insiders", "codium"] {
+            if Command::new(program).arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    Err("Visual Studio Code was not found. Install it or add its launcher to PATH.".to_string())
+}
+
+fn open_intellij_idea(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = vec![PathBuf::from("idea64.exe"), PathBuf::from("idea.exe")];
+        candidates.extend(windows_app_path_candidates(&[
+            "JetBrains\\Toolbox\\scripts\\idea.exe",
+            "JetBrains\\Toolbox\\scripts\\idea64.exe",
+        ]));
+        for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
+            if let Ok(root) = std::env::var(variable) {
+                let search_root = if variable == "LOCALAPPDATA" {
+                    Path::new(&root)
+                        .join("JetBrains")
+                        .join("Toolbox")
+                        .join("apps")
+                } else {
+                    Path::new(&root).join("JetBrains")
+                };
+                if let Some(program) = find_jetbrains_idea(&search_root, 6) {
+                    candidates.push(program);
+                }
+            }
+        }
+        for program in candidates {
+            if Command::new(program).arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for application in ["IntelliJ IDEA", "IntelliJ IDEA CE"] {
+            if Command::new("open")
+                .args(["-a", application, "--args"])
+                .arg(path)
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for program in [
+            "idea",
+            "idea.sh",
+            "intellij-idea",
+            "intellij-idea-community",
+        ] {
+            if Command::new(program).arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        for application_id in [
+            "com.jetbrains.IntelliJ-IDEA-Ultimate",
+            "com.jetbrains.IntelliJ-IDEA-Community",
+        ] {
+            if Command::new("flatpak")
+                .args(["run", application_id])
+                .arg(path)
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    Err("IntelliJ IDEA was not found. Install it or add its launcher to PATH.".to_string())
 }

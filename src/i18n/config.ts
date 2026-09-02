@@ -1994,3 +1994,18 @@ const unifiedChangesTranslations: Record<Locale, MessageCatalog> = {
 for (const loc of Object.keys(unifiedChangesTranslations) as Locale[]) {
   Object.assign(messages[loc], unifiedChangesTranslations[loc]);
 }
+
+const editorTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Open Repository in Editor': 'Open Repository in Editor', 'Editor Opened': 'Editor Opened', 'Opened {path} in {editor}': 'Opened {path} in {editor}', 'Failed to Open Editor': 'Failed to Open Editor', 'Could not open {editor}. Make sure it is installed.': 'Could not open {editor}. Make sure it is installed.' },
+  ja: { 'Open Repository in Editor': 'エディターでリポジトリを開く', 'Editor Opened': 'エディターを開きました', 'Opened {path} in {editor}': '{path} を {editor} で開きました', 'Failed to Open Editor': 'エディターを開けませんでした', 'Could not open {editor}. Make sure it is installed.': '{editor} を開けませんでした。インストールされていることを確認してください。' },
+  de: { 'Open Repository in Editor': 'Repository im Editor öffnen', 'Editor Opened': 'Editor geöffnet', 'Opened {path} in {editor}': '{path} in {editor} geöffnet', 'Failed to Open Editor': 'Editor konnte nicht geöffnet werden', 'Could not open {editor}. Make sure it is installed.': '{editor} konnte nicht geöffnet werden. Stelle sicher, dass es installiert ist.' },
+  es: { 'Open Repository in Editor': 'Abrir repositorio en el editor', 'Editor Opened': 'Editor abierto', 'Opened {path} in {editor}': 'Se abrió {path} en {editor}', 'Failed to Open Editor': 'No se pudo abrir el editor', 'Could not open {editor}. Make sure it is installed.': 'No se pudo abrir {editor}. Comprueba que esté instalado.' },
+  'zh-CN': { 'Open Repository in Editor': '在编辑器中打开仓库', 'Editor Opened': '编辑器已打开', 'Opened {path} in {editor}': '已使用 {editor} 打开 {path}', 'Failed to Open Editor': '无法打开编辑器', 'Could not open {editor}. Make sure it is installed.': '无法打开 {editor}，请确认已安装该编辑器。' },
+  'zh-TW': { 'Open Repository in Editor': '在編輯器中開啟儲存庫', 'Editor Opened': '編輯器已開啟', 'Opened {path} in {editor}': '已使用 {editor} 開啟 {path}', 'Failed to Open Editor': '無法開啟編輯器', 'Could not open {editor}. Make sure it is installed.': '無法開啟 {editor}，請確認已安裝該編輯器。' },
+  fr: { 'Open Repository in Editor': 'Ouvrir le dépôt dans l’éditeur', 'Editor Opened': 'Éditeur ouvert', 'Opened {path} in {editor}': '{path} ouvert dans {editor}', 'Failed to Open Editor': 'Échec de l’ouverture de l’éditeur', 'Could not open {editor}. Make sure it is installed.': 'Impossible d’ouvrir {editor}. Vérifiez qu’il est installé.' },
+  ar: { 'Open Repository in Editor': 'فتح المستودع في المحرر', 'Editor Opened': 'تم فتح المحرر', 'Opened {path} in {editor}': 'تم فتح {path} في {editor}', 'Failed to Open Editor': 'فشل فتح المحرر', 'Could not open {editor}. Make sure it is installed.': 'تعذر فتح {editor}. تأكد من تثبيته.' },
+};
+
+for (const loc of Object.keys(editorTranslations) as Locale[]) {
+  Object.assign(messages[loc], editorTranslations[loc]);
+}

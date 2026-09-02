@@ -83,6 +83,7 @@ fn main() {
             repo::read_local_history,
             terminal::open_system_terminal,
             terminal::open_file_manager,
+            terminal::open_in_editor,
             diff::get_file_diff,
             diff::apply_partial_patch,
             diff::get_file_history,

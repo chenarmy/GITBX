@@ -152,6 +152,11 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   const isDesktop = computed(isTauriRuntime);
   const isBusy = computed(() => status.value === 'checking' || status.value === 'downloading');
+  const hasUpdateAvailable = computed(() => Boolean(
+    latestVersion.value
+      && latestVersion.value !== currentVersion.value
+      && settings.skippedVersion !== latestVersion.value,
+  ));
 
   const initialize = async () => {
     if (!isTauriRuntime()) return;
@@ -383,6 +388,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     hasMoreReleaseNotes,
     isDesktop,
     isBusy,
+    hasUpdateAvailable,
     initialize,
     checkForUpdates,
     downloadAndInstall,
