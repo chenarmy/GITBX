@@ -42,6 +42,8 @@ AI 提交信息生成、敏感信息扫描和 MCP 工具已接入核心服务。
 
 桌面端设置支持系统代理、HTTP 自定义代理和直连模式。自定义代理可配置端口及认证信息，密码保存于系统密钥环；代理设置用于 HTTP(S) Git 克隆、Fetch、Pull 和 Push，SSH 远程不经过代理。
 
+SSH 远程支持在“设置”中选择全局私钥，也可以在“远程仓库”窗口为当前仓库选择专用私钥。认证优先级为：仓库专用密钥 → 全局密钥 → SSH Agent/用户目录常用密钥 → Git 原有凭据方式。私钥文件内容不会写入 GITBX 配置，仅保存路径；加密私钥的口令保存在系统密钥环中。
+
 ## 开发
 
 ```powershell
@@ -80,13 +82,14 @@ node scripts/verify_all.cjs
 
 ## 桌面版本发布与更新
 
-桌面端使用 Tauri 签名更新，正式更新元数据从
-`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取。updater 公钥随客户端发布，私钥仅用于 CI 签名且不得提交到仓库。配置中保留最后一个已验证版本的元数据地址作为回退，避免不完整 Release 中断更新检查。
+桌面端使用 Tauri 签名更新，正式更新元数据优先从
+`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取；GitHub 不可用时自动切换到 [GitCode 镜像](https://gitcode.com/rayskidy/GITBX)。updater 公钥随客户端发布，私钥仅用于 CI 签名且不得提交到仓库。配置中仍保留最后一个已验证版本的元数据地址作为最终回退，避免不完整 Release 中断更新检查。
 
 首次发布前，在 GitHub 仓库中配置：
 
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY`
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- Actions Secret `GITCODE_TOKEN`（GitCode 个人访问令牌，需要目标仓库的 Release 创建、更新与附件管理权限）
 
 发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
 
@@ -99,6 +102,6 @@ git tag v0.1.4
 git push origin v0.1.4
 ```
 
-推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。
+推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。GitHub 发布完成后，同一批已签名安装包会镜像到 GitCode，并刷新独立的自动更新元数据附件。
 
 `v0.1.0` 尚未包含 updater，必须手动安装一次 `v0.1.1` 或更高版本；之后可直接在应用内下载、签名校验、覆盖安装并重启。

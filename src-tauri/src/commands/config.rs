@@ -1,4 +1,6 @@
-use gitbx_core::{path_for_display, set_proxy_config, KeyringManager, ProxyConfig};
+use gitbx_core::{
+    path_for_display, set_global_ssh_key, set_proxy_config, KeyringManager, ProxyConfig,
+};
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
@@ -80,11 +82,22 @@ fn apply_proxy_config(config: &Value) -> Result<(), String> {
     set_proxy_config(proxy)
 }
 
+fn apply_ssh_config(config: &Value) -> Result<(), String> {
+    let key_path = config
+        .get("settings")
+        .and_then(|settings| settings.get("sshKey"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    set_global_ssh_key(key_path).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub async fn load_app_config() -> Result<Option<Value>, String> {
     let config = read_config(&config_path()?)?;
     if let Some(ref config) = config {
         apply_proxy_config(config)?;
+        apply_ssh_config(config)?;
     }
     Ok(config)
 }
@@ -92,6 +105,7 @@ pub async fn load_app_config() -> Result<Option<Value>, String> {
 #[tauri::command]
 pub async fn save_app_config(config: Value) -> Result<String, String> {
     apply_proxy_config(&config)?;
+    apply_ssh_config(&config)?;
     let path = config_path()?;
     write_config(&path, &config)?;
     Ok(path_for_display(&path))

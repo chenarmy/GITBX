@@ -213,10 +213,14 @@ pub async fn open_in_editor(repo_path: String, editor: String) -> Result<(), Str
         .map_err(|error| format!("The selected directory is not a Git repository: {error}"))?;
     let path = std::fs::canonicalize(path)
         .map_err(|error| format!("Failed to resolve repository directory: {error}"))?;
+    // Electron-based launchers can reject Windows verbatim paths such as
+    // `\\?\D:\repo`, even though the same path is valid for filesystem APIs.
+    let display_path = path_for_display(&path);
+    let launch_path = Path::new(&display_path);
 
     match editor.trim().to_ascii_lowercase().as_str() {
-        "vscode" => open_vscode(&path),
-        "idea" => open_intellij_idea(&path),
+        "vscode" => open_vscode(launch_path),
+        "idea" => open_intellij_idea(launch_path),
         _ => Err(format!("Unsupported editor: {editor}")),
     }
 }
@@ -233,6 +237,80 @@ fn windows_app_path_candidates(relative_paths: &[&str]) -> Vec<PathBuf> {
             );
         }
     }
+    candidates
+}
+
+#[cfg(target_os = "windows")]
+fn hidden_windows_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(target_os = "windows")]
+fn registry_default_value(key: &str) -> Option<String> {
+    let output = hidden_windows_command("reg.exe")
+        .args(["query", key, "/ve"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.lines().find_map(|line| {
+        ["REG_EXPAND_SZ", "REG_SZ"].iter().find_map(|kind| {
+            let (_, value) = line.split_once(kind)?;
+            let value = value.trim().trim_matches('"');
+            (!value.is_empty()).then(|| value.to_string())
+        })
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn executable_from_registry_command(value: &str) -> Option<PathBuf> {
+    let trimmed = value.trim();
+    let executable = if let Some(rest) = trimmed.strip_prefix('"') {
+        rest.split_once('"').map(|(path, _)| path)?
+    } else {
+        trimmed.split_whitespace().next()?
+    };
+    let path = PathBuf::from(executable);
+    path.is_file().then_some(path)
+}
+
+#[cfg(target_os = "windows")]
+fn vscode_registry_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for key in [
+        r"HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe",
+        r"HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe",
+        r"HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\Code - Insiders.exe",
+        r"HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\Code - Insiders.exe",
+    ] {
+        if let Some(value) = registry_default_value(key) {
+            let path = PathBuf::from(value);
+            if path.is_file() {
+                candidates.push(path);
+            }
+        }
+    }
+    for key in [
+        r"HKCU\Software\Classes\vscode\shell\open\command",
+        r"HKCR\vscode\shell\open\command",
+        r"HKCU\Software\Classes\vscode-insiders\shell\open\command",
+        r"HKCR\vscode-insiders\shell\open\command",
+    ] {
+        if let Some(path) = registry_default_value(key)
+            .as_deref()
+            .and_then(executable_from_registry_command)
+        {
+            candidates.push(path);
+        }
+    }
+    candidates.sort();
+    candidates.dedup();
     candidates
 }
 
@@ -266,6 +344,7 @@ fn open_vscode(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let mut candidates = vec![PathBuf::from("code.exe")];
+        candidates.extend(vscode_registry_candidates());
         candidates.extend(windows_app_path_candidates(&[
             "Programs\\Microsoft VS Code\\Code.exe",
             "Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe",

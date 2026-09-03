@@ -1,7 +1,14 @@
 use crate::error::Result;
+use crate::process::hidden_command;
 use crate::proxy_options;
 use crate::repository::Repository;
-use git2::{Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
+use crate::ssh::{
+    configure_git_ssh, configured_ssh_key, passphrase_for, public_key_for,
+    REPOSITORY_SSH_KEY_CONFIG,
+};
+use git2::{
+    ConfigLevel, Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,7 +18,11 @@ pub struct RemoteItem {
     pub push_url: Option<String>,
 }
 
-pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCallbacks<'static> {
+pub fn authenticated_remote_callbacks(
+    config: Option<git2::Config>,
+) -> Result<RemoteCallbacks<'static>> {
+    let configured_key = configured_ssh_key(config.as_ref())?;
+    let configured_passphrase = configured_key.as_deref().and_then(passphrase_for);
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(
         move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
@@ -32,6 +43,15 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
 
             if allowed.is_ssh_key() {
                 let user = username_from_url.unwrap_or("git");
+                if let Some(ref private_key) = configured_key {
+                    let public_key = public_key_for(private_key);
+                    return Cred::ssh_key(
+                        user,
+                        public_key.as_deref(),
+                        private_key,
+                        configured_passphrase.as_deref(),
+                    );
+                }
                 if let Ok(credential) = Cred::ssh_key_from_agent(user) {
                     return Ok(credential);
                 }
@@ -73,7 +93,7 @@ pub fn authenticated_remote_callbacks(config: Option<git2::Config>) -> RemoteCal
             ))
         },
     );
-    callbacks
+    Ok(callbacks)
 }
 
 fn create_git_command() -> std::process::Command {
@@ -86,22 +106,16 @@ fn create_git_command() -> std::process::Command {
             "git",
         ] {
             if *candidate == "git" || std::path::Path::new(candidate).exists() {
-                if let Ok(mut child) = std::process::Command::new(candidate)
-                    .arg("--version")
-                    .spawn()
-                {
-                    let _ = child.wait();
-                    return std::process::Command::new(candidate);
-                }
+                return hidden_command(candidate);
             }
         }
     }
-    std::process::Command::new("git")
+    hidden_command("git")
 }
 
 impl Repository {
     fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
-        Ok(authenticated_remote_callbacks(self.inner().config().ok()))
+        authenticated_remote_callbacks(self.inner().config().ok())
     }
 
     pub fn list_remotes(&self) -> Result<Vec<RemoteItem>> {
@@ -119,6 +133,37 @@ impl Repository {
         }
 
         Ok(list)
+    }
+
+    pub fn repository_ssh_key(&self) -> Result<Option<String>> {
+        let config = self.inner().config()?.open_level(ConfigLevel::Local)?;
+        Ok(config.get_string(REPOSITORY_SSH_KEY_CONFIG).ok())
+    }
+
+    pub fn set_repository_ssh_key(&self, key_path: Option<&str>) -> Result<()> {
+        let mut config = self.inner().config()?.open_level(ConfigLevel::Local)?;
+        match key_path.map(str::trim).filter(|value| !value.is_empty()) {
+            Some(value) => {
+                let path = std::path::Path::new(value);
+                if !path.is_file() {
+                    return Err(crate::error::GitbxError::General(format!(
+                        "SSH private key does not exist: {}",
+                        path.display()
+                    )));
+                }
+                let canonical = std::fs::canonicalize(path)?;
+                config.set_str(
+                    REPOSITORY_SSH_KEY_CONFIG,
+                    &crate::path_for_display(&canonical),
+                )?;
+            }
+            None => {
+                if config.get_string(REPOSITORY_SSH_KEY_CONFIG).is_ok() {
+                    config.remove(REPOSITORY_SSH_KEY_CONFIG)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn set_remote_urls(&self, name: &str, url: &str, push_url: Option<&str>) -> Result<()> {
@@ -148,7 +193,10 @@ impl Repository {
         fetch_opts.proxy_options(proxy_options());
 
         if let Err(err) = remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None) {
-            if let Ok(output) = create_git_command()
+            let mut command = create_git_command();
+            let config = self.inner().config().ok();
+            configure_git_ssh(&mut command, config.as_ref())?;
+            if let Ok(output) = command
                 .current_dir(self.path())
                 .args(["fetch", remote_name])
                 .output()
@@ -183,7 +231,10 @@ impl Repository {
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
         if let Err(error) = remote.push(&[refspec.as_str()], Some(&mut options)) {
             // Fallback to system git CLI push if available
-            if let Ok(output) = create_git_command()
+            let mut command = create_git_command();
+            let config = self.inner().config().ok();
+            configure_git_ssh(&mut command, config.as_ref())?;
+            if let Ok(output) = command
                 .current_dir(self.path())
                 .args(["push", remote_name, &branch])
                 .output()
@@ -261,5 +312,24 @@ mod tests {
             .set_remote_urls(" ", "https://example.com/repo.git", None)
             .is_err());
         assert!(repo.set_remote_urls("origin", " ", None).is_err());
+    }
+
+    #[test]
+    fn stores_repository_ssh_key_in_local_config() {
+        let dir = tempdir().expect("tempdir");
+        let repo = Repository::init(dir.path(), false).expect("init repository");
+        let private_key = dir.path().join("id_ed25519");
+        std::fs::write(&private_key, "private key").expect("write private key");
+
+        repo.set_repository_ssh_key(private_key.to_str()).expect("set key");
+        assert_eq!(
+            repo.repository_ssh_key().expect("read key"),
+            Some(crate::path_for_display(
+                &std::fs::canonicalize(&private_key).expect("canonical key")
+            ))
+        );
+
+        repo.set_repository_ssh_key(None).expect("clear key");
+        assert_eq!(repo.repository_ssh_key().expect("read cleared key"), None);
     }
 }

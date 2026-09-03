@@ -59,13 +59,15 @@ impl LaneTracker {
     }
 
     pub fn allocate_or_continue(&mut self, commit_id: &str) -> usize {
-        for (idx, expected) in self.active_lanes.iter_mut().enumerate() {
-            if let Some(ref target) = expected {
-                if target == commit_id {
+        if let Some(idx) = self.expected_lane(commit_id) {
+            // A commit can be reached by more than one branch. Consume every
+            // duplicate expectation so merged lanes actually close.
+            for expected in &mut self.active_lanes {
+                if expected.as_deref() == Some(commit_id) {
                     *expected = None;
-                    return idx;
                 }
             }
+            return idx;
         }
 
         // Find empty slot to reuse
@@ -81,10 +83,39 @@ impl LaneTracker {
         new_idx
     }
 
-    pub fn set_expected(&mut self, lane: usize, parent_id: String) {
-        if lane >= self.active_lanes.len() {
-            self.active_lanes.resize(lane + 1, None);
+    pub fn expected_lane(&self, commit_id: &str) -> Option<usize> {
+        self.active_lanes
+            .iter()
+            .position(|expected| expected.as_deref() == Some(commit_id))
+    }
+
+    pub fn reserve_parent(&mut self, parent_id: &str, preferred_lane: Option<usize>) -> usize {
+        if let Some(lane) = self.expected_lane(parent_id) {
+            return lane;
         }
-        self.active_lanes[lane] = Some(parent_id);
+
+        if let Some(lane) = preferred_lane {
+            if lane >= self.active_lanes.len() {
+                self.active_lanes.resize(lane + 1, None);
+            }
+            if self.active_lanes[lane].is_none() {
+                self.active_lanes[lane] = Some(parent_id.to_string());
+                return lane;
+            }
+        }
+
+        if let Some((lane, slot)) = self
+            .active_lanes
+            .iter_mut()
+            .enumerate()
+            .find(|(_, slot)| slot.is_none())
+        {
+            *slot = Some(parent_id.to_string());
+            return lane;
+        }
+
+        let lane = self.active_lanes.len();
+        self.active_lanes.push(Some(parent_id.to_string()));
+        lane
     }
 }

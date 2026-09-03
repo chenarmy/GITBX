@@ -1,6 +1,5 @@
 use crate::lane::{EdgeType, GraphCommitNode, GraphEdge, LaneTracker};
 use gitbx_core::CommitDetail;
-use std::collections::HashMap;
 
 pub struct GraphLayoutEngine;
 
@@ -12,29 +11,30 @@ impl GraphLayoutEngine {
         let mut tracker = LaneTracker::new();
         let mut nodes = Vec::with_capacity(commits.len());
 
-        let mut commit_index_map: HashMap<&str, usize> = HashMap::new();
-        for (i, c) in commits.iter().enumerate() {
-            commit_index_map.insert(&c.id, i);
-        }
-
         for c in commits.iter() {
             let current_lane = tracker.allocate_or_continue(&c.id);
             let mut edges = Vec::new();
 
             for (p_idx, parent_id) in c.parent_ids.iter().enumerate() {
                 if p_idx == 0 {
-                    // First parent: continues on same lane or allocates
-                    tracker.set_expected(current_lane, parent_id.clone());
+                    // Continue the first-parent line in place unless another
+                    // active branch already leads to that parent. In that case
+                    // route into the existing lane and close the current one.
+                    let parent_lane = tracker.reserve_parent(parent_id, Some(current_lane));
                     edges.push(GraphEdge {
                         from_lane: current_lane,
-                        to_lane: current_lane,
+                        to_lane: parent_lane,
                         parent_id: parent_id.clone(),
-                        edge_type: EdgeType::Straight,
+                        edge_type: if parent_lane == current_lane {
+                            EdgeType::Straight
+                        } else {
+                            EdgeType::Merge
+                        },
                     });
                 } else {
-                    // Secondary parent (Merge): branch off
-                    let merge_lane = tracker.allocate_or_continue(parent_id);
-                    tracker.set_expected(merge_lane, parent_id.clone());
+                    // Secondary parents get an independent lane until their
+                    // history meets an already active parent line.
+                    let merge_lane = tracker.reserve_parent(parent_id, None);
                     edges.push(GraphEdge {
                         from_lane: current_lane,
                         to_lane: merge_lane,
@@ -103,5 +103,26 @@ mod tests {
         assert_eq!(nodes.len(), 3);
         assert!(nodes[0].is_head);
         assert_eq!(nodes[0].edges.len(), 2);
+        assert_eq!(nodes[0].lane, 0);
+        assert_eq!(nodes[1].lane, 0);
+        assert_eq!(nodes[2].lane, 1);
+        assert_eq!(nodes[1].edges[0].to_lane, 1);
+    }
+
+    #[test]
+    fn closes_feature_lane_at_common_ancestor() {
+        let commits = vec![
+            commit("merge", vec!["main", "feat"]),
+            commit("main", vec!["base"]),
+            commit("feat", vec!["base"]),
+            commit("base", vec![]),
+        ];
+        let nodes = GraphLayoutEngine::compute_layout(&commits, Some("merge"));
+        assert_eq!(
+            nodes.iter().map(|node| node.lane).collect::<Vec<_>>(),
+            vec![0, 0, 1, 0]
+        );
+        assert_eq!(nodes[2].edges[0].from_lane, 1);
+        assert_eq!(nodes[2].edges[0].to_lane, 0);
     }
 }
