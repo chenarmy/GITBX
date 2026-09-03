@@ -39,6 +39,15 @@ const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
 const NODE_RADIUS = 4.5;
 
+const graphWidth = computed(() => {
+  const maximumLane = visibleCommits.value.reduce((maximum, node) => Math.max(
+    maximum,
+    node.lane,
+    ...node.edges.map((edge) => Math.max(edge.from_lane, edge.to_lane)),
+  ), 0);
+  return Math.max(80, maximumLane * LANE_WIDTH + 30);
+});
+
 const DATE_LOCALES: Record<AppLocale, DateFnsLocale> = {
   en: enUS,
   ja,
@@ -97,6 +106,7 @@ function drawGraph() {
 
   const commits = visibleCommits.value;
   const height = commits.length * ROW_HEIGHT;
+  canvas.width = graphWidth.value;
   canvas.height = height;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -113,7 +123,14 @@ function drawGraph() {
         const parentX = edge.to_lane * LANE_WIDTH + 14;
 
         ctx.beginPath();
-        ctx.strokeStyle = getLaneColor(edge.from_lane);
+        if (edge.from_lane === edge.to_lane) {
+          ctx.strokeStyle = getLaneColor(edge.from_lane);
+        } else {
+          const gradient = ctx.createLinearGradient(x, y, parentX, parentY);
+          gradient.addColorStop(0, getLaneColor(edge.from_lane));
+          gradient.addColorStop(1, getLaneColor(edge.to_lane));
+          ctx.strokeStyle = gradient;
+        }
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
 
@@ -221,7 +238,7 @@ function formatTime(timestamp: number) {
 
     <!-- Header row -->
     <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
-      <div class="w-20 pl-2">{{ t('Graph') }}</div>
+      <div class="shrink-0 pl-2" :style="{ width: `${graphWidth}px` }">{{ t('Graph') }}</div>
       <div class="flex-1 pl-2">{{ t('Description') }}</div>
       <div class="w-32">{{ t('Author') }}</div>
       <div class="w-24">{{ t('Date') }}</div>
@@ -242,7 +259,7 @@ function formatTime(timestamp: number) {
         <!-- Canvas overlay for graph lines -->
         <canvas
           ref="canvasRef"
-          width="80"
+          :width="graphWidth"
           class="absolute left-0 top-0 pointer-events-none z-10"
         ></canvas>
 
@@ -258,7 +275,7 @@ function formatTime(timestamp: number) {
             :class="repoStore.selectedCommit?.id === commit.id ? 'bg-primary/10 text-primary font-bold' : 'text-foreground'"
           >
             <!-- Graph lane placeholder spacing -->
-            <div class="w-20 shrink-0"></div>
+            <div class="shrink-0" :style="{ width: `${graphWidth}px` }"></div>
 
             <!-- Description & Branch / Tag Pills -->
             <div class="flex-1 flex items-center space-x-1.5 truncate pr-2">

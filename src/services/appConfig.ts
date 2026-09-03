@@ -13,6 +13,7 @@ export const CONFIG_KEYS = {
   lastUpdateCheckAt: 'gitbx_update_last_check_at',
   ai: 'gitbx_ai_config',
   proxy: 'gitbx_proxy_config',
+  sshKey: 'gitbx_ssh_key',
 } as const;
 
 interface PersistedRepository {
@@ -53,6 +54,7 @@ export interface AppConfig {
     authorName: string;
     authorEmail: string;
     proxy: ProxySettings;
+    sshKey: string;
   };
   ai: Partial<PersistedAiConfig>;
   updates: {
@@ -126,6 +128,7 @@ function readLocalConfig(): AppConfig {
       authorName: localStorage.getItem(CONFIG_KEYS.authorName) || 'Developer',
       authorEmail: localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io',
       proxy,
+      sshKey: localStorage.getItem(CONFIG_KEYS.sshKey) || '',
     },
     ai,
     updates: {
@@ -171,6 +174,9 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
         ? settingsInput.authorEmail
         : fallback.settings.authorEmail,
       proxy: settingsInput?.proxy ? sanitizeProxyConfig(settingsInput.proxy) : fallback.settings.proxy,
+      sshKey: typeof settingsInput?.sshKey === 'string'
+        ? settingsInput.sshKey
+        : fallback.settings.sshKey,
     },
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAiConfig(input.ai) : fallback.ai,
     updates: {
@@ -193,6 +199,7 @@ function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.authorName, config.settings.authorName);
   localStorage.setItem(CONFIG_KEYS.authorEmail, config.settings.authorEmail);
   localStorage.setItem(CONFIG_KEYS.proxy, JSON.stringify(config.settings.proxy));
+  localStorage.setItem(CONFIG_KEYS.sshKey, config.settings.sshKey);
   localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(config.ai));
   if (config.updates.skippedVersion) {
     localStorage.setItem(CONFIG_KEYS.skippedVersion, config.updates.skippedVersion);

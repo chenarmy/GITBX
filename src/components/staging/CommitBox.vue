@@ -101,27 +101,30 @@ async function handleCommitAndPush() {
 <template>
   <div class="dbx-commit-box h-full min-h-0 overflow-hidden bg-card flex flex-col p-2.5 text-xs select-none">
     <!-- Conventional Commit shortcuts & AI Trigger -->
-    <div class="flex items-center justify-between mb-1.5 gap-1">
-      <div class="flex items-center flex-wrap gap-1 overflow-hidden">
+    <div class="commit-tools mb-1.5 flex min-w-0 items-center gap-1">
+      <div class="commit-shortcuts flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
         <button
           v-for="tag in CONVENTIONAL_TAGS"
           :key="tag"
           @click="insertPrefix(tag)"
-          class="px-1.5 py-0.5 rounded bg-secondary hover:bg-muted border border-border text-foreground font-mono text-[10px] transition active:scale-95 shadow-2xs shrink-0"
+          class="shortcut-tag px-1.5 py-0.5 rounded bg-secondary hover:bg-muted border border-border text-foreground font-mono text-[10px] transition active:scale-95 shadow-2xs shrink-0"
         >
           {{ tag }}
         </button>
       </div>
 
-      <button
-        @click="aiStore.openAiModal()"
-        class="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
-      >
-        <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-        <span>{{ t('AI Msg') }}</span>
-      </button>
-      <button v-if="commitTemplate" @click="applyTemplate" class="p-1 rounded hover:bg-accent text-muted-foreground" :title="t('Apply Commit Template')"><FileText class="w-3.5 h-3.5" /></button>
-      <button @click="showAdvanced = !showAdvanced" class="p-1 rounded hover:bg-accent" :class="showAdvanced ? 'text-primary' : 'text-muted-foreground'" :title="t('Commit Options')"><Settings2 class="w-3.5 h-3.5" /></button>
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <button v-if="commitTemplate" @click="applyTemplate" class="p-1 rounded hover:bg-accent text-muted-foreground" :title="t('Apply Commit Template')"><FileText class="w-3.5 h-3.5" /></button>
+        <button
+          @click="aiStore.openAiModal()"
+          class="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
+          :title="t('Open AI Commit & Assistant Modal')"
+        >
+          <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+          <span class="ai-message-label">{{ t('AI Msg') }}</span>
+        </button>
+        <button @click="showAdvanced = !showAdvanced" class="p-1 rounded hover:bg-accent" :class="showAdvanced ? 'text-primary' : 'text-muted-foreground'" :title="t('Commit Options')"><Settings2 class="w-3.5 h-3.5" /></button>
+      </div>
     </div>
 
     <!-- Commit message input -->
@@ -168,3 +171,16 @@ async function handleCommitAndPush() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.dbx-commit-box { container-type: inline-size; }
+
+@container (max-width: 330px) {
+  .shortcut-tag:nth-child(n + 4) { display: none; }
+  .ai-message-label { display: none; }
+}
+
+@container (max-width: 255px) {
+  .shortcut-tag:nth-child(n + 3) { display: none; }
+}
+</style>

@@ -3,7 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useI18n } from '@/i18n';
-import { GitFork, X, AlertCircle, Save, Link2 } from 'lucide-vue-next';
+import { GitFork, X, AlertCircle, Save, Link2, KeyRound, FolderOpen } from 'lucide-vue-next';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useGitApi } from '@/composables/useGitApi';
 
 interface RemoteDraft {
   url: string;
@@ -13,25 +15,35 @@ interface RemoteDraft {
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
 const { t } = useI18n();
+const gitApi = useGitApi();
 const drafts = ref<Record<string, RemoteDraft>>({});
+const repositorySshKey = ref('');
+const originalRepositorySshKey = ref('');
+const repositorySshPassphrase = ref('');
 const isSubmitting = ref(false);
 const errorMsg = ref<string | null>(null);
 
-const hasChanges = computed(() => repoStore.remotes.some((remote) => {
-  const draft = drafts.value[remote.name];
-  return draft && (
-    draft.url.trim() !== (remote.url || '')
-    || draft.pushUrl.trim() !== (remote.push_url || '')
-  );
-}));
+const hasChanges = computed(() => Boolean(repositorySshPassphrase.value)
+  || repositorySshKey.value.trim() !== originalRepositorySshKey.value
+  || repoStore.remotes.some((remote) => {
+    const draft = drafts.value[remote.name];
+    return draft && (
+      draft.url.trim() !== (remote.url || '')
+      || draft.pushUrl.trim() !== (remote.push_url || '')
+    );
+  }));
 
-function syncDrafts() {
+async function syncDrafts() {
   drafts.value = Object.fromEntries(
     repoStore.remotes.map((remote) => [remote.name, {
       url: remote.url || '',
       pushUrl: remote.push_url || '',
     }]),
   );
+  const key = await gitApi.getRepositorySshKey(repoStore.activeRepoPath).catch(() => null);
+  repositorySshKey.value = key || '';
+  originalRepositorySshKey.value = key || '';
+  repositorySshPassphrase.value = '';
 }
 
 watch(
@@ -39,7 +51,7 @@ watch(
   (isOpen) => {
     if (isOpen) {
       errorMsg.value = null;
-      syncDrafts();
+      void syncDrafts();
     }
   },
 );
@@ -47,7 +59,7 @@ watch(
 watch(
   () => repoStore.remotes,
   () => {
-    if (repoStore.isRemoteModalOpen && !isSubmitting.value) syncDrafts();
+    if (repoStore.isRemoteModalOpen && !isSubmitting.value) void syncDrafts();
   },
   { deep: true },
 );
@@ -69,6 +81,15 @@ async function handleSave() {
       const draft = drafts.value[remote.name];
       await repoStore.updateRemoteUrl(remote.name, draft.url, draft.pushUrl);
     }
+    if (repositorySshKey.value.trim() !== originalRepositorySshKey.value) {
+      let normalizedKey = repositorySshKey.value.trim();
+      if (normalizedKey && repositorySshPassphrase.value) {
+        normalizedKey = await gitApi.saveSshPassphrase(normalizedKey, repositorySshPassphrase.value);
+      }
+      await gitApi.setRepositorySshKey(repoStore.activeRepoPath, normalizedKey);
+    } else if (repositorySshKey.value.trim() && repositorySshPassphrase.value) {
+      await gitApi.saveSshPassphrase(repositorySshKey.value, repositorySshPassphrase.value);
+    }
     notification.success(t('Remote URLs Updated'), t('The remote configuration was saved.'));
     repoStore.isRemoteModalOpen = false;
   } catch (err: any) {
@@ -76,6 +97,15 @@ async function handleSave() {
   } finally {
     isSubmitting.value = false;
   }
+}
+
+async function selectRepositorySshKey() {
+  const selected = await openDialog({
+    multiple: false,
+    directory: false,
+    title: t('Select SSH Private Key'),
+  });
+  if (typeof selected === 'string') repositorySshKey.value = selected;
 }
 </script>
 
@@ -102,6 +132,37 @@ async function handleSave() {
       <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
         <div class="text-muted-foreground leading-relaxed">
           {{ t('Remote branches are listed in the left sidebar. Edit the repository Fetch URL here; leave Push URL empty to use the Fetch URL for pushing.') }}
+        </div>
+
+        <div class="space-y-2 rounded-lg border border-border bg-background/40 p-3">
+          <div class="flex items-center gap-1.5 font-semibold text-foreground">
+            <KeyRound class="h-3.5 w-3.5 text-emerald-500" />
+            {{ t('Repository SSH Key') }}
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              v-model="repositorySshKey"
+              :placeholder="t('Inherit the global SSH key when empty')"
+              class="min-w-0 flex-1 rounded border border-border bg-background px-2.5 py-1.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button type="button" class="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 hover:bg-accent" @click="selectRepositorySshKey">
+              <FolderOpen class="h-3.5 w-3.5" />{{ t('Browse') }}
+            </button>
+            <button v-if="repositorySshKey" type="button" class="rounded px-2.5 py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" @click="repositorySshKey = ''">
+              {{ t('Use Global') }}
+            </button>
+          </div>
+          <div v-if="repositorySshKey">
+            <label class="text-[11px] text-muted-foreground">{{ t('SSH Key Passphrase') }}</label>
+            <input
+              v-model="repositorySshPassphrase"
+              type="password"
+              :placeholder="t('Leave blank to keep the saved passphrase')"
+              autocomplete="new-password"
+              class="mt-1 w-full rounded border border-border bg-background px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <p class="text-[10px] text-muted-foreground">{{ t('This key overrides the global SSH key for this repository only.') }}</p>
         </div>
 
         <div

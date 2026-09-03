@@ -64,6 +64,24 @@ pub async fn set_remote_url(
 }
 
 #[tauri::command]
+pub async fn get_repository_ssh_key(repo_path: String) -> CommandResult<Option<String>> {
+    GitService::open(&repo_path)
+        .and_then(|repo| repo.repository_ssh_key())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn set_repository_ssh_key(
+    repo_path: String,
+    key_path: Option<String>,
+) -> CommandResult<()> {
+    GitService::with_write_lock(&repo_path, |repo| {
+        repo.set_repository_ssh_key(key_path.as_deref())
+    })
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn stage_file(repo_path: String, file_path: String) -> CommandResult<()> {
     GitService::with_write_lock(&repo_path, |repo| {
         GitService::validate_file_path(&repo_path, &file_path)?;

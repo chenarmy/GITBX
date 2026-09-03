@@ -1075,6 +1075,25 @@ export function useGitApi() {
     getConsole().logInfo(`Opened ${repoPath} in ${editor === 'vscode' ? 'Visual Studio Code' : 'IntelliJ IDEA'}.`);
   };
 
+  const getRepositorySshKey = async (repoPath: string): Promise<string | null> => {
+    if (!isTauri()) return null;
+    return invoke<string | null>('get_repository_ssh_key', { repoPath });
+  };
+
+  const setRepositorySshKey = async (repoPath: string, keyPath?: string): Promise<void> => {
+    if (!isTauri()) {
+      throw new Error('Repository SSH key management is only available in the desktop app.');
+    }
+    await invoke('set_repository_ssh_key', { repoPath, keyPath: keyPath?.trim() || null });
+  };
+
+  const saveSshPassphrase = async (keyPath: string, passphrase: string): Promise<string> => {
+    if (!isTauri()) {
+      throw new Error('SSH passphrase storage is only available in the desktop app.');
+    }
+    return invoke<string>('save_ssh_passphrase', { keyPath, passphrase });
+  };
+
   const generateCommitMessage = async (
     diffText: string,
     config: LlmConfig,
@@ -1388,6 +1407,9 @@ export function useGitApi() {
     openSystemTerminal,
     openFileManager,
     openInEditor,
+    getRepositorySshKey,
+    setRepositorySshKey,
+    saveSshPassphrase,
     generateCommitMessage,
     scanSecrets,
     analyzeConflict,

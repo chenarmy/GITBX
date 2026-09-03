@@ -1,3 +1,5 @@
+use crate::process::hidden_command;
+use crate::ssh::configure_git_ssh;
 use crate::{open_repo, GitbxError, Repository, RepositoryInfo, Result};
 use git2::{BranchType, ObjectType, ResetType};
 use std::collections::HashMap;
@@ -244,7 +246,7 @@ impl GitService {
         })
     }
     fn git_output(path: &str, args: &[&str]) -> Result<String> {
-        let output = std::process::Command::new("git")
+        let output = hidden_command("git")
             .arg("-C")
             .arg(path)
             .args(args)
@@ -574,7 +576,7 @@ impl GitService {
         std::fs::write(&todo_path, todo)?;
         std::fs::write(&editor_path, "#!/bin/sh\ncat \"$GITBX_TODO\" > \"$1\"\n")?;
         let editor_command = format!("sh \"{}\"", shell_path(&editor_path));
-        let output = std::process::Command::new("git")
+        let output = hidden_command("git")
             .arg("-C")
             .arg(path)
             .args(["rebase", "-i", upstream])
@@ -641,12 +643,12 @@ impl GitService {
             .filter(|value| !value.is_empty())
         {
             let output = if cfg!(windows) {
-                std::process::Command::new("cmd")
+                hidden_command("cmd")
                     .args(["/C", command])
                     .current_dir(path)
                     .output()
             } else {
-                std::process::Command::new("sh")
+                hidden_command("sh")
                     .args(["-c", command])
                     .current_dir(path)
                     .output()
@@ -678,7 +680,7 @@ impl GitService {
         if sign {
             args.push("--gpg-sign".into());
         }
-        let output = std::process::Command::new("git")
+        let output = hidden_command("git")
             .arg("-C")
             .arg(path)
             .args(&args)
@@ -825,7 +827,7 @@ impl GitService {
         let mut fetch_options = git2::FetchOptions::new();
         fetch_options.remote_callbacks(crate::remote::authenticated_remote_callbacks(
             git2::Config::open_default().ok(),
-        ));
+        )?);
         fetch_options.proxy_options(crate::proxy_options());
         let mut builder = git2::build::RepoBuilder::new();
         builder.fetch_options(fetch_options);
@@ -947,7 +949,12 @@ impl GitService {
     }
 
     fn run_git(path: &str, args: &[String]) -> Result<()> {
-        let output = std::process::Command::new("git")
+        let mut command = hidden_command("git");
+        let config = Self::open(path)
+            .ok()
+            .and_then(|repo| repo.inner().config().ok());
+        configure_git_ssh(&mut command, config.as_ref())?;
+        let output = command
             .arg("-C")
             .arg(path)
             .args(args)

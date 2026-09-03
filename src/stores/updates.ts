@@ -30,6 +30,14 @@ interface GitHubRelease {
   draft: boolean;
 }
 
+interface GitCodeRelease {
+  tag_name: string;
+  created_at?: string | null;
+  body?: string | null;
+  prerelease?: boolean;
+  release_status?: string;
+}
+
 interface ReleaseCache {
   fetchedAt: number;
   releases: ReleaseNote[];
@@ -38,6 +46,9 @@ interface ReleaseCache {
 const GITHUB_REPOSITORY = 'chenarmy/GITBX';
 const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPOSITORY}/releases`;
 const RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases`;
+const GITCODE_REPOSITORY = 'rayskidy/GITBX';
+const GITCODE_REPOSITORY_URL = `https://gitcode.com/${GITCODE_REPOSITORY}`;
+const GITCODE_RELEASES_API_URL = `https://api.gitcode.com/api/v5/repos/${GITCODE_REPOSITORY}/releases`;
 const RELEASE_CACHE_KEY = 'gitbx_release_notes_cache_v1';
 const RELEASE_CACHE_TTL = 60 * 60 * 1000;
 const RELEASE_PAGE_SIZE = 10;
@@ -119,6 +130,24 @@ function writeCachedReleases(releases: ReleaseNote[]) {
   } catch {
     // The live list remains usable when localStorage is unavailable.
   }
+}
+
+async function fetchGitCodeReleases(page: number, signal: AbortSignal): Promise<ReleaseNote[]> {
+  const response = await fetch(`${GITCODE_RELEASES_API_URL}?per_page=${RELEASE_PAGE_SIZE}&page=${page}`, {
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!response.ok) throw new Error(`GitCode returned HTTP ${response.status}`);
+  const payload = await response.json() as GitCodeRelease[];
+  return payload
+    .filter((release) => !release.prerelease && release.release_status !== 'pre')
+    .map((release) => ({
+      version: normalizeVersion(release.tag_name),
+      publishedAt: release.created_at || '',
+      body: release.body || '',
+      htmlUrl: GITCODE_REPOSITORY_URL,
+      prerelease: false,
+    }));
 }
 
 export function renderReleaseMarkdown(markdown: string) {
@@ -210,7 +239,10 @@ export const useUpdatesStore = defineStore('updates', () => {
       latestVersion.value = normalizeVersion(candidate.version);
       notes.value = candidate.body || '';
       publishedAt.value = candidate.date || null;
-      releaseUrl.value = updateReleaseUrl(candidate.version);
+      const usesGitCodeMirror = JSON.stringify(candidate.rawJson).includes('gitcode.com');
+      releaseUrl.value = usesGitCodeMirror
+        ? GITCODE_REPOSITORY_URL
+        : updateReleaseUrl(candidate.version);
 
       if (!manual && settings.skippedVersion === latestVersion.value) {
         await candidate.close();
@@ -306,8 +338,8 @@ export const useUpdatesStore = defineStore('updates', () => {
     releaseHistoryLoading.value = true;
     releaseHistoryError.value = null;
     releaseHistoryUsingFallback.value = false;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    let controller = new AbortController();
+    let timeout = window.setTimeout(() => controller.abort(), 15_000);
 
     try {
       const response = await fetch(`${RELEASES_API_URL}?per_page=${RELEASE_PAGE_SIZE}&page=${page}`, {
@@ -344,15 +376,34 @@ export const useUpdatesStore = defineStore('updates', () => {
         releaseUrl.value = latest.htmlUrl;
         if (!notes.value) notes.value = latest.body;
       }
-    } catch (caught) {
-      const cache = readCachedReleases();
-      if (page === 1) {
-        releaseHistory.value = mergeReleaseNotes(cache?.releases ?? [], BUNDLED_RELEASES);
-        releasePage.value = 1;
-        hasMoreReleaseNotes.value = false;
+    } catch (githubError) {
+      try {
+        window.clearTimeout(timeout);
+        controller = new AbortController();
+        timeout = window.setTimeout(() => controller.abort(), 15_000);
+        const releases = await fetchGitCodeReleases(page, controller.signal);
+        releaseHistory.value = page === 1
+          ? mergeReleaseNotes(releases, BUNDLED_RELEASES)
+          : sortReleaseNotes([
+              ...releaseHistory.value,
+              ...releases.filter((release) => !releaseHistory.value.some((item) => item.version === release.version)),
+            ]);
+        releasePage.value = page;
+        hasMoreReleaseNotes.value = releases.length === RELEASE_PAGE_SIZE;
+        releaseHistoryUsingFallback.value = true;
+        if (page === 1) writeCachedReleases(releaseHistory.value);
+      } catch (gitCodeError) {
+        const cache = readCachedReleases();
+        if (page === 1) {
+          releaseHistory.value = mergeReleaseNotes(cache?.releases ?? [], BUNDLED_RELEASES);
+          releasePage.value = 1;
+          hasMoreReleaseNotes.value = false;
+        }
+        const githubMessage = githubError instanceof Error ? githubError.message : String(githubError);
+        const gitCodeMessage = gitCodeError instanceof Error ? gitCodeError.message : String(gitCodeError);
+        releaseHistoryError.value = `${githubMessage}; ${gitCodeMessage}`;
+        releaseHistoryUsingFallback.value = releaseHistory.value.length > 0;
       }
-      releaseHistoryError.value = caught instanceof Error ? caught.message : String(caught);
-      releaseHistoryUsingFallback.value = releaseHistory.value.length > 0;
     } finally {
       window.clearTimeout(timeout);
       releaseHistoryLoading.value = false;

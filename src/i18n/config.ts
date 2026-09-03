@@ -2009,3 +2009,33 @@ const editorTranslations: Record<Locale, MessageCatalog> = {
 for (const loc of Object.keys(editorTranslations) as Locale[]) {
   Object.assign(messages[loc], editorTranslations[loc]);
 }
+
+const sshTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Global SSH Key': 'Global SSH Key', 'Repository SSH Key': 'Repository SSH Key', 'Select SSH Private Key': 'Select SSH Private Key', 'Use SSH agent or Git credentials when empty': 'Use SSH agent or Git credentials when empty', 'Used for SSH remotes unless the current repository has its own key.': 'Used for SSH remotes unless the current repository has its own key.', 'Inherit the global SSH key when empty': 'Inherit the global SSH key when empty', 'This key overrides the global SSH key for this repository only.': 'This key overrides the global SSH key for this repository only.', 'Use Global': 'Use Global' },
+  ja: { 'Global SSH Key': 'グローバル SSH キー', 'Repository SSH Key': 'リポジトリ SSH キー', 'Select SSH Private Key': 'SSH 秘密鍵を選択', 'Use SSH agent or Git credentials when empty': '空の場合は SSH エージェントまたは Git 認証を使用', 'Used for SSH remotes unless the current repository has its own key.': 'リポジトリ固有のキーがない SSH リモートで使用されます。', 'Inherit the global SSH key when empty': '空の場合はグローバル SSH キーを継承', 'This key overrides the global SSH key for this repository only.': 'このキーは、このリポジトリでのみグローバル SSH キーより優先されます。', 'Use Global': 'グローバルを使用' },
+  de: { 'Global SSH Key': 'Globaler SSH-Schlüssel', 'Repository SSH Key': 'Repository-SSH-Schlüssel', 'Select SSH Private Key': 'Privaten SSH-Schlüssel auswählen', 'Use SSH agent or Git credentials when empty': 'Leer lassen für SSH-Agent oder Git-Anmeldedaten', 'Used for SSH remotes unless the current repository has its own key.': 'Wird für SSH-Remotes ohne eigenen Repository-Schlüssel verwendet.', 'Inherit the global SSH key when empty': 'Leer lassen, um den globalen SSH-Schlüssel zu verwenden', 'This key overrides the global SSH key for this repository only.': 'Dieser Schlüssel überschreibt den globalen Schlüssel nur für dieses Repository.', 'Use Global': 'Global verwenden' },
+  es: { 'Global SSH Key': 'Clave SSH global', 'Repository SSH Key': 'Clave SSH del repositorio', 'Select SSH Private Key': 'Seleccionar clave SSH privada', 'Use SSH agent or Git credentials when empty': 'Vacío: usar agente SSH o credenciales de Git', 'Used for SSH remotes unless the current repository has its own key.': 'Se usa para remotos SSH salvo que el repositorio tenga su propia clave.', 'Inherit the global SSH key when empty': 'Vacío: heredar la clave SSH global', 'This key overrides the global SSH key for this repository only.': 'Esta clave sustituye a la global solo en este repositorio.', 'Use Global': 'Usar global' },
+  'zh-CN': { 'Global SSH Key': '全局 SSH 密钥', 'Repository SSH Key': '仓库 SSH 密钥', 'Select SSH Private Key': '选择 SSH 私钥', 'Use SSH agent or Git credentials when empty': '留空时使用 SSH Agent 或原有 Git 凭据', 'Used for SSH remotes unless the current repository has its own key.': '用于 SSH 远端；当前仓库配置了专用密钥时，以仓库密钥为准。', 'Inherit the global SSH key when empty': '留空时继承全局 SSH 密钥', 'This key overrides the global SSH key for this repository only.': '此密钥仅对当前仓库生效，优先级高于全局 SSH 密钥。', 'Use Global': '使用全局配置' },
+  'zh-TW': { 'Global SSH Key': '全域 SSH 金鑰', 'Repository SSH Key': '儲存庫 SSH 金鑰', 'Select SSH Private Key': '選擇 SSH 私鑰', 'Use SSH agent or Git credentials when empty': '留空時使用 SSH Agent 或原有 Git 認證', 'Used for SSH remotes unless the current repository has its own key.': '用於 SSH 遠端；目前儲存庫有專用金鑰時，以儲存庫金鑰為準。', 'Inherit the global SSH key when empty': '留空時繼承全域 SSH 金鑰', 'This key overrides the global SSH key for this repository only.': '此金鑰僅對目前儲存庫生效，優先於全域 SSH 金鑰。', 'Use Global': '使用全域設定' },
+  fr: { 'Global SSH Key': 'Clé SSH globale', 'Repository SSH Key': 'Clé SSH du dépôt', 'Select SSH Private Key': 'Sélectionner une clé SSH privée', 'Use SSH agent or Git credentials when empty': 'Vide : utiliser l’agent SSH ou les identifiants Git', 'Used for SSH remotes unless the current repository has its own key.': 'Utilisée pour les dépôts SSH sans clé spécifique.', 'Inherit the global SSH key when empty': 'Vide : hériter de la clé SSH globale', 'This key overrides the global SSH key for this repository only.': 'Cette clé remplace la clé globale pour ce dépôt uniquement.', 'Use Global': 'Utiliser la globale' },
+  ar: { 'Global SSH Key': 'مفتاح SSH العام', 'Repository SSH Key': 'مفتاح SSH للمستودع', 'Select SSH Private Key': 'اختيار مفتاح SSH الخاص', 'Use SSH agent or Git credentials when empty': 'عند الفراغ، استخدم وكيل SSH أو بيانات Git', 'Used for SSH remotes unless the current repository has its own key.': 'يُستخدم لاتصالات SSH ما لم يكن للمستودع مفتاح خاص.', 'Inherit the global SSH key when empty': 'عند الفراغ، استخدم مفتاح SSH العام', 'This key overrides the global SSH key for this repository only.': 'يتجاوز هذا المفتاح المفتاح العام لهذا المستودع فقط.', 'Use Global': 'استخدام العام' },
+};
+
+for (const loc of Object.keys(sshTranslations) as Locale[]) {
+  Object.assign(messages[loc], sshTranslations[loc]);
+}
+
+const sshPassphraseTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'SSH Key Passphrase': 'SSH Key Passphrase', 'Leave blank to keep the saved passphrase': 'Leave blank to keep the saved passphrase' },
+  ja: { 'SSH Key Passphrase': 'SSH キーのパスフレーズ', 'Leave blank to keep the saved passphrase': '保存済みのパスフレーズを維持する場合は空欄' },
+  de: { 'SSH Key Passphrase': 'SSH-Schlüssel-Passphrase', 'Leave blank to keep the saved passphrase': 'Leer lassen, um die gespeicherte Passphrase beizubehalten' },
+  es: { 'SSH Key Passphrase': 'Frase de contraseña de la clave SSH', 'Leave blank to keep the saved passphrase': 'Déjalo vacío para conservar la frase guardada' },
+  'zh-CN': { 'SSH Key Passphrase': 'SSH 密钥口令', 'Leave blank to keep the saved passphrase': '留空以保留已保存的口令' },
+  'zh-TW': { 'SSH Key Passphrase': 'SSH 金鑰密語', 'Leave blank to keep the saved passphrase': '留空以保留已儲存的密語' },
+  fr: { 'SSH Key Passphrase': 'Phrase secrète de la clé SSH', 'Leave blank to keep the saved passphrase': 'Laisser vide pour conserver la phrase secrète enregistrée' },
+  ar: { 'SSH Key Passphrase': 'عبارة مرور مفتاح SSH', 'Leave blank to keep the saved passphrase': 'اتركه فارغًا للاحتفاظ بعبارة المرور المحفوظة' },
+};
+
+for (const loc of Object.keys(sshPassphraseTranslations) as Locale[]) {
+  Object.assign(messages[loc], sshPassphraseTranslations[loc]);
+}

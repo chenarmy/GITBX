@@ -36,6 +36,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const proxyPort = ref<number>(savedProxy.port);
   const proxyAuthEnabled = ref<boolean>(savedProxy.authEnabled);
   const proxyUsername = ref<string>(savedProxy.username);
+  const sshKey = ref<string>(localStorage.getItem(CONFIG_KEYS.sshKey) || '');
   const isSettingsModalOpen = ref<boolean>(false);
   const skippedVersion = ref<string | null>(localStorage.getItem(CONFIG_KEYS.skippedVersion));
   const savedLastUpdateCheckAt = Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt));
@@ -81,6 +82,7 @@ export const useSettingsStore = defineStore('settings', () => {
       authEnabled: proxyAuthEnabled.value,
       username: proxyUsername.value.trim(),
     }));
+    localStorage.setItem(CONFIG_KEYS.sshKey, sshKey.value.trim());
     localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
     localStorage.setItem(CONFIG_KEYS.locale, language.value);
     if (skippedVersion.value) {
@@ -116,6 +118,7 @@ export const useSettingsStore = defineStore('settings', () => {
     proxyPort,
     proxyAuthEnabled,
     proxyUsername,
+    sshKey,
     isSettingsModalOpen,
     skippedVersion,
     lastUpdateCheckAt,

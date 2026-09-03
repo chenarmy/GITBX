@@ -5,7 +5,8 @@ import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useUpdatesStore } from '@/stores/updates';
-import { Settings, X, User, Cpu, Info, Globe2 } from 'lucide-vue-next';
+import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen } from 'lucide-vue-next';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
 import { computed, ref, watch } from 'vue';
@@ -26,6 +27,8 @@ const draftProxyHost = ref(settingsStore.proxyHost);
 const draftProxyPort = ref(settingsStore.proxyPort);
 const draftProxyAuthEnabled = ref(settingsStore.proxyAuthEnabled);
 const draftProxyUsername = ref(settingsStore.proxyUsername);
+const draftSshKey = ref(settingsStore.sshKey);
+const draftSshPassphrase = ref('');
 const draftAuthorName = ref(settingsStore.authorName);
 const draftAuthorEmail = ref(settingsStore.authorEmail);
 const draftLlmConfig = ref<LlmConfig>({ ...aiStore.llmConfig, api_key: '' });
@@ -38,6 +41,8 @@ function resetDraft() {
   draftProxyPort.value = settingsStore.proxyPort;
   draftProxyAuthEnabled.value = settingsStore.proxyAuthEnabled;
   draftProxyUsername.value = settingsStore.proxyUsername;
+  draftSshKey.value = settingsStore.sshKey;
+  draftSshPassphrase.value = '';
   draftAuthorName.value = settingsStore.authorName;
   draftAuthorEmail.value = settingsStore.authorEmail;
   draftLlmConfig.value = { ...aiStore.llmConfig, api_key: '' };
@@ -81,11 +86,17 @@ async function saveSettings() {
     }
   }
   try {
+    let normalizedSshKey = draftSshKey.value.trim();
+    if (normalizedSshKey && draftSshPassphrase.value) {
+      normalizedSshKey = await gitApi.saveSshPassphrase(normalizedSshKey, draftSshPassphrase.value);
+      draftSshPassphrase.value = '';
+    }
     settingsStore.proxyMode = draftProxyMode.value;
     settingsStore.proxyHost = draftProxyHost.value;
     settingsStore.proxyPort = Number(draftProxyPort.value);
     settingsStore.proxyAuthEnabled = draftProxyAuthEnabled.value;
     settingsStore.proxyUsername = draftProxyUsername.value;
+    settingsStore.sshKey = normalizedSshKey;
     settingsStore.authorName = draftAuthorName.value;
     settingsStore.authorEmail = draftAuthorEmail.value;
     settingsStore.changeLanguage(draftLanguage.value);
@@ -99,6 +110,15 @@ async function saveSettings() {
   } catch (error: any) {
     notification.error(t('Failed to save settings'), error?.message || String(error));
   }
+}
+
+async function selectGlobalSshKey() {
+  const selected = await openDialog({
+    multiple: false,
+    directory: false,
+    title: t('Select SSH Private Key'),
+  });
+  if (typeof selected === 'string') draftSshKey.value = selected;
 }
 
 function handleProviderChange(event: Event) {
@@ -259,6 +279,40 @@ function closeSettings() {
               {{ t('Proxy settings apply to HTTP(S) Git operations. SSH remotes are not proxied.') }}
             </p>
           </div>
+        </div>
+
+        <!-- Global SSH identity -->
+        <div class="space-y-2 border-t border-border pt-3">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <KeyRound class="w-3.5 h-3.5 text-emerald-400" />
+            <span>{{ t('Global SSH Key') }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              v-model="draftSshKey"
+              :placeholder="t('Use SSH agent or Git credentials when empty')"
+              class="min-w-0 flex-1 bg-background border border-border rounded px-2.5 py-1.5 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button type="button" class="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1.5 hover:bg-accent" @click="selectGlobalSshKey">
+              <FolderOpen class="h-3.5 w-3.5" />{{ t('Browse') }}
+            </button>
+            <button v-if="draftSshKey" type="button" class="rounded px-2.5 py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" @click="draftSshKey = ''">
+              {{ t('Clear') }}
+            </button>
+          </div>
+          <div v-if="draftSshKey">
+            <label class="text-[11px] text-muted-foreground">{{ t('SSH Key Passphrase') }}</label>
+            <input
+              v-model="draftSshPassphrase"
+              type="password"
+              :placeholder="t('Leave blank to keep the saved passphrase')"
+              autocomplete="new-password"
+              class="mt-1 w-full rounded border border-border bg-background px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <p class="text-[10px] text-muted-foreground">
+            {{ t('Used for SSH remotes unless the current repository has its own key.') }}
+          </p>
         </div>
 
         <!-- Git Signature -->
