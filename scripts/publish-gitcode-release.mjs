@@ -26,11 +26,18 @@ function apiUrl(endpoint, query = {}) {
   return url;
 }
 
-async function request(endpoint, { method = 'GET', body, query, accepted = [200, 201] } = {}) {
+async function request(endpoint, {
+  method = 'GET', body, query, accepted = [200, 201], form = false,
+} = {}) {
+  const requestBody = form && body
+    ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)]))
+    : body ? JSON.stringify(body) : undefined;
   const response = await fetch(apiUrl(endpoint, query), {
     method,
-    headers: body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body
+      ? { Accept: 'application/json', 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' }
+      : { Accept: 'application/json' },
+    body: requestBody,
   });
   const text = await response.text();
   let payload = null;
@@ -55,11 +62,13 @@ async function ensureRelease(releaseTag, name, body, status) {
   if (!existing) {
     return (await request('/releases', {
       method: 'POST',
+      form: true,
       body: { tag_name: releaseTag, name, body, target_commitish: 'main', release_status: status },
     })).payload;
   }
   return (await request(`/releases/${encodeURIComponent(releaseTag)}`, {
     method: 'PATCH',
+    form: true,
     body: { name, body, release_status: status },
   })).payload;
 }
