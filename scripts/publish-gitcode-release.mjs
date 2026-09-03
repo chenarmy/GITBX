@@ -30,15 +30,19 @@ async function request(endpoint, {
   method = 'GET', body, query, accepted = [200, 201], form = false,
 } = {}) {
   const requestBody = form && body
-    ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)]))
+    ? (() => {
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(body)) formData.append(key, String(value));
+      return formData;
+    })()
     : body ? JSON.stringify(body) : undefined;
-  const serializedBody = requestBody instanceof URLSearchParams ? requestBody.toString() : requestBody;
+  const serializedBody = requestBody instanceof FormData ? requestBody : requestBody;
   const response = await fetch(apiUrl(endpoint, query), {
     method,
-    headers: body
+    headers: body && !(requestBody instanceof FormData)
       ? {
         Accept: 'application/json',
-        'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json; charset=utf-8',
+        'Content-Type': 'application/json; charset=utf-8',
         'Content-Length': String(Buffer.byteLength(serializedBody)),
       }
       : { Accept: 'application/json' },
@@ -67,11 +71,13 @@ async function ensureRelease(releaseTag, name, body, status) {
   if (!existing) {
     return (await request('/releases', {
       method: 'POST',
+      form: true,
       body: { tag_name: releaseTag, name, body, target_commitish: 'main', release_status: status },
     })).payload;
   }
   return (await request(`/releases/${encodeURIComponent(releaseTag)}`, {
     method: 'PATCH',
+    form: true,
     body: { name, body, release_status: status },
   })).payload;
 }
