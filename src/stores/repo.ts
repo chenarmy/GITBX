@@ -66,6 +66,8 @@ export const useRepoStore = defineStore('repo', () => {
   const tags = ref<TagItem[]>([]);
   const stashes = ref<StashItem[]>([]);
   const syncStatus = ref<SyncStatus>({ incoming: [], outgoing: [] });
+  const repoSyncStatuses = ref<Record<string, SyncStatus>>({});
+  const isRefreshingRepoSyncStatuses = ref(false);
   const isSyncStatusOpen = ref(false);
   const isWorktreeManagerOpen = ref(false);
   const isPullRequestOpen = ref(false);
@@ -116,6 +118,7 @@ export const useRepoStore = defineStore('repo', () => {
     remotes.value = [];
     tags.value = [];
     stashes.value = [];
+    syncStatus.value = { incoming: [], outgoing: [] };
     commitNodes.value = [];
     graphHasMore.value = false;
     selectedCommit.value = null;
@@ -171,13 +174,14 @@ export const useRepoStore = defineStore('repo', () => {
         saveReposToStorage();
       }
 
-      const [statusResult, branchResult, remoteResult, tagResult, stashResult, graphResult] = await Promise.allSettled([
+      const [statusResult, branchResult, remoteResult, tagResult, stashResult, graphResult, syncResult] = await Promise.allSettled([
         gitApi.getRepoStatus(path),
         gitApi.listBranches(path),
         gitApi.listRemotes(path),
         gitApi.listTags(path),
         gitApi.listStashes(path),
         gitApi.getCommitGraph(path, 0, 150),
+        gitApi.getSyncStatus(path),
       ]);
 
       const failures: string[] = [];
@@ -200,6 +204,12 @@ export const useRepoStore = defineStore('repo', () => {
         selectedCommit.value = graphResult.value.nodes[0] || null;
       } else {
         failures.push(`commit graph: ${formatGitError(graphResult.reason)}`);
+      }
+      if (syncResult.status === 'fulfilled') {
+        syncStatus.value = syncResult.value;
+        repoSyncStatuses.value = { ...repoSyncStatuses.value, [path]: syncResult.value };
+      } else {
+        failures.push(`sync status: ${formatGitError(syncResult.reason)}`);
       }
 
       if (failures.length) {
@@ -238,6 +248,8 @@ export const useRepoStore = defineStore('repo', () => {
 
   const removeRepo = (pathToRemove: string) => {
     repoList.value = repoList.value.filter((r) => r.path !== pathToRemove);
+    const { [pathToRemove]: _removed, ...remainingSyncStatuses } = repoSyncStatuses.value;
+    repoSyncStatuses.value = remainingSyncStatuses;
     if (activeRepoPath.value === pathToRemove) {
       if (repoList.value.length > 0) {
         loadRepo(repoList.value[0].path);
@@ -596,8 +608,24 @@ export const useRepoStore = defineStore('repo', () => {
     syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value).catch(() => ({ incoming: [], outgoing: [] }));
   };
 
-  const refreshSyncStatus = async () => {
-    syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value);
+  const refreshSyncStatus = async (repoPath = activeRepoPath.value) => {
+    if (!repoPath) return;
+    const status = await gitApi.getSyncStatus(repoPath);
+    repoSyncStatuses.value = { ...repoSyncStatuses.value, [repoPath]: status };
+    if (repoPath === activeRepoPath.value) syncStatus.value = status;
+  };
+
+  const refreshAllRepoSyncStatuses = async (fetchFirst = false) => {
+    if (isRefreshingRepoSyncStatuses.value) return;
+    isRefreshingRepoSyncStatuses.value = true;
+    try {
+      await Promise.allSettled(repoList.value.map(async (repo) => {
+        if (fetchFirst) await gitApi.fetchRemote(repo.path).catch(() => undefined);
+        await refreshSyncStatus(repo.path);
+      }));
+    } finally {
+      isRefreshingRepoSyncStatuses.value = false;
+    }
   };
 
   const discoverRoots = async () => {
@@ -622,6 +650,8 @@ export const useRepoStore = defineStore('repo', () => {
     tags,
     stashes,
     syncStatus,
+    repoSyncStatuses,
+    isRefreshingRepoSyncStatuses,
     isSyncStatusOpen,
     isWorktreeManagerOpen,
     isPullRequestOpen,
@@ -698,6 +728,7 @@ export const useRepoStore = defineStore('repo', () => {
     pullRemote,
     pushRemote,
     refreshSyncStatus,
+    refreshAllRepoSyncStatuses,
     discoverRoots,
   };
 });

@@ -21,6 +21,8 @@ import {
   FolderTree,
   Folder,
   FolderOpen,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
@@ -179,14 +181,32 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             <span class="min-w-0 truncate">{{ repo.name }}</span>
           </div>
 
-          <button
-            v-if="repoStore.repoList.length > 1"
-            @click.stop="repoStore.removeRepo(repo.path)"
-            class="ml-1 shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
-            :title="t('Remove from Workspace')"
-          >
-            <Trash2 class="w-3 h-3" />
-          </button>
+          <div class="ml-1 flex shrink-0 items-center gap-1">
+            <span
+              v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
+              class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+              :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
+            >
+              <ArrowDownCircle class="h-3.5 w-3.5" />
+              <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
+            </span>
+            <span
+              v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
+              class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+              :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
+            >
+              <ArrowUpCircle class="h-3.5 w-3.5" />
+              <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
+            </span>
+            <button
+              v-if="repoStore.repoList.length > 1"
+              @click.stop="repoStore.removeRepo(repo.path)"
+              class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+              :title="t('Remove from Workspace')"
+            >
+              <Trash2 class="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

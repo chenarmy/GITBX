@@ -47,7 +47,9 @@ function scheduleAutoFetch() {
   if (autoFetchTimer) window.clearInterval(autoFetchTimer);
   autoFetchTimer = undefined;
   if (autoFetchEnabled.value) {
-    autoFetchTimer = window.setInterval(() => { if (!isFetching.value && repoStore.activeRepoPath) void repoStore.fetchRemote(); }, 5 * 60 * 1000);
+    autoFetchTimer = window.setInterval(() => {
+      if (!isFetching.value) void repoStore.refreshAllRepoSyncStatuses(true);
+    }, 5 * 60 * 1000);
   }
 }
 
@@ -55,6 +57,7 @@ function toggleAutoFetch() {
   autoFetchEnabled.value = !autoFetchEnabled.value;
   localStorage.setItem('gitbx_auto_fetch', String(autoFetchEnabled.value));
   scheduleAutoFetch();
+  if (autoFetchEnabled.value) void repoStore.refreshAllRepoSyncStatuses(true);
 }
 
 function handleWindowClick(event: MouseEvent) {
@@ -63,7 +66,7 @@ function handleWindowClick(event: MouseEvent) {
 
 onMounted(() => {
   scheduleAutoFetch();
-  if (repoStore.activeRepoPath) void repoStore.refreshSyncStatus().catch(() => undefined);
+  void repoStore.refreshAllRepoSyncStatuses(autoFetchEnabled.value);
   window.addEventListener('click', handleWindowClick);
 });
 onUnmounted(() => {
