@@ -6,9 +6,7 @@ use crate::ssh::{
     configure_git_ssh, configured_ssh_key, passphrase_for, public_key_for,
     REPOSITORY_SSH_KEY_CONFIG,
 };
-use git2::{
-    ConfigLevel, Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks,
-};
+use git2::{ConfigLevel, Cred, CredentialType, Error, FetchOptions, PushOptions, RemoteCallbacks};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,7 +319,8 @@ mod tests {
         let private_key = dir.path().join("id_ed25519");
         std::fs::write(&private_key, "private key").expect("write private key");
 
-        repo.set_repository_ssh_key(private_key.to_str()).expect("set key");
+        repo.set_repository_ssh_key(private_key.to_str())
+            .expect("set key");
         assert_eq!(
             repo.repository_ssh_key().expect("read key"),
             Some(crate::path_for_display(

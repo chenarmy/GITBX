@@ -20,9 +20,6 @@ pub async fn delete_credential(provider: String, username: String) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn save_ssh_passphrase(
-    key_path: String,
-    passphrase: String,
-) -> Result<String, String> {
+pub async fn save_ssh_passphrase(key_path: String, passphrase: String) -> Result<String, String> {
     save_ssh_key_passphrase(&key_path, &passphrase).map_err(|error| error.to_string())
 }

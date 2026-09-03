@@ -6,7 +6,10 @@ use std::process::Command;
 /// window is both unnecessary and disruptive. Other platforms keep the standard
 /// process behavior.
 pub(crate) fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[cfg(target_os = "windows")]
     let mut command = Command::new(program);
+    #[cfg(not(target_os = "windows"))]
+    let command = Command::new(program);
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;

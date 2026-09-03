@@ -2,11 +2,11 @@ pub mod auth;
 pub mod branch;
 pub mod error;
 pub mod path;
+mod process;
 pub mod proxy;
 pub mod remote;
 pub mod repository;
 pub mod service;
-mod process;
 pub mod ssh;
 pub mod status;
 

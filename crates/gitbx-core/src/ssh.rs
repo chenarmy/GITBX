@@ -14,7 +14,9 @@ fn global_key() -> &'static RwLock<Option<PathBuf>> {
 fn validate_key_path(value: &str) -> Result<PathBuf> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return Err(GitbxError::General("SSH private key path cannot be empty".into()));
+        return Err(GitbxError::General(
+            "SSH private key path cannot be empty".into(),
+        ));
     }
     let path = PathBuf::from(trimmed);
     if !path.is_file() {
@@ -54,7 +56,9 @@ fn credential_name(private_key: &Path) -> String {
 pub fn save_ssh_key_passphrase(key_path: &str, passphrase: &str) -> Result<String> {
     let private_key = validate_key_path(key_path)?;
     if passphrase.is_empty() {
-        return Err(GitbxError::General("SSH key passphrase cannot be empty".into()));
+        return Err(GitbxError::General(
+            "SSH key passphrase cannot be empty".into(),
+        ));
     }
     KeyringManager::save_token(
         "ssh-key-passphrase",
