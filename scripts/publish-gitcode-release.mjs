@@ -32,12 +32,17 @@ async function request(endpoint, {
   const requestBody = form && body
     ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)]))
     : body ? JSON.stringify(body) : undefined;
+  const serializedBody = requestBody instanceof URLSearchParams ? requestBody.toString() : requestBody;
   const response = await fetch(apiUrl(endpoint, query), {
     method,
     headers: body
-      ? { Accept: 'application/json', 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' }
+      ? {
+        Accept: 'application/json',
+        'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json; charset=utf-8',
+        'Content-Length': String(Buffer.byteLength(serializedBody)),
+      }
       : { Accept: 'application/json' },
-    body: requestBody,
+    body: serializedBody,
   });
   const text = await response.text();
   let payload = null;
@@ -62,13 +67,11 @@ async function ensureRelease(releaseTag, name, body, status) {
   if (!existing) {
     return (await request('/releases', {
       method: 'POST',
-      form: true,
       body: { tag_name: releaseTag, name, body, target_commitish: 'main', release_status: status },
     })).payload;
   }
   return (await request(`/releases/${encodeURIComponent(releaseTag)}`, {
     method: 'PATCH',
-    form: true,
     body: { name, body, release_status: status },
   })).payload;
 }
