@@ -1,0 +1,41 @@
+name: Mirror an existing release to CNB
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GitHub release tag to mirror
+        required: true
+        default: v0.1.18
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    name: Mirror release to CNB
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+      CNB_REPOSITORY: chenarmy/GITBX
+      CNB_RELEASE_TAG: ${{ inputs.tag }}
+      CNB_RELEASE_NAME: GITBX ${{ inputs.tag }}
+      CNB_RELEASE_BODY_FILE: cnb-release-notes.md
+      CNB_ASSET_DIRECTORY: release-assets
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require release credentials
+        run: |
+          test -n "$CNB_TOKEN" || (echo "Add the CNB_TOKEN Actions secret before publishing." && exit 1)
+          gh release view "$CNB_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+      - name: Download verified GitHub release assets
+        run: gh release download "$CNB_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$CNB_ASSET_DIRECTORY"
+
+      - name: Read release notes
+        run: node scripts/release-notes.mjs "$CNB_RELEASE_TAG" > "$CNB_RELEASE_BODY_FILE"
+
+      - name: Publish assets and updater metadata to CNB
+        run: node scripts/publish-cnb-release.mjs
