@@ -32,7 +32,7 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJCNjQ2NjdDOUYzQUM2QTYKUldTbXhqcWZmR1prS3d6cVpYOWo0K0xCN3Q5WTJ1N0xXSnRVcldkV0dtWWlKbmJpNnhvVjI1eFIK",
       "endpoints": [
         "https://github.com/chenarmy/GITBX/releases/latest/download/latest.json",
-        "https://api.gitcode.com/api/v5/repos/rayskidy/GITBX/releases/gitbx-updater/attach_files/latest.json/download",
+        "https://cnb.cool/chenarmy/GITBX/-/releases/latest/download/latest.json",
         "https://github.com/chenarmy/GITBX/releases/download/v0.1.1/latest.json"
       ],
       "windows": {

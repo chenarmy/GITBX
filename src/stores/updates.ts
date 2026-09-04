@@ -30,12 +30,14 @@ interface GitHubRelease {
   draft: boolean;
 }
 
-interface GitCodeRelease {
+interface CnbRelease {
   tag_name: string;
   created_at?: string | null;
+  published_at?: string | null;
   body?: string | null;
+  html_url?: string;
   prerelease?: boolean;
-  release_status?: string;
+  draft?: boolean;
 }
 
 interface ReleaseCache {
@@ -46,9 +48,9 @@ interface ReleaseCache {
 const GITHUB_REPOSITORY = 'chenarmy/GITBX';
 const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPOSITORY}/releases`;
 const RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases`;
-const GITCODE_REPOSITORY = 'rayskidy/GITBX';
-const GITCODE_REPOSITORY_URL = `https://gitcode.com/${GITCODE_REPOSITORY}`;
-const GITCODE_RELEASES_API_URL = `https://api.gitcode.com/api/v5/repos/${GITCODE_REPOSITORY}/releases`;
+const CNB_REPOSITORY = 'chenarmy/GITBX';
+const CNB_REPOSITORY_URL = `https://cnb.cool/${CNB_REPOSITORY}`;
+const CNB_RELEASES_API_URL = `https://api.cnb.cool/${CNB_REPOSITORY}/-/releases`;
 const RELEASE_CACHE_KEY = 'gitbx_release_notes_cache_v1';
 const RELEASE_CACHE_TTL = 60 * 60 * 1000;
 const RELEASE_PAGE_SIZE = 10;
@@ -132,20 +134,20 @@ function writeCachedReleases(releases: ReleaseNote[]) {
   }
 }
 
-async function fetchGitCodeReleases(page: number, signal: AbortSignal): Promise<ReleaseNote[]> {
-  const response = await fetch(`${GITCODE_RELEASES_API_URL}?per_page=${RELEASE_PAGE_SIZE}&page=${page}`, {
+async function fetchCnbReleases(page: number, signal: AbortSignal): Promise<ReleaseNote[]> {
+  const response = await fetch(`${CNB_RELEASES_API_URL}?page=${page}&page_size=${RELEASE_PAGE_SIZE}`, {
     headers: { Accept: 'application/json' },
     signal,
   });
-  if (!response.ok) throw new Error(`GitCode returned HTTP ${response.status}`);
-  const payload = await response.json() as GitCodeRelease[];
+  if (!response.ok) throw new Error(`CNB returned HTTP ${response.status}`);
+  const payload = await response.json() as CnbRelease[];
   return payload
-    .filter((release) => !release.prerelease && release.release_status !== 'pre')
+    .filter((release) => !release.prerelease && !release.draft)
     .map((release) => ({
       version: normalizeVersion(release.tag_name),
-      publishedAt: release.created_at || '',
+      publishedAt: release.published_at || release.created_at || '',
       body: release.body || '',
-      htmlUrl: GITCODE_REPOSITORY_URL,
+      htmlUrl: release.html_url || CNB_REPOSITORY_URL,
       prerelease: false,
     }));
 }
@@ -239,9 +241,9 @@ export const useUpdatesStore = defineStore('updates', () => {
       latestVersion.value = normalizeVersion(candidate.version);
       notes.value = candidate.body || '';
       publishedAt.value = candidate.date || null;
-      const usesGitCodeMirror = JSON.stringify(candidate.rawJson).includes('gitcode.com');
-      releaseUrl.value = usesGitCodeMirror
-        ? GITCODE_REPOSITORY_URL
+      const usesCnbMirror = JSON.stringify(candidate.rawJson).includes('cnb.cool');
+      releaseUrl.value = usesCnbMirror
+        ? CNB_REPOSITORY_URL
         : updateReleaseUrl(candidate.version);
 
       if (!manual && settings.skippedVersion === latestVersion.value) {
@@ -381,7 +383,7 @@ export const useUpdatesStore = defineStore('updates', () => {
         window.clearTimeout(timeout);
         controller = new AbortController();
         timeout = window.setTimeout(() => controller.abort(), 15_000);
-        const releases = await fetchGitCodeReleases(page, controller.signal);
+        const releases = await fetchCnbReleases(page, controller.signal);
         releaseHistory.value = page === 1
           ? mergeReleaseNotes(releases, BUNDLED_RELEASES)
           : sortReleaseNotes([
@@ -392,7 +394,7 @@ export const useUpdatesStore = defineStore('updates', () => {
         hasMoreReleaseNotes.value = releases.length === RELEASE_PAGE_SIZE;
         releaseHistoryUsingFallback.value = true;
         if (page === 1) writeCachedReleases(releaseHistory.value);
-      } catch (gitCodeError) {
+      } catch (cnbError) {
         const cache = readCachedReleases();
         if (page === 1) {
           releaseHistory.value = mergeReleaseNotes(cache?.releases ?? [], BUNDLED_RELEASES);
@@ -400,8 +402,8 @@ export const useUpdatesStore = defineStore('updates', () => {
           hasMoreReleaseNotes.value = false;
         }
         const githubMessage = githubError instanceof Error ? githubError.message : String(githubError);
-        const gitCodeMessage = gitCodeError instanceof Error ? gitCodeError.message : String(gitCodeError);
-        releaseHistoryError.value = `${githubMessage}; ${gitCodeMessage}`;
+        const cnbMessage = cnbError instanceof Error ? cnbError.message : String(cnbError);
+        releaseHistoryError.value = `${githubMessage}; ${cnbMessage}`;
         releaseHistoryUsingFallback.value = releaseHistory.value.length > 0;
       }
     } finally {
