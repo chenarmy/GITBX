@@ -2039,3 +2039,18 @@ const sshPassphraseTranslations: Record<Locale, MessageCatalog> = {
 for (const loc of Object.keys(sshPassphraseTranslations) as Locale[]) {
   Object.assign(messages[loc], sshPassphraseTranslations[loc]);
 }
+
+const pushRecoveryTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Remote Branch Has New Commits': 'Remote Branch Has New Commits', 'Continue Push': 'Continue Push', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.' },
+  ja: { 'Remote Branch Has New Commits': 'リモートブランチに新しいコミットがあります', 'Continue Push': 'プッシュを続行', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': '最新のリモート状態を取得してから、リモートブランチをローカルブランチで置き換えますか？リモートにしかないコミットは削除されます。' },
+  de: { 'Remote Branch Has New Commits': 'Remote-Branch enthält neue Commits', 'Continue Push': 'Push fortsetzen', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': 'Den neuesten Remote-Stand abrufen und anschließend den Remote-Branch durch den lokalen Branch ersetzen? Commits, die nur im Remote vorhanden sind, werden entfernt.' },
+  es: { 'Remote Branch Has New Commits': 'La rama remota tiene commits nuevos', 'Continue Push': 'Continuar Push', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': '¿Obtener el estado remoto más reciente y reemplazar la rama remota por la rama local? Se eliminarán los commits que solo existan en el remoto.' },
+  'zh-CN': { 'Remote Branch Has New Commits': '远端分支有新的提交', 'Continue Push': '继续推送', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': '是否先获取最新远端状态，再用本地分支替换远端分支？仅存在于远端的提交将被移除。' },
+  'zh-TW': { 'Remote Branch Has New Commits': '遠端分支有新的提交', 'Continue Push': '繼續推送', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': '是否先取得最新遠端狀態，再用本機分支取代遠端分支？僅存在於遠端的提交將被移除。' },
+  fr: { 'Remote Branch Has New Commits': 'La branche distante contient de nouveaux commits', 'Continue Push': 'Continuer l’envoi', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': 'Récupérer le dernier état distant, puis remplacer la branche distante par la branche locale ? Les commits présents uniquement à distance seront supprimés.' },
+  ar: { 'Remote Branch Has New Commits': 'يحتوي الفرع البعيد على التزامات جديدة', 'Continue Push': 'متابعة الدفع', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': 'هل تريد جلب أحدث حالة للفرع البعيد ثم استبداله بالفرع المحلي؟ ستتم إزالة الالتزامات الموجودة في الفرع البعيد فقط.' },
+};
+
+for (const loc of Object.keys(pushRecoveryTranslations) as Locale[]) {
+  Object.assign(messages[loc], pushRecoveryTranslations[loc]);
+}

@@ -25,6 +25,7 @@ import {
 } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
+import { usePushRecovery } from '@/composables/usePushRecovery';
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
@@ -32,6 +33,7 @@ const confirmation = useConfirmationStore();
 const diffStore = useDiffStore();
 const { t } = useI18n();
 const changelistStore = useChangelistStore();
+const { pushWithRecovery } = usePushRecovery();
 
 const isFetching = ref(false);
 const isPulling = ref(false);
@@ -111,11 +113,8 @@ async function handlePush() {
   isPushing.value = true;
   notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
-    if (forceWithLease.value) {
-      const approved = await confirmation.confirm({ title: t('Force Push with Lease'), message: t('Rewrite the remote branch only if it has not changed since the last fetch?'), danger: true, confirmText: t('Force Push') });
-      if (!approved) return;
-    }
-    await repoStore.pushRemote(forceWithLease.value);
+    const pushed = await pushWithRecovery({ forceWithLease: forceWithLease.value });
+    if (!pushed) return;
     notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
     notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));

@@ -7,6 +7,7 @@ import { useConfirmationStore } from '@/stores/confirmation';
 import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { ChevronRight } from 'lucide-vue-next';
+import { usePushRecovery } from '@/composables/usePushRecovery';
 
 const props = defineProps<{
   branch: BranchItem;
@@ -23,6 +24,7 @@ const gitApi = useGitApi();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
+const { pushWithRecovery } = usePushRecovery();
 
 const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
@@ -130,9 +132,15 @@ function handleUpdate() {
   emit('close');
 }
 
-function handlePush() {
-  repoStore.pushRemote();
+async function handlePush() {
   emit('close');
+  notification.info(t('Git Push'), t("Pushing commits to remote..."));
+  try {
+    const pushed = await pushWithRecovery();
+    if (pushed) notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
+  } catch (error) {
+    notification.error(t('Push Failed'), formatGitError(error, t('Failed to push to remote')));
+  }
 }
 
 function handleRename() {

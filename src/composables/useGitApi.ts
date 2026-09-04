@@ -51,6 +51,21 @@ export function formatGitError(error: unknown, fallback = 'Git operation failed'
   return fallback;
 }
 
+export function isNonFastForwardPushError(error: unknown): boolean {
+  const message = formatGitError(error, '').toLowerCase();
+  if (!message) return false;
+  return message.includes('non-fast-forward')
+    || message.includes('(fetch first)')
+    || (
+      (message.includes('updates were rejected') || message.includes('failed to push some refs'))
+      && (
+        message.includes('tip of your current branch is behind')
+        || message.includes('remote contains work')
+        || message.includes('fetch first')
+      )
+    );
+}
+
 async function parseGitResponse<T>(res: Response, fallback: string): Promise<T> {
   const data = await res.json().catch(() => null);
   if (!res.ok || data?.error) {
