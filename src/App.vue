@@ -165,7 +165,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dbx-shell h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans">
+  <div class="dbx-shell h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden font-sans" @contextmenu.prevent>
     <!-- Top Header -->
     <NavbarHeader />
 

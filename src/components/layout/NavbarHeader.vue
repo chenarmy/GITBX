@@ -19,8 +19,12 @@ import {
   FolderOpen,
   Terminal,
   Code2,
+  Minus,
+  Maximize2,
+  X,
 } from 'lucide-vue-next';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
@@ -35,6 +39,22 @@ const isEditorDropdownOpen = ref(false);
 const isOpeningTerminal = ref(false);
 const isOpeningFileManager = ref(false);
 const isOpeningEditor = ref<'vscode' | 'idea' | null>(null);
+const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+async function minimizeWindow() {
+  if (!isDesktop) return;
+  await getCurrentWindow().minimize();
+}
+
+async function toggleMaximizeWindow() {
+  if (!isDesktop) return;
+  await getCurrentWindow().toggleMaximize();
+}
+
+async function closeWindow() {
+  if (!isDesktop) return;
+  await getCurrentWindow().close();
+}
 
 function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
@@ -127,6 +147,7 @@ onUnmounted(() => {
 <template>
   <header
     class="dbx-header h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30"
+    data-tauri-drag-region
   >
     <!-- Left: App Logo & Repo Dropdown Selector -->
     <div class="flex items-center space-x-2">
@@ -307,6 +328,33 @@ onUnmounted(() => {
           aria-label="New version available"
         />
       </button>
+
+      <div v-if="isDesktop" class="ml-1 pl-1 border-l border-border flex items-center">
+        <button
+          @click.stop="minimizeWindow"
+          class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+          :title="t('Minimize Window')"
+          :aria-label="t('Minimize Window')"
+        >
+          <Minus class="w-3.5 h-3.5" />
+        </button>
+        <button
+          @click.stop="toggleMaximizeWindow"
+          class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+          :title="t('Maximize or Restore Window')"
+          :aria-label="t('Maximize or Restore Window')"
+        >
+          <Maximize2 class="w-3.5 h-3.5" />
+        </button>
+        <button
+          @click.stop="closeWindow"
+          class="p-1.5 rounded-md hover:bg-rose-500 hover:text-white active:scale-95 text-muted-foreground transition"
+          :title="t('Close Window')"
+          :aria-label="t('Close Window')"
+        >
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   </header>
 </template>

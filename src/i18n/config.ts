@@ -2040,6 +2040,21 @@ for (const loc of Object.keys(sshPassphraseTranslations) as Locale[]) {
   Object.assign(messages[loc], sshPassphraseTranslations[loc]);
 }
 
+const windowControlsTranslations: Record<Locale, MessageCatalog> = {
+  en: { 'Minimize Window': 'Minimize Window', 'Maximize or Restore Window': 'Maximize or Restore Window', 'Close Window': 'Close Window' },
+  ja: { 'Minimize Window': 'ウィンドウを最小化', 'Maximize or Restore Window': 'ウィンドウを最大化／元に戻す', 'Close Window': 'ウィンドウを閉じる' },
+  de: { 'Minimize Window': 'Fenster minimieren', 'Maximize or Restore Window': 'Fenster maximieren oder wiederherstellen', 'Close Window': 'Fenster schließen' },
+  es: { 'Minimize Window': 'Minimizar ventana', 'Maximize or Restore Window': 'Maximizar o restaurar ventana', 'Close Window': 'Cerrar ventana' },
+  'zh-CN': { 'Minimize Window': '最小化窗口', 'Maximize or Restore Window': '最大化或还原窗口', 'Close Window': '关闭窗口' },
+  'zh-TW': { 'Minimize Window': '最小化視窗', 'Maximize or Restore Window': '最大化或還原視窗', 'Close Window': '關閉視窗' },
+  fr: { 'Minimize Window': 'Réduire la fenêtre', 'Maximize or Restore Window': 'Agrandir ou restaurer la fenêtre', 'Close Window': 'Fermer la fenêtre' },
+  ar: { 'Minimize Window': 'تصغير النافذة', 'Maximize or Restore Window': 'تكبير النافذة أو استعادتها', 'Close Window': 'إغلاق النافذة' },
+};
+
+for (const loc of Object.keys(windowControlsTranslations) as Locale[]) {
+  Object.assign(messages[loc], windowControlsTranslations[loc]);
+}
+
 const pushRecoveryTranslations: Record<Locale, MessageCatalog> = {
   en: { 'Remote Branch Has New Commits': 'Remote Branch Has New Commits', 'Continue Push': 'Continue Push', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.' },
   ja: { 'Remote Branch Has New Commits': 'リモートブランチに新しいコミットがあります', 'Continue Push': 'プッシュを続行', 'Fetch the latest remote state, then replace the remote branch with your local branch? Commits that exist only on the remote will be removed.': '最新のリモート状態を取得してから、リモートブランチをローカルブランチで置き換えますか？リモートにしかないコミットは削除されます。' },
