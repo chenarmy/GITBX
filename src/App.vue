@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import NavbarHeader from '@/components/layout/NavbarHeader.vue';
 import MainToolbar from '@/components/layout/MainToolbar.vue';
 import SidebarWorkspace from '@/components/layout/SidebarWorkspace.vue';
@@ -44,6 +44,25 @@ const { t } = useI18n();
 let updateCheckTimer: number | undefined;
 let updateCheckInterval: number | undefined;
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+
+// A conflict can be created by pull, merge, rebase, cherry-pick, or by a
+// repository refresh after an external Git operation. Always expose the merge
+// editor instead of requiring the operation that caused it to know about UI
+// selection state.
+watch(
+  () => repoStore.statusSummary.conflicted_files.map((file) => file.path).join('\0'),
+  () => {
+    const paths = repoStore.statusSummary.conflicted_files.map((file) => file.path);
+    if (paths.length === 0) {
+      if (diffStore.selectedConflictFile) diffStore.clearConflictSelection();
+      return;
+    }
+    if (!diffStore.selectedConflictFile || !paths.includes(diffStore.selectedConflictFile)) {
+      diffStore.selectConflictFile(paths[0]);
+    }
+  },
+  { immediate: true },
+);
 
 type ResizeTarget = 'sidebar' | 'graph' | 'staging' | 'commit' | 'console';
 

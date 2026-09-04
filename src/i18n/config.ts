@@ -444,6 +444,15 @@ Object.assign(messages['zh-CN'], {
 });
 
 Object.assign(messages.en, {
+  'Minimize Window': 'Minimize Window',
+  'Maximize Window': 'Maximize Window',
+  'Restore Window': 'Restore Window',
+  'Close Window': 'Close Window',
+  'Merge Result': 'Merge Result',
+  'Apply local content': 'Apply local content',
+  'Apply incoming content': 'Apply incoming content',
+  'Remove local content': 'Remove local content',
+  'Remove incoming content': 'Remove incoming content',
   'Conflicts': 'Conflicts',
   'No differences': 'No differences between the branches',
   'Resolve before continuing': 'Resolve before continuing',
@@ -490,6 +499,15 @@ Object.assign(messages.en, {
 });
 
 Object.assign(messages['zh-CN'], {
+  'Minimize Window': '最小化窗口',
+  'Maximize Window': '最大化窗口',
+  'Restore Window': '还原窗口',
+  'Close Window': '关闭窗口',
+  'Merge Result': '最终合并结果',
+  'Apply local content': '采用本地内容',
+  'Apply incoming content': '采用远程内容',
+  'Remove local content': '移除本地内容',
+  'Remove incoming content': '移除远程内容',
   'Conflicts': '冲突文件',
   'Resolve before continuing': '解决后才能继续',
   'Resolve': '解决',

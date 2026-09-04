@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, Check, FileWarning, LoaderCircle, Sparkles, X } from 'lucide-vue-next';
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, FileWarning, LoaderCircle, Sparkles, X } from 'lucide-vue-next';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useDiffStore } from '@/stores/diff';
 import { useNotificationStore } from '@/stores/notification';
@@ -54,6 +54,38 @@ function choose(index: number, side: 'ours' | 'theirs' | 'both') {
     : side === 'theirs'
       ? section.theirs
       : combineBoth(section.ours, section.theirs);
+}
+
+function applySide(index: number, side: 'ours' | 'theirs') {
+  const section = conflict.value ? getConflictSection(conflict.value.chunks[index]) : null;
+  if (!section) return;
+  const source = section[side];
+  const current = resolutions.value[index];
+  if (current === null || current === '') {
+    resolutions.value[index] = source;
+    return;
+  }
+  if (!source || current.includes(source)) return;
+  resolutions.value[index] = side === 'ours'
+    ? combineBoth(source, current)
+    : combineBoth(current, source);
+}
+
+function removeSide(index: number, side: 'ours' | 'theirs') {
+  const section = conflict.value ? getConflictSection(conflict.value.chunks[index]) : null;
+  if (!section) return;
+  const source = section[side];
+  const current = resolutions.value[index] ?? '';
+  if (!source || !current.includes(source)) {
+    // Clicking × is also an explicit decision that this side contributes no
+    // content, so an empty result is considered resolved.
+    if (resolutions.value[index] === null) resolutions.value[index] = '';
+    return;
+  }
+  resolutions.value[index] = current
+    .replace(source, '')
+    .replace(/^\r?\n/, '')
+    .replace(/\r?\n$/, '');
 }
 
 function chooseAll(side: 'ours' | 'theirs') {
@@ -257,34 +289,67 @@ watch(
           </span>
         </div>
 
-        <div class="grid grid-cols-3 divide-x divide-border border-b border-border">
-          <div class="min-w-0">
-            <div class="px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold">{{ t('Ours (Current)') }}</div>
-            <pre class="p-2 min-h-20 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px]">{{ getConflictSection(conflict.chunks[index])?.ours }}</pre>
+        <div class="grid grid-cols-[minmax(0,1fr)_36px_minmax(0,1fr)_36px_minmax(0,1fr)] border-b border-border min-h-40">
+          <div class="min-w-0 flex flex-col">
+            <div class="px-2 py-1.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border-b border-border">{{ t('Ours (Current)') }}</div>
+            <pre class="flex-1 p-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-blue-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.ours }}</pre>
           </div>
-          <div class="min-w-0 bg-muted/20">
-            <div class="px-2 py-1 bg-muted/60 text-muted-foreground font-semibold">{{ t('Base') }}</div>
-            <pre class="p-2 min-h-20 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">{{ getConflictSection(conflict.chunks[index])?.base ?? t('No base content') }}</pre>
+
+          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/40">
+            <button
+              @click="applySide(index, 'ours')"
+              class="w-7 h-7 flex items-center justify-center rounded border border-blue-500/40 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20"
+              :title="t('Apply local content')"
+            >
+              <ArrowRight class="w-4 h-4" />
+            </button>
+            <button
+              @click="removeSide(index, 'ours')"
+              class="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:bg-rose-500/15 hover:text-rose-500"
+              :title="t('Remove local content')"
+            >
+              <X class="w-4 h-4" />
+            </button>
           </div>
-          <div class="min-w-0">
-            <div class="px-2 py-1 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-semibold">{{ t('Theirs (Incoming)') }}</div>
-            <pre class="p-2 min-h-20 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px]">{{ getConflictSection(conflict.chunks[index])?.theirs }}</pre>
+
+          <div class="min-w-0 flex flex-col bg-emerald-500/[0.03]">
+            <div class="px-2 py-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold border-b border-border">{{ t('Merge Result') }}</div>
+            <textarea
+              :value="resolutions[index] ?? ''"
+              @input="resolutions[index] = ($event.target as HTMLTextAreaElement).value"
+              :placeholder="t('Choose a side or enter the resolved content')"
+              spellcheck="false"
+              class="flex-1 min-h-32 w-full p-2 bg-transparent font-mono text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-inset focus:ring-emerald-500"
+            ></textarea>
+          </div>
+
+          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/40">
+            <button
+              @click="applySide(index, 'theirs')"
+              class="w-7 h-7 flex items-center justify-center rounded border border-purple-500/40 bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
+              :title="t('Apply incoming content')"
+            >
+              <ArrowLeft class="w-4 h-4" />
+            </button>
+            <button
+              @click="removeSide(index, 'theirs')"
+              class="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:bg-rose-500/15 hover:text-rose-500"
+              :title="t('Remove incoming content')"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          <div class="min-w-0 flex flex-col">
+            <div class="px-2 py-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-semibold border-b border-border">{{ t('Theirs (Incoming)') }}</div>
+            <pre class="flex-1 p-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-purple-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.theirs }}</pre>
           </div>
         </div>
 
-        <div class="p-2 bg-card">
-          <div class="flex items-center gap-1.5 mb-2">
-            <button @click="choose(index, 'ours')" class="px-2 py-1 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20">{{ t('Accept Ours') }}</button>
-            <button @click="choose(index, 'theirs')" class="px-2 py-1 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20">{{ t('Accept Theirs') }}</button>
-            <button @click="choose(index, 'both')" class="px-2 py-1 rounded bg-secondary text-foreground hover:bg-muted">{{ t('Accept Both') }}</button>
-          </div>
-          <textarea
-            :value="resolutions[index] ?? ''"
-            @input="resolutions[index] = ($event.target as HTMLTextAreaElement).value"
-            :placeholder="t('Choose a side or enter the resolved content')"
-            class="w-full min-h-24 p-2 rounded border border-border bg-background font-mono text-[11px] resize-y focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          ></textarea>
-        </div>
+        <details v-if="getConflictSection(conflict.chunks[index])?.base" class="px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground">
+          <summary class="cursor-pointer font-semibold">{{ t('Base') }}</summary>
+          <pre class="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono">{{ getConflictSection(conflict.chunks[index])?.base }}</pre>
+        </details>
       </section>
     </div>
   </div>

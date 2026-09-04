@@ -19,8 +19,13 @@ import {
   FolderOpen,
   Terminal,
   Code2,
+  Minus,
+  Square,
+  Copy,
+  X,
 } from 'lucide-vue-next';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 const repoStore = useRepoStore();
 const settingsStore = useSettingsStore();
@@ -35,6 +40,33 @@ const isEditorDropdownOpen = ref(false);
 const isOpeningTerminal = ref(false);
 const isOpeningFileManager = ref(false);
 const isOpeningEditor = ref<'vscode' | 'idea' | null>(null);
+const isMaximized = ref(false);
+const isTauriWindow = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const appWindow = isTauriWindow ? getCurrentWindow() : null;
+let unlistenResize: (() => void) | undefined;
+
+async function syncWindowState() {
+  if (appWindow) isMaximized.value = await appWindow.isMaximized();
+}
+
+async function handleMinimize() {
+  await appWindow?.minimize();
+}
+
+async function handleToggleMaximize() {
+  if (!appWindow) return;
+  await appWindow.toggleMaximize();
+  await syncWindowState();
+}
+
+async function handleCloseWindow() {
+  await appWindow?.close();
+}
+
+function handleHeaderDoubleClick(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('button, input, select, textarea, a')) void handleToggleMaximize();
+}
 
 function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
@@ -115,18 +147,25 @@ function handleClickOutside(e: MouseEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('click', handleClickOutside);
+  if (appWindow) {
+    await syncWindowState();
+    unlistenResize = await appWindow.onResized(() => void syncWindowState());
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener('click', handleClickOutside);
+  unlistenResize?.();
 });
 </script>
 
 <template>
   <header
     class="dbx-header h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30"
+    data-tauri-drag-region
+    @dblclick="handleHeaderDoubleClick"
   >
     <!-- Left: App Logo & Repo Dropdown Selector -->
     <div class="flex items-center space-x-2">
@@ -248,6 +287,7 @@ onUnmounted(() => {
       >
         <FolderOpen class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningFileManager }" />
       </button>
+
     </div>
 
     <!-- Center: Active Repo Status Badge -->
@@ -307,6 +347,32 @@ onUnmounted(() => {
           aria-label="New version available"
         />
       </button>
+
+      <div v-if="isTauriWindow" class="h-4 w-px bg-border ml-1"></div>
+      <div v-if="isTauriWindow" class="-my-2 -mr-3 ml-0.5 h-10 flex items-stretch" aria-label="Window controls">
+        <button
+          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          :title="t('Minimize Window')"
+          @click="handleMinimize"
+        >
+          <Minus class="w-3.5 h-3.5" />
+        </button>
+        <button
+          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          :title="isMaximized ? t('Restore Window') : t('Maximize Window')"
+          @click="handleToggleMaximize"
+        >
+          <Copy v-if="isMaximized" class="w-3 h-3" />
+          <Square v-else class="w-3 h-3" />
+        </button>
+        <button
+          class="w-11 flex items-center justify-center text-muted-foreground hover:bg-red-600 hover:text-white transition-colors"
+          :title="t('Close Window')"
+          @click="handleCloseWindow"
+        >
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   </header>
 </template>

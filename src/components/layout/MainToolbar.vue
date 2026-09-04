@@ -108,6 +108,12 @@ async function handlePull() {
 }
 
 async function handlePush() {
+  const existingConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+  if (existingConflict) {
+    diffStore.selectConflictFile(existingConflict);
+    notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    return;
+  }
   isPushing.value = true;
   notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
@@ -118,7 +124,17 @@ async function handlePush() {
     await repoStore.pushRemote(forceWithLease.value);
     notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
-    notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
+    // Refresh first: conflicts may have been produced by an external/pending
+    // operation just before the push attempt. If so, take the user directly to
+    // the editable resolution instead of leaving only an error toast.
+    await repoStore.loadRepo().catch(() => undefined);
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) {
+      diffStore.selectConflictFile(firstConflict);
+      notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    } else {
+      notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
+    }
   } finally {
     isPushing.value = false;
   }
