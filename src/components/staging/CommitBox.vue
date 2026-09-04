@@ -6,6 +6,7 @@ import { useAiStore } from '@/stores/ai';
 import { useNotificationStore } from '@/stores/notification';
 import { Sparkles, Send, ArrowUpCircle, Settings2, FileText } from 'lucide-vue-next';
 import { useGitApi } from '@/composables/useGitApi';
+import { usePushRecovery } from '@/composables/usePushRecovery';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -13,6 +14,7 @@ const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
 const notification = useNotificationStore();
 const gitApi = useGitApi();
+const { pushWithRecovery } = usePushRecovery();
 const { t } = useI18n();
 
 const isSubmitting = ref(false);
@@ -88,7 +90,8 @@ async function handleCommitAndPush() {
     persistCommitOptions();
 
     notification.info(t('Git Push'), t("Pushing commits to remote..."));
-    await repoStore.pushRemote();
+    const pushed = await pushWithRecovery();
+    if (!pushed) return;
     notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
     notification.error(t('Push Failed'), err?.message || String(err));

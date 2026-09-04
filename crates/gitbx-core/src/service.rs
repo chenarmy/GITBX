@@ -464,15 +464,28 @@ impl GitService {
     }
 
     pub fn push_force_with_lease(path: &str, remote: &str) -> Result<()> {
-        Self::run_git(
-            path,
-            &[
-                "push".into(),
-                "--force-with-lease".into(),
-                remote.into(),
-                "HEAD".into(),
-            ],
-        )
+        Self::with_write_lock(path, |repo| {
+            let branch = repo
+                .inner()
+                .head()?
+                .shorthand()
+                .ok_or_else(|| GitbxError::General("HEAD is detached".into()))?
+                .to_string();
+
+            // Refresh the lease immediately before the destructive update. This
+            // lets a confirmed retry replace commits already seen by the user,
+            // while still rejecting a concurrent remote update during the push.
+            repo.fetch_remote(remote)?;
+            Self::run_git(
+                path,
+                &[
+                    "push".into(),
+                    "--force-with-lease".into(),
+                    remote.into(),
+                    format!("refs/heads/{branch}:refs/heads/{branch}"),
+                ],
+            )
+        })
     }
     pub fn get_interactive_rebase_commits(path: &str, upstream: &str) -> Result<Vec<RebaseCommit>> {
         let repo = Self::open(path)?;

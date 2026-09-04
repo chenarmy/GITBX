@@ -16,7 +16,7 @@ async function locate(commitId: string) { await repoStore.locateCommit(commitId)
       </div>
       <div class="flex-1 min-h-0 grid grid-cols-2 divide-x divide-border">
         <section class="flex flex-col min-h-0">
-          <header class="px-3 py-2 font-bold text-sky-500 flex gap-2"><ArrowDownCircle class="w-4 h-4" />{{ t('Incoming') }} ({{ repoStore.syncStatus.incoming.length }})</header>
+          <header class="px-3 py-2 font-bold text-emerald-500 flex gap-2"><ArrowDownCircle class="w-4 h-4" />{{ t('Incoming') }} ({{ repoStore.syncStatus.incoming.length }})</header>
           <div class="overflow-auto divide-y divide-border"><button v-for="commit in repoStore.syncStatus.incoming" :key="commit.id" class="w-full text-left px-3 py-2 hover:bg-accent grid grid-cols-[76px_1fr_120px] gap-2" @click="locate(commit.id)"><span class="font-mono text-primary">{{ commit.short_id }}</span><span class="truncate">{{ commit.summary }}</span><span class="truncate text-muted-foreground">{{ commit.author_name }}</span></button><div v-if="repoStore.syncStatus.incoming.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No incoming commits.') }}</div></div>
         </section>
         <section class="flex flex-col min-h-0">
