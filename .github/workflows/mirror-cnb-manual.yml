@@ -38,7 +38,9 @@ jobs:
         run: node scripts/release-notes.mjs "$CNB_RELEASE_TAG" > "$CNB_RELEASE_BODY_FILE"
 
       - name: Ensure CNB release tag exists
-        run: git push "https://cnb:${CNB_TOKEN}@cnb.cool/${CNB_REPOSITORY}.git" "refs/tags/${CNB_RELEASE_TAG}"
+        run: |
+          git fetch --force origin "refs/tags/${CNB_RELEASE_TAG}:refs/tags/${CNB_RELEASE_TAG}"
+          git push "https://cnb:${CNB_TOKEN}@cnb.cool/${CNB_REPOSITORY}.git" "refs/tags/${CNB_RELEASE_TAG}"
 
       - name: Publish assets and updater metadata to CNB
         run: node scripts/publish-cnb-release.mjs
