@@ -62,15 +62,39 @@ impl McpTools {
                 .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
                 .map(|blob| String::from_utf8_lossy(blob.content()).into_owned())
                 .unwrap_or_default();
-            (
-                old,
-                String::from_utf8_lossy(&repo.index_file(file_path)?).into_owned(),
-            )
+            let new = repo
+                .index_file(file_path)
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            (old, new)
         } else {
-            (
-                String::from_utf8_lossy(&repo.index_file(file_path)?).into_owned(),
-                String::from_utf8_lossy(&repo.workdir_file(file_path)?).into_owned(),
-            )
+            let old = repo
+                .index_file(file_path)
+                .or_else(|_| {
+                    repo.inner()
+                        .head()
+                        .ok()
+                        .and_then(|head| head.peel_to_commit().ok())
+                        .and_then(|commit| {
+                            commit
+                                .tree()
+                                .ok()?
+                                .get_path(std::path::Path::new(file_path))
+                                .ok()
+                        })
+                        .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
+                        .map(|blob| blob.content().to_vec())
+                        .ok_or_else(|| {
+                            gitbx_core::GitbxError::General("No previous version".into())
+                        })
+                })
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            let new = repo
+                .workdir_file(file_path)
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            (old, new)
         };
         Ok(serde_json::to_value(DiffEngine::diff_strings(
             &old,

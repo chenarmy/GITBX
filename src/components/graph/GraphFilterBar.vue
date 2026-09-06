@@ -4,15 +4,28 @@ import { Check, ChevronDown, GitBranch, Search, User, X } from 'lucide-vue-next'
 import type { GraphCommitNode, GraphDateRange, GraphFilters } from '@/types/graph';
 import { useI18n } from '@/i18n';
 
-const props = defineProps<{
-  commits: GraphCommitNode[];
-  modelValue: GraphFilters;
-  resultCount: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    commits?: GraphCommitNode[];
+    modelValue?: GraphFilters;
+    resultCount?: number;
+  }>(),
+  {
+    commits: () => [],
+    modelValue: () => ({
+      query: '',
+      branch: '',
+      author: '',
+      dateRange: 'any' as GraphDateRange,
+      path: '',
+    }),
+    resultCount: 0,
+  }
+);
 
 const emit = defineEmits<{
-  'update:modelValue': [filters: GraphFilters];
-  'search-all': [query: string];
+  (e: 'update:modelValue', filters: GraphFilters): void;
+  (e: 'search-all', query: string): void;
 }>();
 
 const { t } = useI18n();

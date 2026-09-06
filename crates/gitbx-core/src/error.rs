@@ -28,3 +28,37 @@ pub enum GitbxError {
 }
 
 pub type Result<T> = std::result::Result<T, GitbxError>;
+
+impl From<GitbxError> for gitbx_contracts::GitErrorResponse {
+    fn from(error: GitbxError) -> Self {
+        let conflict = matches!(&error, GitbxError::MergeConflict(_));
+        let code = match &error {
+            GitbxError::MergeConflict(_) => "CONFLICT",
+            GitbxError::AuthFailed(_) => "AUTH_FAILED",
+            GitbxError::RepoNotFound(_) => "REPO_NOT_FOUND",
+            GitbxError::BranchAlreadyExists(_) => "BRANCH_ALREADY_EXISTS",
+            _ => "GIT_ERROR",
+        };
+        let mut res = gitbx_contracts::GitErrorResponse::new(code, error.to_string());
+        res.conflict = conflict;
+        res.detail = Some(error.to_string());
+        res
+    }
+}
+
+impl From<&GitbxError> for gitbx_contracts::GitErrorResponse {
+    fn from(error: &GitbxError) -> Self {
+        let conflict = matches!(error, GitbxError::MergeConflict(_));
+        let code = match error {
+            GitbxError::MergeConflict(_) => "CONFLICT",
+            GitbxError::AuthFailed(_) => "AUTH_FAILED",
+            GitbxError::RepoNotFound(_) => "REPO_NOT_FOUND",
+            GitbxError::BranchAlreadyExists(_) => "BRANCH_ALREADY_EXISTS",
+            _ => "GIT_ERROR",
+        };
+        let mut res = gitbx_contracts::GitErrorResponse::new(code, error.to_string());
+        res.conflict = conflict;
+        res.detail = Some(error.to_string());
+        res
+    }
+}

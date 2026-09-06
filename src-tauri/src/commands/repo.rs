@@ -4,7 +4,14 @@ use gitbx_core::{
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
+use gitbx_contracts::GitErrorResponse;
+
 type CommandResult<T> = std::result::Result<T, String>;
+
+fn format_gitbx_err(err: gitbx_core::GitbxError) -> String {
+    let response = GitErrorResponse::from(err);
+    serde_json::to_string(&response).unwrap_or(response.message)
+}
 
 #[tauri::command]
 pub async fn init_repo(repo_path: String) -> CommandResult<RepositoryInfo> {
@@ -236,37 +243,43 @@ pub async fn merge(
     strategy: Option<String>,
 ) -> CommandResult<()> {
     GitService::merge(&repo_path, &target, strategy.as_deref() == Some("no-ff"))
-        .map_err(|e| e.to_string())
+        .map(|_| ())
+        .map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn merge_abort(repo_path: String) -> CommandResult<()> {
-    GitService::abort_merge(&repo_path).map_err(|e| e.to_string())
+    GitService::abort_merge(&repo_path).map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn merge_continue(repo_path: String) -> CommandResult<String> {
-    GitService::continue_merge(&repo_path).map_err(|e| e.to_string())
+    GitService::continue_merge(&repo_path).map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn cherry_pick(repo_path: String, commit_id: String) -> CommandResult<()> {
-    GitService::cherry_pick(&repo_path, &commit_id).map_err(|e| e.to_string())
+    GitService::cherry_pick(&repo_path, &commit_id).map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn cherry_pick_continue(repo_path: String) -> CommandResult<String> {
-    GitService::continue_cherry_pick(&repo_path).map_err(|e| e.to_string())
+    GitService::continue_cherry_pick(&repo_path).map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn revert(repo_path: String, commit_id: String) -> CommandResult<()> {
-    GitService::revert(&repo_path, &commit_id).map_err(|e| e.to_string())
+    GitService::revert(&repo_path, &commit_id).map_err(format_gitbx_err)
 }
 
 #[tauri::command]
 pub async fn revert_continue(repo_path: String) -> CommandResult<String> {
     GitService::continue_revert(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn revert_abort(repo_path: String) -> CommandResult<()> {
+    GitService::abort_revert(&repo_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -359,7 +372,9 @@ pub async fn get_sync_status(repo_path: String) -> CommandResult<gitbx_core::Syn
 
 #[tauri::command]
 pub async fn rebase(repo_path: String, upstream: String) -> CommandResult<()> {
-    GitService::rebase(&repo_path, &upstream).map_err(|e| e.to_string())
+    GitService::rebase(&repo_path, &upstream)
+        .map(|_| ())
+        .map_err(format_gitbx_err)
 }
 
 #[tauri::command]

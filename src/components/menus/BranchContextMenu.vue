@@ -52,8 +52,11 @@ const menuStyle = computed(() => {
 });
 
 async function handleCheckout() {
-  await repoStore.checkoutBranch(props.branch.name);
-  emit('close');
+  try {
+    await repoStore.checkoutBranch(props.branch.name);
+  } finally {
+    emit('close');
+  }
 }
 
 function handleNewBranchFrom() {
@@ -77,9 +80,12 @@ async function handleCheckoutAndRebase() {
 }
 
 async function handleCheckoutAndUpdate() {
-  await repoStore.checkoutBranch(props.branch.name);
-  await repoStore.pullRemote();
-  emit('close');
+  try {
+    await repoStore.checkoutBranch(props.branch.name);
+    await repoStore.pullRemote();
+  } finally {
+    emit('close');
+  }
 }
 
 async function handleCompare() {
@@ -103,16 +109,19 @@ function handleShowDiffWithWorkingTree() {
 }
 
 async function handleNewWorktree() {
-  const destPath = await confirmation.prompt({ title: t('Create Worktree'), message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }), inputLabel: t('Destination path') });
-  if (destPath && destPath.trim()) {
-    try {
-      await gitApi.createWorktree(repoStore.activeRepoPath, destPath.trim(), props.branch.name);
-      notification.success(t('Worktree created'), destPath.trim());
-    } catch (err: any) {
-      notification.error(t('Worktree creation failed'), err?.message || String(err));
+  try {
+    const destPath = await confirmation.prompt({ title: t('Create Worktree'), message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }), inputLabel: t('Destination path') });
+    if (destPath && destPath.trim()) {
+      try {
+        await gitApi.createWorktree(repoStore.activeRepoPath, destPath.trim(), props.branch.name);
+        notification.success(t('Worktree created'), destPath.trim());
+      } catch (err: unknown) {
+        notification.error(t('Worktree creation failed'), formatGitError(err));
+      }
     }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 function handleRebaseOnto() {
@@ -127,9 +136,12 @@ function handleMergeInto() {
   emit('close');
 }
 
-function handleUpdate() {
-  repoStore.pullRemote();
-  emit('close');
+async function handleUpdate() {
+  try {
+    await repoStore.pullRemote();
+  } finally {
+    emit('close');
+  }
 }
 
 async function handlePush() {
@@ -150,10 +162,13 @@ function handleRename() {
 }
 
 async function handleDelete() {
-  if (await confirmation.confirm({ title: t('Delete Branch'), message: t("Delete branch '{branch}'?", { branch: props.branch.name }), danger: true, confirmText: t('Delete') })) {
-    repoStore.deleteBranch(props.branch.name, true);
+  try {
+    if (await confirmation.confirm({ title: t('Delete Branch'), message: t("Delete branch '{branch}'?", { branch: props.branch.name }), danger: true, confirmText: t('Delete') })) {
+      await repoStore.deleteBranch(props.branch.name, true);
+    }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 function handleClickOutside() {

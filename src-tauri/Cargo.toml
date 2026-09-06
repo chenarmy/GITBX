@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 gitbx-core = { path = "../crates/gitbx-core" }
+gitbx-contracts = { path = "../crates/gitbx-contracts" }
 gitbx-graph = { path = "../crates/gitbx-graph" }
 gitbx-diff = { path = "../crates/gitbx-diff" }
 gitbx-ai = { path = "../crates/gitbx-ai" }

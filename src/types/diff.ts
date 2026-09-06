@@ -47,3 +47,6 @@ export interface ConflictFileContent {
   chunks: ConflictChunk[];
   is_binary: boolean;
 }
+
+export type DiffResponse = FileDiff & { raw_diff?: string };
+

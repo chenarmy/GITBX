@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, toRefs } from 'vue';
 import type { RepositoryInfo, RepoStatusSummary, FileStatusItem, BranchItem, RemoteItem, TagItem, StashItem, SyncStatus } from '@/types/git';
 import type { GraphCommitNode } from '@/types/graph';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useConsoleStore } from '@/stores/console';
 import { useDiffStore } from '@/stores/diff';
+import { useUiStore } from '@/stores/ui';
 import { CONFIG_KEYS, persistAppConfig } from '@/services/appConfig';
 
 export interface ManagedRepo {
@@ -68,9 +69,23 @@ export const useRepoStore = defineStore('repo', () => {
   const syncStatus = ref<SyncStatus>({ incoming: [], outgoing: [] });
   const repoSyncStatuses = ref<Record<string, SyncStatus>>({});
   const isRefreshingRepoSyncStatuses = ref(false);
-  const isSyncStatusOpen = ref(false);
-  const isWorktreeManagerOpen = ref(false);
-  const isPullRequestOpen = ref(false);
+  const uiStore = useUiStore();
+  const {
+    isAddRepoModalOpen,
+    isBranchModalOpen,
+    isTagModalOpen,
+    isStashModalOpen,
+    isMergeModalOpen,
+    isRebaseModalOpen,
+    isRenameBranchModalOpen,
+    isResetModalOpen,
+    isRemoteModalOpen,
+    isSyncStatusOpen,
+    isWorktreeManagerOpen,
+    isPullRequestOpen,
+    targetBranchForAction,
+    targetCommitForAction,
+  } = toRefs(uiStore);
   const commitNodes = ref<GraphCommitNode[]>([]);
   const graphHasMore = ref(false);
   const isLoadingMoreCommits = ref(false);
@@ -85,21 +100,6 @@ export const useRepoStore = defineStore('repo', () => {
   const branchComparisonFiles = ref<FileStatusItem[]>([]);
   const isLoading = ref<boolean>(false);
   const errorMessage = ref<string | null>(null);
-
-  // Dialog & Modal states
-  const isAddRepoModalOpen = ref<boolean>(false);
-  const isBranchModalOpen = ref<boolean>(false);
-  const isTagModalOpen = ref<boolean>(false);
-  const isStashModalOpen = ref<boolean>(false);
-  const isMergeModalOpen = ref<boolean>(false);
-  const isRebaseModalOpen = ref<boolean>(false);
-  const isRenameBranchModalOpen = ref<boolean>(false);
-  const isResetModalOpen = ref<boolean>(false);
-  const isRemoteModalOpen = ref<boolean>(false);
-
-  // Context target data
-  const targetBranchForAction = ref<string>('');
-  const targetCommitForAction = ref<string>('');
 
   const saveReposToStorage = () => {
     try {
@@ -148,12 +148,15 @@ export const useRepoStore = defineStore('repo', () => {
     knownChangePaths.value = allPaths;
   };
 
+  let loadSequence = 0;
+
   const loadRepo = async (targetPath?: string) => {
     const path = targetPath || activeRepoPath.value;
     if (!path) {
       clearLoadedRepoData();
       return false;
     }
+    const seq = ++loadSequence;
     if (path !== activeRepoPath.value) {
       diffStore.clearSelection();
     }
@@ -165,6 +168,7 @@ export const useRepoStore = defineStore('repo', () => {
 
     try {
       const info = await gitApi.getRepoInfo(path);
+      if (seq !== loadSequence || path !== activeRepoPath.value) return false;
       repoInfo.value = info;
 
       const existing = repoList.value.find((r) => r.path === path);
@@ -183,6 +187,8 @@ export const useRepoStore = defineStore('repo', () => {
         gitApi.getCommitGraph(path, 0, 150),
         gitApi.getSyncStatus(path),
       ]);
+
+      if (seq !== loadSequence || path !== activeRepoPath.value) return false;
 
       const failures: string[] = [];
       if (statusResult.status === 'fulfilled') {
@@ -218,12 +224,15 @@ export const useRepoStore = defineStore('repo', () => {
       }
       return true;
     } catch (err: any) {
+      if (seq !== loadSequence || path !== activeRepoPath.value) return false;
       clearLoadedRepoData();
       errorMessage.value = formatGitError(err, 'Failed to open repository');
       consoleStore.logError('Failed to open repository.', errorMessage.value);
       return false;
     } finally {
-      isLoading.value = false;
+      if (seq === loadSequence) {
+        isLoading.value = false;
+      }
     }
   };
 
@@ -579,7 +588,7 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const abortRevert = async () => {
-    await gitApi.abortMerge(activeRepoPath.value);
+    await gitApi.abortRevert(activeRepoPath.value);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -730,5 +739,8 @@ export const useRepoStore = defineStore('repo', () => {
     refreshSyncStatus,
     refreshAllRepoSyncStatuses,
     discoverRoots,
+    openModal: uiStore.openModal,
+    closeModal: uiStore.closeModal,
+    closeAllModals: uiStore.closeAllModals,
   };
 });

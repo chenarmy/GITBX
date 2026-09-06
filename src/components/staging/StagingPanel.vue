@@ -230,6 +230,11 @@ async function handleStageSelected() {
   notification.success(t('Changes Staged'), t('{count} selected files were staged.', { count: selectedCount.value }));
 }
 
+async function handleStageAll() {
+  await repoStore.stageAll();
+  notification.success(t('Changes Staged'), t('All changes were staged.'));
+}
+
 async function handleUnstageSelected() {
   const staged = repoStore.statusSummary.staged_files
     .map((file) => file.path)
@@ -237,6 +242,11 @@ async function handleUnstageSelected() {
   if (!staged.length) return;
   await repoStore.unstageFiles(staged);
   notification.success(t('Changes Unstaged'), t('{count} selected files were unstaged.', { count: staged.length }));
+}
+
+async function handleUnstageAll() {
+  await repoStore.unstageAll();
+  notification.success(t('Changes Unstaged'), t('All changes were unstaged.'));
 }
 
 async function handleStashSelected() {
@@ -452,11 +462,21 @@ async function handleDiscardFile(e: Event, filePath: string) {
       </div>
 
       <div class="flex items-center gap-1 px-2 py-1 border-b border-border bg-card">
-        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleStageSelected">
-          <Plus class="w-3 h-3" />{{ t('Add') }}
+        <button
+          class="change-action"
+          :disabled="operationsLocked || (!selectedCount && !repoStore.statusSummary.unstaged_files.length && !repoStore.statusSummary.untracked_files.length)"
+          :title="selectedCount ? t('Stage Selected') : t('Stage All')"
+          @click="selectedCount ? handleStageSelected() : handleStageAll()"
+        >
+          <Plus class="w-3 h-3" />{{ selectedCount ? t('Add') : t('Add All') }}
         </button>
-        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleUnstageSelected">
-          <Minus class="w-3 h-3" />{{ t('Unstage') }}
+        <button
+          class="change-action"
+          :disabled="operationsLocked || (!selectedCount && !repoStore.statusSummary.staged_files.length)"
+          :title="selectedCount ? t('Unstage Selected') : t('Unstage All')"
+          @click="selectedCount ? handleUnstageSelected() : handleUnstageAll()"
+        >
+          <Minus class="w-3 h-3" />{{ selectedCount ? t('Unstage') : t('Unstage All') }}
         </button>
         <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleStashSelected">
           <Layers class="w-3 h-3" />{{ t('Stash Selected') }}

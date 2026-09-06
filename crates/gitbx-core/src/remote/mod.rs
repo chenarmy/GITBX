@@ -201,6 +201,13 @@ impl Repository {
             {
                 if output.status.success() {
                     return Ok(());
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    let detail = if !stderr.is_empty() { stderr } else { stdout };
+                    if !detail.is_empty() {
+                        return Err(crate::error::GitbxError::General(detail));
+                    }
                 }
             }
             return Err(err.into());
@@ -223,10 +230,11 @@ impl Repository {
             .ok_or_else(|| crate::error::GitbxError::General("HEAD is detached".into()))?
             .to_string();
         let mut remote = self.inner().find_remote(remote_name)?;
+        let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
         let mut options = PushOptions::new();
         options.remote_callbacks(self.authenticated_callbacks()?);
         options.proxy_options(proxy_options());
-        let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+
         if let Err(error) = remote.push(&[refspec.as_str()], Some(&mut options)) {
             // Fallback to system git CLI push if available
             let mut command = create_git_command();
@@ -241,15 +249,17 @@ impl Repository {
                     return Ok(());
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                    if !stderr.is_empty() {
-                        let lower = stderr.to_ascii_lowercase();
+                    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    let detail = if !stderr.is_empty() { stderr } else { stdout };
+                    if !detail.is_empty() {
+                        let lower = detail.to_ascii_lowercase();
                         if lower.contains("permission to")
                             || lower.contains("authentication failed")
                             || lower.contains("denied")
                         {
-                            return Err(crate::error::GitbxError::AuthFailed(stderr));
+                            return Err(crate::error::GitbxError::AuthFailed(detail));
                         }
-                        return Err(crate::error::GitbxError::General(stderr));
+                        return Err(crate::error::GitbxError::General(detail));
                     }
                 }
             }

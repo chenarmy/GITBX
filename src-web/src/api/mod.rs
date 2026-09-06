@@ -21,6 +21,16 @@ pub struct AppState {
     pub auth_token: Option<String>,
 }
 
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (&x, &y)| acc | (x ^ y))
+        == 0
+}
+
 impl AppState {
     pub fn from_env() -> Self {
         let allowed_roots = std::env::var("GITBX_ALLOWED_REPOS")
@@ -43,21 +53,24 @@ impl AppState {
             Some(expected) => headers
                 .get("authorization")
                 .and_then(|value| value.to_str().ok())
-                .map(|value| value == format!("Bearer {expected}"))
+                .and_then(|value| value.strip_prefix("Bearer "))
+                .map(|token| constant_time_eq(token.as_bytes(), expected.as_bytes()))
                 .unwrap_or(false),
-            None => true,
+            None => false,
         }
     }
 
     pub fn authorized_token(&self, token: Option<&str>, headers: &HeaderMap) -> bool {
         match &self.auth_token {
             Some(expected) => {
-                if token.is_some_and(|t| t == expected) {
-                    return true;
+                if let Some(t) = token {
+                    if constant_time_eq(t.as_bytes(), expected.as_bytes()) {
+                        return true;
+                    }
                 }
                 self.authorized(headers)
             }
-            None => true,
+            None => false,
         }
     }
 
@@ -211,16 +224,7 @@ fn error_response(status: StatusCode, error: GitErrorResponse) -> Response {
 }
 
 fn git_error(error: GitbxError) -> GitErrorResponse {
-    let conflict = matches!(&error, GitbxError::MergeConflict(_));
-    let code = match &error {
-        GitbxError::MergeConflict(_) => "CONFLICT",
-        GitbxError::AuthFailed(_) => "AUTH_FAILED",
-        _ => "GIT_ERROR",
-    };
-    let mut result = GitErrorResponse::new(code, error.to_string());
-    result.conflict = conflict;
-    result.detail = Some(error.to_string());
-    result
+    GitErrorResponse::from(error)
 }
 
 fn repo_path(body: &Value, uri: &axum::http::Uri) -> Option<String> {
@@ -423,7 +427,7 @@ async fn repo_handler(
                     .get("sign")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
-                body_json.get("pre_commit_command").and_then(Value::as_str),
+                None, // Pre-commit command execution is forbidden via Web API (H1 security fix)
             )
             .map(|commit_id| json!({ "success": true, "commit_id": commit_id }))
         }),
@@ -788,7 +792,10 @@ async fn repo_handler(
         Err(error) => {
             let status = match &error {
                 GitbxError::AuthFailed(_) => StatusCode::UNAUTHORIZED,
-                _ if endpoint == "not-found" => StatusCode::NOT_FOUND,
+                GitbxError::RepoNotFound(_) => StatusCode::NOT_FOUND,
+                GitbxError::General(msg) if msg.to_lowercase().contains("not found") => {
+                    StatusCode::NOT_FOUND
+                }
                 _ => StatusCode::BAD_REQUEST,
             };
             error_response(status, git_error(error))

@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(AppState::from_env());
     if state.auth_token.is_none() {
         tracing::warn!(
-            "GITBX_WEB_TOKEN is not set; Web API authentication is disabled for local development"
+            "GITBX_WEB_TOKEN is not set; Web API will reject authenticated endpoints (fail-closed)"
         );
     }
     if state.allowed_roots.is_empty() {
@@ -35,7 +35,15 @@ async fn main() -> anyhow::Result<()> {
         )
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let host = std::env::var("GITBX_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let port: u16 = std::env::var("GITBX_WEB_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
+    let ip: std::net::IpAddr = host
+        .parse()
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+    let addr = SocketAddr::from((ip, port));
     tracing::info!("GITBX Web Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

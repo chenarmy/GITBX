@@ -38,17 +38,23 @@ const menuStyle = computed(() => {
 });
 
 async function handleCherryPick() {
-  if (await confirmation.confirm({ title: t('Cherry-pick Commit'), message: t('Apply {sha} ("{summary}") into {branch}?', { sha: props.commit.short_id, summary: props.commit.summary, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
-    await repoStore.cherryPick(props.commit.id);
+  try {
+    if (await confirmation.confirm({ title: t('Cherry-pick Commit'), message: t('Apply {sha} ("{summary}") into {branch}?', { sha: props.commit.short_id, summary: props.commit.summary, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
+      await repoStore.cherryPick(props.commit.id);
+    }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 async function handleRevert() {
-  if (await confirmation.confirm({ title: t('Revert Commit'), message: t('Revert {sha} ("{summary}")?', { sha: props.commit.short_id, summary: props.commit.summary }), danger: true })) {
-    await repoStore.revertCommit(props.commit.id);
+  try {
+    if (await confirmation.confirm({ title: t('Revert Commit'), message: t('Revert {sha} ("{summary}")?', { sha: props.commit.short_id, summary: props.commit.summary }), danger: true })) {
+      await repoStore.revertCommit(props.commit.id);
+    }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 function handleReset() {
@@ -70,21 +76,29 @@ function handleNewTag() {
 }
 
 async function handleRebaseOnto() {
-  if (await confirmation.confirm({ title: t('Rebase Branch'), message: t("Rebase '{branch}' onto {sha}?", { branch: repoStore.repoInfo?.head_branch || 'HEAD', sha: props.commit.short_id }), danger: true })) {
-    await repoStore.rebase(props.commit.id);
+  try {
+    if (await confirmation.confirm({ title: t('Rebase Branch'), message: t("Rebase '{branch}' onto {sha}?", { branch: repoStore.repoInfo?.head_branch || 'HEAD', sha: props.commit.short_id }), danger: true })) {
+      await repoStore.rebase(props.commit.id);
+    }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 async function handleMergeInto() {
-  if (await confirmation.confirm({ title: t('Merge Commit'), message: t("Merge {sha} into '{branch}'?", { sha: props.commit.short_id, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
-    await repoStore.mergeBranch(props.commit.id);
+  try {
+    if (await confirmation.confirm({ title: t('Merge Commit'), message: t("Merge {sha} into '{branch}'?", { sha: props.commit.short_id, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
+      await repoStore.mergeBranch(props.commit.id);
+    }
+  } finally {
+    emit('close');
   }
-  emit('close');
 }
 
 function handleCopySha() {
-  navigator.clipboard.writeText(props.commit.id);
+  navigator.clipboard.writeText(props.commit.id).catch((err) => {
+    console.warn('Failed to copy commit SHA:', err);
+  });
   emit('close');
 }
 

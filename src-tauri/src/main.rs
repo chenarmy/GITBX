@@ -61,6 +61,7 @@ fn main() {
             repo::cherry_pick_continue,
             repo::revert,
             repo::revert_continue,
+            repo::revert_abort,
             repo::get_commit_changes,
             repo::resolve_revision,
             repo::get_branch_changes,

@@ -161,7 +161,9 @@ async function handleNaturalCommand() {
 
 function copyMessage() {
   if (!hasGeneratedMessage.value) return;
-  navigator.clipboard.writeText(getFullMessage());
+  navigator.clipboard.writeText(getFullMessage()).catch((err) => {
+    console.warn('Failed to copy message to clipboard:', err);
+  });
   isCopied.value = true;
   setTimeout(() => {
     isCopied.value = false;

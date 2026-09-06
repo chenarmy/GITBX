@@ -101,24 +101,31 @@ function buildResolvedContent() {
     .join('');
 }
 
+let conflictSequence = 0;
+
 async function loadConflict() {
   const filePath = diffStore.selectedConflictFile;
   const repoPath = repoStore.activeRepoPath;
   if (!filePath || !repoPath) return;
 
+  const currentSeq = ++conflictSequence;
   isLoading.value = true;
   errorMessage.value = '';
   try {
     const data = await gitApi.getConflictFile(repoPath, filePath);
+    if (currentSeq !== conflictSequence || diffStore.selectedConflictFile !== filePath) return;
     conflict.value = data;
     resolutions.value = data.chunks.map((chunk) =>
       chunk.section_type === 'Normal' ? (chunk.resolved_content ?? '') : null
     );
   } catch (error) {
+    if (currentSeq !== conflictSequence || diffStore.selectedConflictFile !== filePath) return;
     conflict.value = null;
     errorMessage.value = formatGitError(error, t('Failed to load conflict'));
   } finally {
-    isLoading.value = false;
+    if (currentSeq === conflictSequence) {
+      isLoading.value = false;
+    }
   }
 }
 

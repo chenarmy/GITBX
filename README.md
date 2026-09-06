@@ -1,4 +1,4 @@
-﻿# GITBX
+# GITBX
 
 > **Next-Gen Lightweight, Blazingly Fast, AI-Native Git GUI & Source Code Manager**  
 > 对标 Sourcetree / GitKraken / Sublime Merge 的轻量化跨平台 Git 客户端与协同平台。
@@ -27,9 +27,9 @@
 | **安全凭据管理** | keyring-rs (系统级安全密钥链) |
 | **AI / Agent 协议** | MCP stdio JSON-RPC 兼容服务 |
 | **前端框架** | Vue 3 (Composition API + <script setup lang= ts>) + TypeScript |
-| **UI 组件与样式** | shadcn-vue (Radix Vue) + Tailwind CSS v4 + Lucide Icons |
+| **UI 组件与样式** | Tailwind CSS v3 + Lucide Icons |
 | **编辑器与 Diff** | CodeMirror 6 (定制 Diff & 3-Way Merge 扩展) |
-| **状态与路由** | Pinia + Vue Router |
+| **状态管理** | Pinia |
 | **构建工具** | Vite + Cargo Workspace |
 
 ---
@@ -74,22 +74,26 @@ pnpm dev
 
 `GITBX_ALLOWED_REPOS` 使用分号分隔，并且会被 canonicalize；`GITBX_WEB_TOKEN` 配置后所有 Web API（健康检查除外）都要求 `Authorization: Bearer <token>`。Vite 仅负责将 `/api` 和 `/ws` 代理到 Axum，不再拼接或执行 Git shell 命令。
 
-临时仓库 API 验证：
+临时仓库 API 验证（需在配置了与服务端相同环境变量的终端中运行，脚本会读取 `GITBX_WEB_TOKEN` 与 `GITBX_ALLOWED_REPOS`）：
 
 ```powershell
+$env:GITBX_WEB_TOKEN = 'change-me'
+$env:GITBX_ALLOWED_REPOS = 'C:\work\repo-a;C:\work\repo-b'   # 可选：脚本会在此目录下建临时仓库
 node scripts/verify_all.cjs
 ```
+
+脚本默认访问 `127.0.0.1:8080`，可用 `GITBX_WEB_PORT` 覆盖端口。若服务端未配置 `GITBX_WEB_TOKEN`（本地开发模式），脚本也可不带 token 运行。
 
 ## 桌面版本发布与更新
 
 桌面端使用 Tauri 签名更新，正式更新元数据优先从
-`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取；GitHub 不可用时自动切换到 [GitCode 镜像](https://gitcode.com/rayskidy/GITBX)。updater 公钥随客户端发布，私钥仅用于 CI 签名且不得提交到仓库。配置中仍保留最后一个已验证版本的元数据地址作为最终回退，避免不完整 Release 中断更新检查。
+`https://github.com/chenarmy/GITBX/releases/latest/download/latest.json` 获取；GitHub 不可用时自动切换到 [CNB 镜像](https://cnb.cool/chenarmy/GITBX)。updater 公钥随客户端发布，私钥仅用于 CI 签名且不得提交到仓库。配置中仍保留最后一个已验证版本的元数据地址作为最终回退，避免不完整 Release 中断更新检查。
 
 首次发布前，在 GitHub 仓库中配置：
 
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY`
 - Actions Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-- Actions Secret `GITCODE_TOKEN`（GitCode 个人访问令牌，需要目标仓库的 Release 创建、更新与附件管理权限）
+- Actions Secret `CNB_TOKEN`（CNB 个人访问令牌，需要目标仓库的 Release 创建、更新与附件管理权限）
 
 发布新版本时先同步版本并补充对应的 `CHANGELOG.md` 章节：
 
@@ -102,6 +106,6 @@ git tag v0.1.4
 git push origin v0.1.4
 ```
 
-推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。GitHub 发布完成后，同一批已签名安装包会镜像到 GitCode，并刷新独立的自动更新元数据附件。
+推送 `vX.Y.Z` Tag 后，Release 工作流会先创建草稿，构建 Windows、macOS 和 Linux 安装包并上传签名文件及 `latest.json`。只有各平台 updater 资产全部通过校验后才正式发布，Release 正文使用对应版本的 Changelog。GitHub 发布完成后，同一批已签名安装包会镜像到 CNB，并刷新独立的自动更新元数据附件。
 
 `v0.1.0` 尚未包含 updater，必须手动安装一次 `v0.1.1` 或更高版本；之后可直接在应用内下载、签名校验、覆盖安装并重启。

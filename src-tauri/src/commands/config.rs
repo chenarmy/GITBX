@@ -43,26 +43,36 @@ fn write_config(path: &Path, config: &Value) -> Result<(), String> {
 
     let content = serde_json::to_vec_pretty(config)
         .map_err(|error| format!("Failed to serialize configuration: {error}"))?;
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)
-        .map_err(|error| {
+    let temp_path = path.with_extension(format!("tmp.{}", std::process::id()));
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&temp_path)
+            .map_err(|error| {
+                format!(
+                    "Failed to open temporary configuration at {}: {error}",
+                    temp_path.display()
+                )
+            })?;
+        file.write_all(&content).map_err(|error| {
             format!(
-                "Failed to open configuration at {}: {error}",
-                path.display()
+                "Failed to write configuration at {}: {error}",
+                temp_path.display()
             )
         })?;
-    file.write_all(&content).map_err(|error| {
+        file.sync_all().map_err(|error| {
+            format!(
+                "Failed to flush configuration at {}: {error}",
+                temp_path.display()
+            )
+        })?;
+    }
+    fs::rename(&temp_path, path).map_err(|error| {
+        let _ = fs::remove_file(&temp_path);
         format!(
-            "Failed to write configuration at {}: {error}",
-            path.display()
-        )
-    })?;
-    file.sync_all().map_err(|error| {
-        format!(
-            "Failed to flush configuration at {}: {error}",
+            "Failed to replace configuration at {}: {error}",
             path.display()
         )
     })

@@ -1663,6 +1663,7 @@ dependencies = [
  "dirs",
  "git2",
  "gitbx-ai",
+ "gitbx-contracts",
  "gitbx-core",
  "gitbx-diff",
  "gitbx-graph",

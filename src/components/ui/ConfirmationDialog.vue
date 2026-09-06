@@ -25,15 +25,21 @@ function accept() {
   <div
     v-if="store.pending"
     class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc="cancel"
+    @keydown.esc.window="cancel"
   >
-    <div class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-sm" @click.stop>
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="store.pending.options.title || 'Confirmation Dialog'"
+      class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-sm"
+      @click.stop
+    >
       <div class="h-11 px-4 flex items-center justify-between border-b border-border bg-muted/40">
         <div class="flex items-center gap-2 font-semibold">
           <AlertTriangle v-if="store.pending.options.danger" class="w-4 h-4 text-rose-500" />
           <span>{{ store.pending.options.title }}</span>
         </div>
-        <button class="p-1 rounded hover:bg-accent" @click="cancel"><X class="w-4 h-4" /></button>
+        <button class="p-1 rounded hover:bg-accent" aria-label="Close" @click="cancel"><X class="w-4 h-4" /></button>
       </div>
       <div class="p-4 space-y-3">
         <p class="text-muted-foreground whitespace-pre-wrap">{{ store.pending.options.message }}</p>

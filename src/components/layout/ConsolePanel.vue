@@ -49,7 +49,9 @@ function handleCopyAll() {
         `[${formatTime(l.timestamp)}] [${l.level.toUpperCase()}] ${l.command ? `> ${l.command}\n` : ''}${l.message}${l.detail ? `\n${l.detail}` : ''}`
     )
     .join('\n\n');
-  navigator.clipboard.writeText(text);
+  navigator.clipboard.writeText(text).catch((err) => {
+    console.warn('Failed to copy logs to clipboard:', err);
+  });
   isCopied.value = true;
   setTimeout(() => {
     isCopied.value = false;

@@ -121,8 +121,16 @@ mod tests {
     use super::{configured_ssh_key, set_global_ssh_key, REPOSITORY_SSH_KEY_CONFIG};
     use tempfile::tempdir;
 
+    struct ResetGlobalSshKey;
+    impl Drop for ResetGlobalSshKey {
+        fn drop(&mut self) {
+            let _ = set_global_ssh_key(None);
+        }
+    }
+
     #[test]
     fn repository_key_takes_priority_over_global_key() {
+        let _guard = ResetGlobalSshKey;
         let directory = tempdir().expect("tempdir");
         let global = directory.path().join("global-key");
         let repository = directory.path().join("repo-key");
@@ -141,15 +149,16 @@ mod tests {
             )
             .expect("write config");
         let config = repo.config().expect("config");
+        let expected = std::fs::canonicalize(&repository).ok();
         assert_eq!(
             configured_ssh_key(Some(&config)).expect("configured key"),
-            Some(repository)
+            expected
         );
-        set_global_ssh_key(None).expect("clear global");
     }
 
     #[test]
     fn invalid_repository_key_does_not_fall_back_to_global_key() {
+        let _guard = ResetGlobalSshKey;
         let directory = tempdir().expect("tempdir");
         let global = directory.path().join("global-key");
         std::fs::write(&global, "global").expect("global key");
@@ -164,6 +173,5 @@ mod tests {
             .expect("write config");
         let config = repo.config().expect("config");
         assert!(configured_ssh_key(Some(&config)).is_err());
-        set_global_ssh_key(None).expect("clear global");
     }
 }

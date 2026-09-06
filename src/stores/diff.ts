@@ -31,7 +31,10 @@ export const useDiffStore = defineStore('diff', () => {
     isFileInvestigationOpen.value = true;
   };
 
+  let diffSequence = 0;
+
   const selectFile = async (filePath: string, staged: boolean = false, repoPath?: string, commitId?: string) => {
+    const currentSeq = ++diffSequence;
     selectedConflictFile.value = null;
     selectedFile.value = filePath;
     isStaged.value = staged;
@@ -41,6 +44,7 @@ export const useDiffStore = defineStore('diff', () => {
     try {
       if (!repoPath) return;
       const data = await gitApi.getFileDiff(repoPath, filePath, staged, commitId);
+      if (currentSeq !== diffSequence || selectedFile.value !== filePath) return;
       if (data.hunks) {
         activeDiff.value = data as FileDiff;
       } else if (data.raw_diff) {
@@ -66,6 +70,7 @@ export const useDiffStore = defineStore('diff', () => {
         };
       }
     } catch (err) {
+      if (currentSeq !== diffSequence || selectedFile.value !== filePath) return;
       console.warn('Failed to fetch diff:', err);
       activeDiff.value = { old_path: filePath, new_path: filePath, is_binary: false, additions: 0, deletions: 0, hunks: [] };
     }
@@ -78,6 +83,7 @@ export const useDiffStore = defineStore('diff', () => {
     baseCommitId: string,
     targetCommitId: string,
   ) => {
+    const currentSeq = ++diffSequence;
     selectedConflictFile.value = null;
     selectedFile.value = filePath;
     isStaged.value = false;
@@ -85,12 +91,15 @@ export const useDiffStore = defineStore('diff', () => {
     branchComparison.value = { baseCommitId, targetCommitId };
 
     try {
-      activeDiff.value = await gitApi.getFileDiff(repoPath, filePath, false, undefined, {
+      const data = await gitApi.getFileDiff(repoPath, filePath, false, undefined, {
         baseCommitId,
         targetCommitId,
         oldFilePath,
       }) as FileDiff;
+      if (currentSeq !== diffSequence || selectedFile.value !== filePath) return;
+      activeDiff.value = data;
     } catch (err) {
+      if (currentSeq !== diffSequence || selectedFile.value !== filePath) return;
       console.warn('Failed to fetch branch diff:', err);
       activeDiff.value = {
         old_path: oldFilePath || filePath,

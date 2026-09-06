@@ -26,9 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require release credentials
+      - name: Require release credentials and validate tag
         run: |
           test -n "$CNB_TOKEN" || (echo "Add the CNB_TOKEN Actions secret before publishing." && exit 1)
+          if ! echo "$CNB_RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$'; then
+            echo "Invalid release tag format: $CNB_RELEASE_TAG" && exit 1
+          fi
           gh release view "$CNB_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
 
       - name: Download verified GitHub release assets

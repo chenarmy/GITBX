@@ -6,7 +6,7 @@ use std::io::{self, BufRead, Write};
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
     #[serde(rename = "jsonrpc")]
-    _jsonrpc: String,
+    jsonrpc: String,
     id: Option<Value>,
     method: String,
     params: Option<Value>,
@@ -64,16 +64,40 @@ impl McpServer {
 
         for line_res in stdin.lock().lines() {
             let line = line_res?;
-            if line.trim().is_empty() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
                 continue;
             }
 
-            if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(&line) {
-                let resp = Self::handle_request(req).await;
-                let out = serde_json::to_string(&resp)?;
-                writeln!(stdout, "{}", out)?;
-                stdout.flush()?;
-            }
+            let resp = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
+                Ok(req) => {
+                    if req.jsonrpc != "2.0" {
+                        JsonRpcResponse {
+                            jsonrpc: "2.0".to_string(),
+                            id: req.id,
+                            result: None,
+                            error: Some(serde_json::json!({
+                                "code": -32600,
+                                "message": "Invalid Request: jsonrpc must be '2.0'"
+                            })),
+                        }
+                    } else {
+                        Self::handle_request(req).await
+                    }
+                }
+                Err(err) => JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: None,
+                    result: None,
+                    error: Some(serde_json::json!({
+                        "code": -32700,
+                        "message": format!("Parse error: {err}")
+                    })),
+                },
+            };
+            let out = serde_json::to_string(&resp)?;
+            writeln!(stdout, "{}", out)?;
+            stdout.flush()?;
         }
 
         Ok(())

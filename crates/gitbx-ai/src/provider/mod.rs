@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct LlmConfig {
     pub provider: String, // "openai", "claude", "deepseek", "ollama", "custom"
     pub api_base: String,
+    #[serde(skip_serializing)]
     pub api_key: Option<String>,
     pub model: String,
     pub temperature: Option<f32>,

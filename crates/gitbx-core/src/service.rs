@@ -56,6 +56,18 @@ fn repo_locks() -> &'static Mutex<HashMap<PathBuf, Arc<Mutex<()>>>> {
     REPO_LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+struct RebaseCleanupGuard {
+    files: Vec<std::path::PathBuf>,
+}
+
+impl Drop for RebaseCleanupGuard {
+    fn drop(&mut self) {
+        for path in &self.files {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 pub struct GitService;
 
 impl GitService {
@@ -541,78 +553,77 @@ impl GitService {
                 "The first retained commit cannot be squash or fixup".into(),
             ));
         }
-        let repo = Self::open(path)?;
-        if repo.info()?.is_dirty {
-            return Err(GitbxError::General(
-                "Commit, stash, or shelve local changes before interactive rebase".into(),
-            ));
-        }
-        let git_dir = repo.inner().path();
-        let token = format!("gitbx-rebase-{}", std::process::id());
-        let todo_path = git_dir.join(format!("{token}.todo"));
-        let editor_path = git_dir.join(format!("{token}-editor.sh"));
-        let shell_path = |value: &std::path::Path| value.to_string_lossy().replace('\\', "/");
-        let mut todo = String::new();
-        let mut message_paths = Vec::new();
-        for (index, item) in plan.iter().enumerate() {
-            let commit = repo
-                .inner()
-                .find_commit(git2::Oid::from_str(&item.commit_id)?)?;
-            let action = if item.action == "reword" {
-                "pick"
-            } else {
-                item.action.as_str()
-            };
-            todo.push_str(&format!(
-                "{action} {} {}\n",
-                item.commit_id,
-                commit.summary().unwrap_or("")
-            ));
-            if item.action == "reword" {
-                let message = item
-                    .message
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .ok_or_else(|| {
-                        GitbxError::General("A reword action requires a commit message".into())
-                    })?;
-                let message_path = git_dir.join(format!("{token}-{index}.message"));
-                std::fs::write(&message_path, message)?;
-                todo.push_str(&format!(
-                    "exec git commit --amend --no-verify -F '{}'\n",
-                    shell_path(&message_path).replace('\'', "'\\''")
+        Self::with_write_lock(path, |repo| {
+            if repo.info()?.is_dirty {
+                return Err(GitbxError::General(
+                    "Commit, stash, or shelve local changes before interactive rebase".into(),
                 ));
-                message_paths.push(message_path);
             }
-        }
-        std::fs::write(&todo_path, todo)?;
-        std::fs::write(&editor_path, "#!/bin/sh\ncat \"$GITBX_TODO\" > \"$1\"\n")?;
-        let editor_command = format!("sh \"{}\"", shell_path(&editor_path));
-        let output = hidden_command("git")
-            .arg("-C")
-            .arg(path)
-            .args(["rebase", "-i", upstream])
-            .env("GIT_SEQUENCE_EDITOR", editor_command)
-            .env("GIT_EDITOR", "true")
-            .env("GITBX_TODO", shell_path(&todo_path))
-            .output()
-            .map_err(|error| GitbxError::General(format!("Failed to start Git: {error}")))?;
-        if output.status.success() {
-            let _ = std::fs::remove_file(todo_path);
-            let _ = std::fs::remove_file(editor_path);
-            for message_path in message_paths {
-                let _ = std::fs::remove_file(message_path);
+            let git_dir = repo.inner().path().to_path_buf();
+            let token = format!("gitbx-rebase-{}", std::process::id());
+            let todo_path = git_dir.join(format!("{token}.todo"));
+            let editor_path = git_dir.join(format!("{token}-editor.sh"));
+            let shell_path = |value: &std::path::Path| value.to_string_lossy().replace('\\', "/");
+            let mut todo = String::new();
+            let mut cleanup = RebaseCleanupGuard {
+                files: vec![todo_path.clone(), editor_path.clone()],
+            };
+
+            for (index, item) in plan.iter().enumerate() {
+                let commit = repo
+                    .inner()
+                    .find_commit(git2::Oid::from_str(&item.commit_id)?)?;
+                let action = if item.action == "reword" {
+                    "pick"
+                } else {
+                    item.action.as_str()
+                };
+                todo.push_str(&format!(
+                    "{action} {} {}\n",
+                    item.commit_id,
+                    commit.summary().unwrap_or("")
+                ));
+                if item.action == "reword" {
+                    let message = item
+                        .message
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| {
+                            GitbxError::General("A reword action requires a commit message".into())
+                        })?;
+                    let message_path = git_dir.join(format!("{token}-{index}.message"));
+                    std::fs::write(&message_path, message)?;
+                    todo.push_str(&format!(
+                        "exec git commit --amend --no-verify -F '{}'\n",
+                        shell_path(&message_path).replace('\'', "'\\''")
+                    ));
+                    cleanup.files.push(message_path);
+                }
             }
-            return Ok(());
-        }
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Err(GitbxError::General(if stderr.is_empty() {
-            stdout
-        } else {
-            stderr
-        }))
+            std::fs::write(&todo_path, todo)?;
+            std::fs::write(&editor_path, "#!/bin/sh\ncat \"$GITBX_TODO\" > \"$1\"\n")?;
+            let editor_command = format!("sh \"{}\"", shell_path(&editor_path));
+            let output = hidden_command("git")
+                .arg("-C")
+                .arg(path)
+                .args(["rebase", "-i", upstream])
+                .env("GIT_SEQUENCE_EDITOR", editor_command)
+                .env("GIT_EDITOR", "true")
+                .env("GITBX_TODO", shell_path(&todo_path))
+                .output()
+                .map_err(|error| GitbxError::General(format!("Failed to start Git: {error}")))?;
+            if output.status.success() {
+                return Ok(());
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Err(GitbxError::General(if stderr.is_empty() {
+                stdout
+            } else {
+                stderr
+            }))
+        })
     }
     pub fn get_commit_template(path: &str) -> Result<Option<String>> {
         let repo = Self::open(path)?;
@@ -651,66 +662,86 @@ impl GitService {
         if message.trim().is_empty() {
             return Err(GitbxError::General("Commit message cannot be empty".into()));
         }
-        if let Some(command) = pre_commit_command
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            let output = if cfg!(windows) {
-                hidden_command("cmd")
-                    .args(["/C", command])
-                    .current_dir(path)
-                    .output()
-            } else {
-                hidden_command("sh")
-                    .args(["-c", command])
-                    .current_dir(path)
-                    .output()
+        Self::with_write_lock(path, |repo| {
+            if let Some(command) = pre_commit_command
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                if command.contains('\n') || command.contains('\r') {
+                    return Err(GitbxError::General(
+                        "Pre-commit command must be a single line".into(),
+                    ));
+                }
+                tracing::warn!(
+                    "Executing pre-commit hook command for repo '{}': {}",
+                    path,
+                    command
+                );
+                let start = std::time::Instant::now();
+                let output = if cfg!(windows) {
+                    hidden_command("cmd")
+                        .args(["/C", command])
+                        .current_dir(path)
+                        .output()
+                } else {
+                    hidden_command("sh")
+                        .args(["-c", command])
+                        .current_dir(path)
+                        .output()
+                }
+                .map_err(|error| {
+                    GitbxError::General(format!("Failed to run pre-commit command: {error}"))
+                })?;
+                let elapsed = start.elapsed();
+                tracing::info!(
+                    "Pre-commit command finished in {:?} with status: {:?}",
+                    elapsed,
+                    output.status
+                );
+                if !output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                    let detail = if stderr.is_empty() { stdout } else { stderr };
+                    return Err(GitbxError::General(format!(
+                        "Pre-commit command failed: {detail}"
+                    )));
+                }
             }
-            .map_err(|error| {
-                GitbxError::General(format!("Failed to run pre-commit command: {error}"))
-            })?;
-            if !output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                let detail = if stderr.is_empty() { stdout } else { stderr };
-                return Err(GitbxError::General(format!(
-                    "Pre-commit command failed: {detail}"
-                )));
-            }
-        }
 
-        let mut args = vec![
-            "commit".to_string(),
-            "-m".to_string(),
-            message.to_string(),
-            "--author".to_string(),
-            format!("{author} <{email}>"),
-        ];
-        if amend {
-            args.push("--amend".into());
-            args.push("--allow-empty".into());
-        }
-        if sign {
-            args.push("--gpg-sign".into());
-        }
-        let output = hidden_command("git")
-            .arg("-C")
-            .arg(path)
-            .args(&args)
-            .env("GIT_COMMITTER_NAME", author)
-            .env("GIT_COMMITTER_EMAIL", email)
-            .output()
-            .map_err(|error| GitbxError::General(format!("Failed to start Git: {error}")))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            return Err(GitbxError::General(if stderr.is_empty() {
-                stdout
-            } else {
-                stderr
-            }));
-        }
-        Self::resolve_revision(path, "HEAD")
+            let mut args = vec![
+                "commit".to_string(),
+                "-m".to_string(),
+                message.to_string(),
+                "--author".to_string(),
+                format!("{author} <{email}>"),
+            ];
+            if amend {
+                args.push("--amend".into());
+                args.push("--allow-empty".into());
+            }
+            if sign {
+                args.push("--gpg-sign".into());
+            }
+            let output = hidden_command("git")
+                .arg("-C")
+                .arg(path)
+                .args(&args)
+                .env("GIT_COMMITTER_NAME", author)
+                .env("GIT_COMMITTER_EMAIL", email)
+                .output()
+                .map_err(|error| GitbxError::General(format!("Failed to start Git: {error}")))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                return Err(GitbxError::General(if stderr.is_empty() {
+                    stdout
+                } else {
+                    stderr
+                }));
+            }
+            let head_commit = repo.inner().head()?.peel_to_commit()?;
+            Ok(head_commit.id().to_string())
+        })
     }
     fn ensure_no_operation(repo: &Repository, action: &str) -> Result<()> {
         if repo.inner().state() != git2::RepositoryState::Clean {
@@ -797,6 +828,9 @@ impl GitService {
             let mut locks = repo_locks()
                 .lock()
                 .map_err(|_| GitbxError::General("Repository lock poisoned".into()))?;
+            if locks.len() > 500 {
+                locks.retain(|_, v| Arc::strong_count(v) > 1);
+            }
             locks
                 .entry(canonical.clone())
                 .or_insert_with(|| Arc::new(Mutex::new(())))
@@ -988,30 +1022,30 @@ impl GitService {
         if message.trim().is_empty() {
             return Err(GitbxError::General("Stash name cannot be empty".into()));
         }
-        let commit_id = {
-            let mut repo = Self::open(path)?;
-            repo.list_stashes()?
+        Self::with_write_lock(path, |repo| {
+            let commit_id = repo
+                .list_stashes()?
                 .into_iter()
                 .find(|stash| stash.index == index)
                 .map(|stash| stash.commit_id)
-                .ok_or_else(|| GitbxError::General(format!("Stash {index} was not found")))?
-        };
-        Self::run_git(
-            path,
-            &["stash".into(), "drop".into(), format!("stash@{{{index}}}")],
-        )?;
-        // Store the same immutable stash commit again with a new reflog message.
-        // Renaming moves the entry to the top, matching common GUI behavior.
-        Self::run_git(
-            path,
-            &[
-                "stash".into(),
-                "store".into(),
-                "-m".into(),
-                message.trim().into(),
-                commit_id,
-            ],
-        )
+                .ok_or_else(|| GitbxError::General(format!("Stash {index} was not found")))?;
+            Self::run_git(
+                path,
+                &["stash".into(), "drop".into(), format!("stash@{{{index}}}")],
+            )?;
+            // Store the same immutable stash commit again with a new reflog message.
+            // Renaming moves the entry to the top, matching common GUI behavior.
+            Self::run_git(
+                path,
+                &[
+                    "stash".into(),
+                    "store".into(),
+                    "-m".into(),
+                    message.trim().into(),
+                    commit_id,
+                ],
+            )
+        })
     }
 
     pub fn create_shelf(path: &str, message: &str, file_paths: &[String]) -> Result<()> {
@@ -1037,7 +1071,7 @@ impl GitService {
             "--".into(),
         ];
         args.extend(file_paths.iter().cloned());
-        Self::run_git(path, &args)
+        Self::with_write_lock(path, |_repo| Self::run_git(path, &args))
     }
 
     pub fn discard_file(path: &str, file_path: Option<&str>) -> Result<()> {
@@ -1458,6 +1492,10 @@ impl GitService {
             repo.inner().checkout_head(None)?;
             Ok(id.to_string())
         })
+    }
+
+    pub fn abort_revert(path: &str) -> Result<()> {
+        Self::abort_operation(path)
     }
 
     pub fn continue_revert(path: &str) -> Result<String> {

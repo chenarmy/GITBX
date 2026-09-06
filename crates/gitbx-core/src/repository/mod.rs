@@ -302,18 +302,120 @@ impl Repository {
 
     pub fn get_file_history(&self, file_path: &str, max_count: usize) -> Result<Vec<CommitDetail>> {
         let normalized = file_path.replace('\\', "/");
-        let scan_limit = max_count.saturating_mul(50).clamp(max_count, 10_000);
-        Ok(self
-            .get_commits(scan_limit)?
-            .into_iter()
-            .filter(|commit| {
-                commit
-                    .changed_paths
-                    .iter()
-                    .any(|path| path.replace('\\', "/") == normalized)
-            })
-            .take(max_count)
-            .collect())
+        let path = std::path::Path::new(&normalized);
+
+        let mut branch_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        let mut revision_tips = std::collections::HashSet::new();
+        if let Ok(branches) = self.inner.branches(None) {
+            for item in branches.flatten() {
+                let is_remote = item.1 == git2::BranchType::Remote;
+                let name = item.0.name().ok().flatten().unwrap_or("").to_string();
+                if name.is_empty() || (is_remote && (name == "HEAD" || name.ends_with("/HEAD"))) {
+                    continue;
+                }
+                if let Ok(target) = item.0.get().peel_to_commit() {
+                    revision_tips.insert(target.id());
+                    branch_map.entry(target.id()).or_default().push(name);
+                }
+            }
+        }
+
+        let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        if let Ok(tags) = self.inner.tag_names(None) {
+            for name in tags.iter().flatten() {
+                if let Ok(obj) = self.inner.revparse_single(&format!("refs/tags/{}", name)) {
+                    if let Ok(commit) = obj.peel_to_commit() {
+                        revision_tips.insert(commit.id());
+                        tag_map
+                            .entry(commit.id())
+                            .or_default()
+                            .push(name.to_string());
+                    }
+                }
+            }
+        }
+
+        if let Ok(head) = self.inner.head().and_then(|head| head.peel_to_commit()) {
+            revision_tips.insert(head.id());
+        }
+        if revision_tips.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut revwalk = self.inner.revwalk()?;
+        for tip in revision_tips {
+            revwalk.push(tip)?;
+        }
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+
+        let mut matched_commits = Vec::new();
+        for oid_res in revwalk {
+            if matched_commits.len() >= max_count {
+                break;
+            }
+            let oid = oid_res?;
+            let commit = self.inner.find_commit(oid)?;
+            let tree = commit.tree().ok();
+
+            let current_id = tree
+                .as_ref()
+                .and_then(|t| t.get_path(path).ok())
+                .map(|entry| entry.id());
+
+            let mut touched = false;
+            let parent_count = commit.parent_count();
+            if parent_count == 0 {
+                touched = current_id.is_some();
+            } else {
+                for i in 0..parent_count {
+                    let parent = commit.parent(i)?;
+                    let parent_tree = parent.tree().ok();
+                    let parent_file_id = parent_tree
+                        .as_ref()
+                        .and_then(|t| t.get_path(path).ok())
+                        .map(|entry| entry.id());
+                    if parent_file_id != current_id {
+                        touched = true;
+                        break;
+                    }
+                }
+            }
+
+            if !touched {
+                continue;
+            }
+
+            let parent_ids = commit.parent_ids().map(|id| id.to_string()).collect();
+            let author = commit.author();
+            let committer = commit.committer();
+
+            matched_commits.push(CommitDetail {
+                id: commit.id().to_string(),
+                short_id: commit
+                    .as_object()
+                    .short_id()?
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
+                parent_ids,
+                author_name: author.name().unwrap_or("").to_string(),
+                author_email: author.email().unwrap_or("").to_string(),
+                author_time: author.when().seconds(),
+                committer_name: committer.name().unwrap_or("").to_string(),
+                committer_email: committer.email().unwrap_or("").to_string(),
+                committer_time: committer.when().seconds(),
+                summary: commit.summary().unwrap_or("").to_string(),
+                body: commit.body().map(|s| s.to_string()),
+                branch_refs: branch_map.get(&commit.id()).cloned().unwrap_or_default(),
+                containing_branch_refs: Vec::new(),
+                tag_refs: tag_map.get(&commit.id()).cloned().unwrap_or_default(),
+                changed_paths: vec![normalized.clone()],
+            });
+        }
+
+        Ok(matched_commits)
     }
 
     pub fn blame_file(&self, file_path: &str, revision: Option<&str>) -> Result<Vec<BlameLine>> {

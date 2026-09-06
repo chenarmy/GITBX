@@ -215,6 +215,9 @@ impl Repository {
         author_name: &str,
         author_email: &str,
     ) -> Result<String> {
+        if message.trim().is_empty() {
+            return Err(GitbxError::General("Commit message cannot be empty".into()));
+        }
         if self.inner().state() != git2::RepositoryState::Clean {
             return Err(GitbxError::General(
                 "Use Continue to finish the current Git operation".into(),
