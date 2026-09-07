@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { ChevronRight } from 'lucide-vue-next';
 import { usePushRecovery } from '@/composables/usePushRecovery';
+import { useSmartCheckout } from '@/composables/useSmartCheckout';
 
 const props = defineProps<{
   branch: BranchItem;
@@ -25,6 +26,7 @@ const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
 const { pushWithRecovery } = usePushRecovery();
+const { checkoutWithSmartFallback } = useSmartCheckout();
 
 const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
@@ -53,7 +55,7 @@ const menuStyle = computed(() => {
 
 async function handleCheckout() {
   try {
-    await repoStore.checkoutBranch(props.branch.name);
+    await checkoutWithSmartFallback(props.branch.name, props.branch.is_head);
   } finally {
     emit('close');
   }
@@ -83,6 +85,8 @@ async function handleCheckoutAndUpdate() {
   try {
     await repoStore.checkoutBranch(props.branch.name);
     await repoStore.pullRemote();
+  } catch (error) {
+    notification.error(t('Checkout Failed'), formatGitError(error));
   } finally {
     emit('close');
   }

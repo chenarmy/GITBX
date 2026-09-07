@@ -195,9 +195,14 @@ export const checkoutBranch = async (repoPath: string, name: string): Promise<vo
   getConsole().logCommand(cmd);
 
   if (isTauri()) {
-    await invoke('checkout_branch', { repoPath, branchName: name });
-    getConsole().logSuccess(`Switched to branch '${name}'.`);
-    return;
+    try {
+      await invoke('checkout_branch', { repoPath, branchName: name });
+      getConsole().logSuccess(`Switched to branch '${name}'.`);
+      return;
+    } catch (error) {
+      getConsole().logError(formatGitError(error), undefined, cmd);
+      throw error;
+    }
   }
   const res = await fetch('/api/repo/branch/checkout', {
     method: 'POST',

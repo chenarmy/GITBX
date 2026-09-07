@@ -133,9 +133,21 @@ impl Repository {
     pub fn checkout_branch(&self, name: &str) -> Result<()> {
         // 1. If it's already a local branch, check it out directly
         if let Ok(local_branch) = self.inner().find_branch(name, BranchType::Local) {
+            if local_branch.is_head() {
+                return Ok(());
+            }
             let reference = local_branch.get();
             let object = reference.peel_to_commit()?.into_object();
-            self.inner().checkout_tree(&object, None)?;
+            self.inner().checkout_tree(&object, None).map_err(|e| {
+                if e.code() == git2::ErrorCode::Conflict {
+                    anyhow::anyhow!(
+                        "Checkout failed: local uncommitted changes conflict with branch '{}'. Please commit or stash your changes before switching branches.",
+                        name
+                    )
+                } else {
+                    anyhow::Error::from(e)
+                }
+            })?;
             self.inner().set_head(reference.name().unwrap_or(name))?;
             return Ok(());
         }
@@ -154,9 +166,21 @@ impl Repository {
 
             // If a local branch with that name already exists, check it out
             if let Ok(existing_local) = self.inner().find_branch(local_name, BranchType::Local) {
+                if existing_local.is_head() {
+                    return Ok(());
+                }
                 let reference = existing_local.get();
                 let object = reference.peel_to_commit()?.into_object();
-                self.inner().checkout_tree(&object, None)?;
+                self.inner().checkout_tree(&object, None).map_err(|e| {
+                    if e.code() == git2::ErrorCode::Conflict {
+                        anyhow::anyhow!(
+                            "Checkout failed: local uncommitted changes conflict with branch '{}'. Please commit or stash your changes before switching branches.",
+                            local_name
+                        )
+                    } else {
+                        anyhow::Error::from(e)
+                    }
+                })?;
                 self.inner()
                     .set_head(reference.name().unwrap_or(local_name))?;
                 return Ok(());
@@ -167,7 +191,16 @@ impl Repository {
             let _ = new_branch.set_upstream(Some(name));
 
             let object = commit.into_object();
-            self.inner().checkout_tree(&object, None)?;
+            self.inner().checkout_tree(&object, None).map_err(|e| {
+                if e.code() == git2::ErrorCode::Conflict {
+                    anyhow::anyhow!(
+                        "Checkout failed: local uncommitted changes conflict with branch '{}'. Please commit or stash your changes before switching branches.",
+                        local_name
+                    )
+                } else {
+                    anyhow::Error::from(e)
+                }
+            })?;
             self.inner()
                 .set_head(&format!("refs/heads/{}", local_name))?;
             return Ok(());

@@ -362,6 +362,42 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
+  const smartCheckoutBranch = async (branchName: string): Promise<{ popConflict: boolean }> => {
+    if (!activeRepoPath.value) {
+      throw new Error('No active repository');
+    }
+    const path = activeRepoPath.value;
+    const autoStashMessage = `GitBX Smart Checkout (${branchName})`;
+
+    // 1. Stash current uncommitted changes
+    await gitApi.createStash(path, autoStashMessage);
+
+    // 2. Checkout target branch
+    try {
+      await gitApi.checkoutBranch(path, branchName);
+    } catch (checkoutErr) {
+      // If checkout fails, restore the stash immediately to prevent data loss
+      try {
+        await gitApi.popStash(path, 0);
+      } catch {}
+      await loadRepo(path);
+      throw checkoutErr;
+    }
+
+    // 3. Pop the stash onto the new branch
+    let popConflict = false;
+    try {
+      await gitApi.popStash(path, 0);
+    } catch (popErr) {
+      popConflict = true;
+      consoleStore.logWarning('Smart Checkout', 'Stash applied with conflicts or could not be dropped cleanly.');
+    }
+
+    // 4. Reload repository status
+    await loadRepo(path);
+    return { popConflict };
+  };
+
   const createBranch = async (name: string, startPoint?: string, checkout = true) => {
     await gitApi.createBranch(activeRepoPath.value, name, startPoint, checkout);
     await loadRepo(activeRepoPath.value);
@@ -702,6 +738,7 @@ export const useRepoStore = defineStore('repo', () => {
     commit,
     commitAndPush,
     checkoutBranch,
+    smartCheckoutBranch,
     createBranch,
     deleteBranch,
     renameBranch,

@@ -5,6 +5,7 @@ import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
 import { useI18n } from '@/i18n';
 import { useNotificationStore } from '@/stores/notification';
+import { useSmartCheckout } from '@/composables/useSmartCheckout';
 import {
   FolderGit2,
   GitBranch,
@@ -28,6 +29,7 @@ import {
 const repoStore = useRepoStore();
 const { t } = useI18n();
 const notification = useNotificationStore();
+const { checkoutWithSmartFallback } = useSmartCheckout();
 
 async function discoverRoots() {
   try { const count = await repoStore.discoverRoots(); notification.success(t('Git Roots Discovered'), t('Found {count} Git roots.', { count })); }
@@ -117,8 +119,8 @@ function branchLeafName(branchName: string) {
   return branchName.split('/').pop() || branchName;
 }
 
-function handleCheckout(name: string) {
-  repoStore.checkoutBranch(name);
+async function handleCheckout(name: string, isHead?: boolean) {
+  await checkoutWithSmartFallback(name, isHead);
 }
 
 function handleLocateCommit(commitId: string) {
@@ -244,7 +246,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           </div>
           <div
             v-else
-            @dblclick="handleCheckout(row.branch.name)"
+            @dblclick="handleCheckout(row.branch.name, row.branch.is_head)"
             @click="handleLocateCommit(row.branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"
