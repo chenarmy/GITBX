@@ -96,7 +96,7 @@ async function generate() {
     );
   } catch (err: any) {
     aiStore.generatedMessage = null;
-    throw err;
+    notification.error(t('AI Generation Failed'), err?.message || String(err));
   } finally {
     aiStore.isGenerating = false;
   }
@@ -161,13 +161,17 @@ async function handleNaturalCommand() {
 
 function copyMessage() {
   if (!hasGeneratedMessage.value) return;
-  navigator.clipboard.writeText(getFullMessage()).catch((err) => {
-    console.warn('Failed to copy message to clipboard:', err);
-  });
-  isCopied.value = true;
-  setTimeout(() => {
-    isCopied.value = false;
-  }, 2000);
+  navigator.clipboard.writeText(getFullMessage())
+    .then(() => {
+      isCopied.value = true;
+      setTimeout(() => {
+        isCopied.value = false;
+      }, 2000);
+    })
+    .catch((err) => {
+      console.warn('Failed to copy message to clipboard:', err);
+      notification.error(t('Copy Failed'), t('Could not copy commit message to clipboard.'));
+    });
 }
 </script>
 
@@ -175,24 +179,31 @@ function copyMessage() {
   <div
     v-if="aiStore.isAiModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="aiStore.closeAiModal()"
   >
     <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('GITBX AI Assistant')"
       class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs animate-in fade-in zoom-in-95 duration-150"
+      @click.stop
     >
       <!-- Header -->
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <Sparkles class="w-4 h-4 text-indigo-400 animate-pulse" />
+          <Sparkles class="w-4 h-4 text-indigo-400 animate-pulse" aria-hidden="true" />
           <span class="font-bold text-sm text-foreground">{{ t('GITBX AI Assistant') }}</span>
           <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             {{ aiStore.llmConfig.provider }} / {{ aiStore.llmConfig.model }}
           </span>
         </div>
         <button
+          type="button"
+          aria-label="Close dialog"
           @click="aiStore.closeAiModal()"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition cursor-pointer"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition cursor-pointer focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 

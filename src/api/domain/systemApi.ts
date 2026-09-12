@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WorktreeInfo } from '@/types/git';
-import { isTauri, parseGitResponse, getConsole } from '@/api/common';
+import { isTauri, parseGitResponse, getConsole, gitbxFetch } from '@/api/common';
 
 export const openSystemTerminal = async (repoPath: string): Promise<void> => {
   if (!isTauri()) {
@@ -47,7 +47,7 @@ export const saveSshPassphrase = async (keyPath: string, passphrase: string): Pr
 
 export const listWorktrees = async (repoPath: string): Promise<WorktreeInfo[]> => {
   if (isTauri()) return await invoke<WorktreeInfo[]>('list_worktrees', { repoPath });
-  const res = await fetch(`/api/repo/worktrees?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/worktrees?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<WorktreeInfo[]>(res, 'Failed to load worktrees');
 };
 
@@ -59,7 +59,7 @@ export const createWorktree = async (repoPath: string, destination: string, bran
     getConsole().logSuccess(`Created worktree at ${destination}`);
     return;
   }
-  const res = await fetch('/api/repo/worktree/add', {
+  const res = await gitbxFetch('/api/repo/worktree/add', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, destination, branch }),
@@ -75,20 +75,20 @@ export const worktreeOperation = async (repoPath: string, endpoint: 'remove' | '
     else await invoke('prune_worktrees', { repoPath });
     return;
   }
-  const res = await fetch(`/api/repo/worktree/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_path: repoPath, ...body }) });
+  const res = await gitbxFetch(`/api/repo/worktree/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_path: repoPath, ...body }) });
   await parseGitResponse(res, `Failed to ${endpoint} worktree`);
 };
 
 export const discoverGitRoots = async (repoPath: string): Promise<string[]> => {
   if (isTauri()) return await invoke<string[]>('discover_git_roots', { repoPath });
-  const res = await fetch(`/api/repo/git-roots?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/git-roots?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<string[]>(res, 'Failed to discover Git roots');
 };
 
 export const openPullRequest = async (repoPath: string, base: string, compare: string): Promise<void> => {
   if (isTauri()) { await invoke('open_pull_request', { repoPath, base, compare }); return; }
   const params = new URLSearchParams({ path: repoPath, base, compare });
-  const res = await fetch(`/api/repo/pull-request-url?${params.toString()}`);
+  const res = await gitbxFetch(`/api/repo/pull-request-url?${params.toString()}`);
   const url = await parseGitResponse<string>(res, 'Failed to create pull request URL');
   window.open(url, '_blank', 'noopener,noreferrer');
 };

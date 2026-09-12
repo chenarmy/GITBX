@@ -38,7 +38,12 @@ function getColorClass(type: string) {
 </script>
 
 <template>
-  <div class="fixed top-12 right-4 z-50 flex flex-col space-y-2 max-w-sm pointer-events-none select-none">
+  <div
+    role="region"
+    aria-label="Notifications"
+    aria-live="polite"
+    class="fixed top-12 right-4 z-50 flex flex-col space-y-2 max-w-sm pointer-events-none select-none"
+  >
     <transition-group
       enter-active-class="transform ease-out duration-300 transition"
       enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
@@ -50,19 +55,23 @@ function getColorClass(type: string) {
       <div
         v-for="toast in notificationStore.toasts"
         :key="toast.id"
+        role="status"
+        :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
         class="pointer-events-auto p-3 rounded-lg border shadow-xl flex items-start space-x-2.5 text-xs backdrop-blur-md"
         :class="getColorClass(toast.type)"
       >
-        <component :is="getIcon(toast.type)" class="w-4 h-4 shrink-0 mt-0.5" />
+        <component :is="getIcon(toast.type)" aria-hidden="true" class="w-4 h-4 shrink-0 mt-0.5" />
         <div class="flex-1 pr-2">
           <div class="font-bold text-foreground">{{ toast.title }}</div>
           <div v-if="toast.message" class="text-[11px] opacity-90 mt-0.5">{{ toast.message }}</div>
         </div>
         <button
+          type="button"
+          aria-label="Close notification"
           @click="notificationStore.removeToast(toast.id)"
-          class="p-0.5 rounded hover:bg-black/20 opacity-70 hover:opacity-100 transition"
+          class="p-0.5 rounded hover:bg-black/20 opacity-70 hover:opacity-100 transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
-          <X class="w-3.5 h-3.5" />
+          <X aria-hidden="true" class="w-3.5 h-3.5" />
         </button>
       </div>
     </transition-group>

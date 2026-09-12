@@ -5,7 +5,36 @@ mod commands;
 
 use commands::{ai, auth, config, diff, graph, repo, terminal, update};
 
+/// Appends panics to a local log file so hard crashes leave a trace for
+/// diagnosis (the file lives under %LOCALAPPDATA%\GITBX\panic.log).
+fn install_panic_logger() {
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let logged = dirs::data_local_dir()
+            .map(|dir| dir.join("GITBX"))
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .and_then(|dir| {
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(dir.join("panic.log"))
+                    .ok()
+            });
+        if let Some(mut file) = logged {
+            use std::io::Write;
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            let location = info
+                .location()
+                .map(|location| location.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            let _ = writeln!(file, "[{timestamp}] panic at {location}: {info}");
+        }
+        previous_hook(info);
+    }));
+}
+
 fn main() {
+    install_panic_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -40,6 +69,7 @@ fn main() {
             repo::get_commit_template,
             repo::commit_and_push,
             repo::checkout_branch,
+            repo::smart_checkout_branch,
             repo::create_branch,
             repo::delete_branch,
             repo::rename_branch,

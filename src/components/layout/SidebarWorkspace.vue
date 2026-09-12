@@ -5,6 +5,8 @@ import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
 import { useI18n } from '@/i18n';
 import { useNotificationStore } from '@/stores/notification';
+import { formatGitError } from '@/composables/useGitApi';
+import { useBranchCheckout } from '@/composables/useBranchCheckout';
 import {
   FolderGit2,
   GitBranch,
@@ -28,10 +30,21 @@ import {
 const repoStore = useRepoStore();
 const { t } = useI18n();
 const notification = useNotificationStore();
+const { checkoutBranch } = useBranchCheckout();
 
 async function discoverRoots() {
   try { const count = await repoStore.discoverRoots(); notification.success(t('Git Roots Discovered'), t('Found {count} Git roots.', { count })); }
   catch (error: any) { notification.error(t('Discovery Failed'), error?.message || String(error)); }
+}
+
+async function handleSwitchRepo(path: string) {
+  if (path === repoStore.activeRepoPath && repoStore.repoInfo) return;
+  try {
+    await repoStore.switchRepo(path);
+    notification.info(t('Switched Repository'), t('Active workspace: {path}', { path }));
+  } catch (error) {
+    notification.error(t('Failed to switch repository'), formatGitError(error));
+  }
 }
 
 const isReposOpen = ref(true);
@@ -118,7 +131,7 @@ function branchLeafName(branchName: string) {
 }
 
 function handleCheckout(name: string) {
-  repoStore.checkoutBranch(name);
+  void checkoutBranch(name);
 }
 
 function handleLocateCommit(commitId: string) {
@@ -151,7 +164,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         </div>
         <div class="flex items-center space-x-1">
           <button
-            @click.stop="repoStore.isRemoteModalOpen = true"
+            @click.stop="repoStore.openModal('remote')"
             :disabled="!repoStore.activeRepoPath"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
             :title="t('View and edit Git remotes')"
@@ -159,7 +172,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             <GitFork class="w-3.5 h-3.5" />
           </button>
           <button
-            @click.stop="repoStore.isAddRepoModalOpen = true"
+            @click.stop="repoStore.openModal('addRepo')"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
             :title="t('Add Repository')"
           >
@@ -172,7 +185,11 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         <div
           v-for="repo in repoStore.repoList"
           :key="repo.path"
-          @click="repoStore.switchRepo(repo.path)"
+          @click.stop="handleSwitchRepo(repo.path)"
+          @keydown.enter.prevent="handleSwitchRepo(repo.path)"
+          @keydown.space.prevent="handleSwitchRepo(repo.path)"
+          role="button"
+          tabindex="0"
           class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
           :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
         >
@@ -222,7 +239,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           <span>{{ t('Local Branches') }} ({{ localBranches.length }})</span>
         </div>
         <button
-          @click.stop="repoStore.isBranchModalOpen = true"
+          @click.stop="repoStore.openModal('branch')"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
           :title="t('Create Branch')"
         >
@@ -323,7 +340,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           <span>{{ t('Tags') }} ({{ repoStore.tags.length }})</span>
         </div>
         <button
-          @click.stop="repoStore.isTagModalOpen = true"
+          @click.stop="repoStore.openModal('tag')"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
           :title="t('Create Tag')"
         >
@@ -355,7 +372,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           <span>{{ t('Stashes') }} ({{ repoStore.stashes.length }})</span>
         </div>
         <button
-          @click.stop="repoStore.isStashModalOpen = true"
+          @click.stop="repoStore.openModal('stash')"
           class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
           :title="t('Save Stash')"
         >
@@ -367,7 +384,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
         <div
           v-for="stash in repoStore.stashes"
           :key="stash.index"
-          @click="repoStore.isStashModalOpen = true"
+          @click="repoStore.openModal('stash')"
           class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate group text-xs"
         >
           <div class="flex items-center space-x-1.5 truncate">

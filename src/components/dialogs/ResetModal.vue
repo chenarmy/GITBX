@@ -17,7 +17,7 @@ async function handleReset() {
   isSubmitting.value = true;
   try {
     await repoStore.reset(repoStore.selectedCommit.id, resetMode.value);
-    repoStore.isResetModalOpen = false;
+    repoStore.closeModal('reset');
   } catch (err: any) {
     notification.error(t('Reset Failed', undefined) || 'Reset Failed', err?.message || 'Failed to reset');
   } finally {
@@ -30,7 +30,7 @@ async function handleReset() {
   <div
     v-if="repoStore.isResetModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.isResetModalOpen = false"
+    @keydown.esc.window="repoStore.closeModal('reset')"
   >
     <div
       role="dialog"
@@ -45,7 +45,7 @@ async function handleReset() {
           <span class="font-bold text-sm text-foreground">{{ t('Reset Branch to Commit') }}</span>
         </div>
         <button
-          @click="repoStore.isResetModalOpen = false"
+          @click="repoStore.closeModal('reset')"
           aria-label="Close"
           class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
@@ -95,7 +95,7 @@ async function handleReset() {
 
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
-          @click="repoStore.isResetModalOpen = false"
+          @click="repoStore.closeModal('reset')"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}

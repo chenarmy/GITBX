@@ -14,11 +14,17 @@ import {
   Copy,
 } from 'lucide-vue-next';
 
-const props = defineProps<{
-  commit: GraphCommitNode;
-  x: number;
-  y: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    commit: GraphCommitNode;
+    x?: number;
+    y?: number;
+  }>(),
+  {
+    x: 0,
+    y: 0,
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -59,19 +65,19 @@ async function handleRevert() {
 
 function handleReset() {
   repoStore.selectedCommit = props.commit;
-  repoStore.isResetModalOpen = true;
+  repoStore.openModal('reset');
   emit('close');
 }
 
 function handleNewBranch() {
   repoStore.selectedCommit = props.commit;
-  repoStore.isBranchModalOpen = true;
+  repoStore.openModal('branch');
   emit('close');
 }
 
 function handleNewTag() {
   repoStore.selectedCommit = props.commit;
-  repoStore.isTagModalOpen = true;
+  repoStore.openModal('tag');
   emit('close');
 }
 

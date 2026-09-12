@@ -14,6 +14,7 @@ export const CONFIG_KEYS = {
   ai: 'gitbx_ai_config',
   proxy: 'gitbx_proxy_config',
   sshKey: 'gitbx_ssh_key',
+  webToken: 'gitbx_web_token',
 } as const;
 
 interface PersistedRepository {

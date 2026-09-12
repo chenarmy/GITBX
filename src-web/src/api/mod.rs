@@ -9,8 +9,8 @@ use axum::{
 use gitbx_ai::{CommitGenerator, GenericOpenAiClient, LlmConfig};
 use gitbx_contracts::GitErrorResponse;
 use gitbx_core::{GitService, GitbxError};
-use gitbx_diff::{load_conflict_file, resolve_conflict_file, DiffEngine};
-use gitbx_graph::{GraphLayoutEngine, GraphPage};
+use gitbx_diff::{get_file_diff, load_conflict_file, resolve_conflict_file};
+use gitbx_graph::get_commit_graph_page;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub allowed_roots: Vec<PathBuf>,
     pub auth_token: Option<String>,
+    pub open_mode: bool,
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -31,20 +32,30 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         == 0
 }
 
+fn allowed_root_values(value: &str) -> impl Iterator<Item = &str> {
+    value
+        .split([';', ','])
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
 impl AppState {
     pub fn from_env() -> Self {
-        let allowed_roots = std::env::var("GITBX_ALLOWED_REPOS")
-            .unwrap_or_default()
-            .split(';')
-            .filter(|value| !value.trim().is_empty())
-            .filter_map(|value| Path::new(value.trim()).canonicalize().ok())
+        let configured_roots = std::env::var("GITBX_ALLOWED_REPOS").unwrap_or_default();
+        let allowed_roots = allowed_root_values(&configured_roots)
+            .filter_map(|value| Path::new(value).canonicalize().ok())
             .collect();
         let auth_token = std::env::var("GITBX_WEB_TOKEN")
             .ok()
             .filter(|value| !value.is_empty());
+        let open_mode = std::env::var("GITBX_ALLOW_ALL_REPOS")
+            .or_else(|_| std::env::var("GITBX_OPEN_MODE"))
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         Self {
             allowed_roots,
             auth_token,
+            open_mode,
         }
     }
 
@@ -76,7 +87,7 @@ impl AppState {
 
     pub fn allowed(&self, repo_path: &str) -> bool {
         if self.allowed_roots.is_empty() {
-            return true;
+            return self.open_mode;
         }
         let Some(path) = canonicalize_for_policy(Path::new(repo_path)) else {
             return false;
@@ -310,28 +321,10 @@ async fn repo_handler(
             repo.list_stashes().map(|value| json!(value))
         }
         (Method::GET, "graph") => {
-            let repo = read_repo()?;
-            let offset = query(&uri, "offset")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0usize);
-            let limit = query(&uri, "limit")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(150usize)
-                .clamp(20, 500);
-            let commits = repo.get_commits(offset.saturating_add(limit).saturating_add(1))?;
-            let has_more = commits.len() > offset.saturating_add(limit);
-            let info = repo.info()?;
-            let nodes = GraphLayoutEngine::compute_layout(&commits, info.head_commit_id.as_deref())
-                .into_iter()
-                .skip(offset)
-                .take(limit)
-                .collect();
-            Ok(json!(GraphPage {
-                nodes,
-                offset,
-                limit,
-                has_more
-            }))
+            let offset = query(&uri, "offset").and_then(|v| v.parse().ok());
+            let limit = query(&uri, "limit").and_then(|v| v.parse().ok());
+            let page = get_commit_graph_page(&path, offset, limit)?;
+            Ok(json!(page))
         }
         (Method::GET, "diff") => diff_response(&path, &uri),
         (Method::GET, "file-history") => {
@@ -483,7 +476,15 @@ async fn repo_handler(
         }),
         (Method::POST, "branch/checkout") => write_op(&path, || {
             let name = body_json.get("name").and_then(Value::as_str).unwrap_or("");
-            GitService::with_write_lock(&path, |repo| repo.checkout_branch(name))
+            if body_json
+                .get("smart")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                GitService::smart_checkout_branch(&path, name).map(Some)
+            } else {
+                GitService::with_write_lock(&path, |repo| repo.checkout_branch(name)).map(|_| None)
+            }
         }),
         (Method::POST, "remote/set-url") => write_op(&path, || {
             let name = body_json
@@ -827,74 +828,30 @@ fn diff_response(path: &str, uri: &axum::http::Uri) -> Result<Value, GitbxError>
     if file.is_empty() {
         return Ok(json!({ "raw_diff": "", "file": file }));
     }
-    GitService::validate_file_path(path, &file)?;
-    let repo = GitService::open(path)?;
     let staged = query(uri, "staged").as_deref() == Some("true");
     let commit_id = query(uri, "commit");
     let base_commit_id = query(uri, "base_commit");
     let target_commit_id = query(uri, "target_commit");
-    let old_file = query(uri, "old_file").unwrap_or_else(|| file.clone());
-    let read_revision_file = |revision: &str, file_path: &str| -> Vec<u8> {
-        repo.inner()
-            .revparse_single(revision)
-            .ok()
-            .and_then(|object| object.peel_to_commit().ok())
-            .and_then(|commit| commit.tree().ok()?.get_path(Path::new(file_path)).ok())
-            .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
-            .map(|blob| blob.content().to_vec())
-            .unwrap_or_default()
-    };
-    let (old, new) = if let (Some(base_id), Some(target_id)) =
-        (base_commit_id.as_deref(), target_commit_id.as_deref())
-    {
-        (
-            read_revision_file(base_id, &old_file),
-            read_revision_file(target_id, &file),
-        )
-    } else if let Some(commit_id) = commit_id {
-        let commit = repo.inner().find_commit(git2::Oid::from_str(&commit_id)?)?;
-        let old = commit
-            .parent(0)
-            .ok()
-            .and_then(|parent| parent.tree().ok()?.get_path(Path::new(&file)).ok())
-            .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
-            .map(|blob| blob.content().to_vec())
-            .unwrap_or_default();
-        let new = commit
-            .tree()
-            .ok()
-            .and_then(|tree| tree.get_path(Path::new(&file)).ok())
-            .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
-            .map(|blob| blob.content().to_vec())
-            .unwrap_or_default();
-        (old, new)
-    } else if staged {
-        let old = repo
-            .inner()
-            .head()
-            .ok()
-            .and_then(|head| head.peel_to_commit().ok())
-            .and_then(|commit| commit.tree().ok()?.get_path(Path::new(&file)).ok())
-            .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
-            .map(|blob| blob.content().to_vec())
-            .unwrap_or_default();
-        (old, repo.index_file(&file).unwrap_or_default())
-    } else {
-        (
-            repo.index_file(&file).unwrap_or_default(),
-            repo.workdir_file(&file).unwrap_or_default(),
-        )
-    };
-    if std::str::from_utf8(&old).is_err() || std::str::from_utf8(&new).is_err() {
-        return Ok(
-            json!({ "old_path": file, "new_path": file, "is_binary": true, "hunks": [], "additions": 0, "deletions": 0 }),
-        );
+    let old_file = query(uri, "old_file");
+    let diff = get_file_diff(
+        path,
+        &file,
+        staged,
+        commit_id.as_deref(),
+        base_commit_id.as_deref(),
+        target_commit_id.as_deref(),
+        old_file.as_deref(),
+    )?;
+    serde_json::to_value(diff).map_err(|error| GitbxError::General(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_root_values;
+
+    #[test]
+    fn allowed_repository_list_accepts_semicolons_and_commas() {
+        let values: Vec<_> = allowed_root_values(r"C:\one; D:\two,E:\three").collect();
+        assert_eq!(values, [r"C:\one", r"D:\two", r"E:\three"]);
     }
-    serde_json::to_value(DiffEngine::diff_strings(
-        &String::from_utf8_lossy(&old),
-        &String::from_utf8_lossy(&new),
-        Some(&old_file),
-        Some(&file),
-    ))
-    .map_err(|error| GitbxError::General(error.to_string()))
 }

@@ -11,4 +11,63 @@ async function create() { if (!diffStore.selectedFile) return; try { await api.c
 async function restore() { if (!selected.value || !diffStore.selectedFile) return; const ok = await confirmation.confirm({ title: t('Restore Local History'), message: t('Restore this snapshot? The current file will be saved as a new snapshot first.'), danger: true, confirmText: t('Restore') }); if (!ok) return; try { await api.restoreLocalHistory(repoStore.activeRepoPath, diffStore.selectedFile, selected.value.id); await repoStore.loadRepo(); await diffStore.selectFile(diffStore.selectedFile, false, repoStore.activeRepoPath); notification.success(t('Snapshot Restored'), diffStore.selectedFile); diffStore.isLocalHistoryOpen = false; } catch (e) { error.value = formatGitError(e); } }
 watch(() => diffStore.isLocalHistoryOpen, (open) => { if (open) void refresh(); });
 </script>
-<template><div v-if="diffStore.isLocalHistoryOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"><div class="w-full max-w-5xl h-[72vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"><div class="h-11 px-4 flex justify-between items-center border-b border-border bg-muted/50"><div><span class="font-bold text-sm">{{ t('Local History') }}</span><span class="ml-2 font-mono text-muted-foreground">{{ diffStore.selectedFile }}</span></div><button @click="diffStore.isLocalHistoryOpen = false"><X class="w-4 h-4" /></button></div><div class="p-3 border-b border-border flex gap-2"><input v-model="label" class="flex-1 bg-background border border-border rounded px-2 py-1" /><button class="px-3 rounded bg-primary text-primary-foreground flex gap-1 items-center" @click="create"><Plus class="w-3.5 h-3.5" />{{ t('Create Snapshot') }}</button><button class="px-3 rounded border border-border hover:bg-accent flex gap-1 items-center disabled:opacity-40" :disabled="!selected" @click="restore"><RotateCcw class="w-3.5 h-3.5" />{{ t('Restore') }}</button></div><div v-if="error" class="m-3 p-2 text-rose-500 bg-rose-500/10">{{ error }}</div><div class="flex-1 min-h-0 grid grid-cols-[280px_1fr]"><div class="border-r border-border overflow-auto divide-y divide-border"><button v-for="entry in entries" :key="entry.id" class="w-full text-left px-3 py-2 hover:bg-accent" :class="selected?.id === entry.id ? 'bg-accent' : ''" @click="select(entry)"><div class="font-semibold truncate">{{ entry.label }}</div><div class="text-[10px] text-muted-foreground">{{ new Date(entry.timestamp * 1000).toLocaleString() }} · {{ entry.size }} B</div></button><div v-if="entries.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No local history snapshots.') }}</div></div><pre class="overflow-auto p-4 font-mono text-[11px] whitespace-pre bg-background">{{ content }}</pre></div></div></div></template>
+<template>
+  <div
+    v-if="diffStore.isLocalHistoryOpen"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="diffStore.isLocalHistoryOpen = false"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Local History')"
+      class="w-full max-w-5xl h-[72vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
+      <div class="h-11 px-4 flex justify-between items-center border-b border-border bg-muted/50">
+        <div>
+          <span class="font-bold text-sm">{{ t('Local History') }}</span>
+          <span class="ml-2 font-mono text-muted-foreground">{{ diffStore.selectedFile }}</span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close dialog"
+          class="p-1 rounded hover:bg-accent focus:outline-none focus:ring-1 focus:ring-foreground/50"
+          @click="diffStore.isLocalHistoryOpen = false"
+        >
+          <X class="w-4 h-4" aria-hidden="true" />
+        </button>
+      </div>
+      <div class="p-3 border-b border-border flex gap-2">
+        <input v-model="label" class="flex-1 bg-background border border-border rounded px-2 py-1" />
+        <button class="px-3 rounded bg-primary text-primary-foreground flex gap-1 items-center" @click="create">
+          <Plus class="w-3.5 h-3.5" aria-hidden="true" />{{ t('Create Snapshot') }}
+        </button>
+        <button
+          class="px-3 rounded border border-border hover:bg-accent flex gap-1 items-center disabled:opacity-40"
+          :disabled="!selected"
+          @click="restore"
+        >
+          <RotateCcw class="w-3.5 h-3.5" aria-hidden="true" />{{ t('Restore') }}
+        </button>
+      </div>
+      <div v-if="error" class="m-3 p-2 text-rose-500 bg-rose-500/10">{{ error }}</div>
+      <div class="flex-1 min-h-0 grid grid-cols-[280px_1fr]">
+        <div class="border-r border-border overflow-auto divide-y divide-border">
+          <button
+            v-for="entry in entries"
+            :key="entry.id"
+            class="w-full text-left px-3 py-2 hover:bg-accent"
+            :class="selected?.id === entry.id ? 'bg-accent' : ''"
+            @click="select(entry)"
+          >
+            <div class="font-semibold truncate">{{ entry.label }}</div>
+            <div class="text-[10px] text-muted-foreground">{{ new Date(entry.timestamp * 1000).toLocaleString() }} · {{ entry.size }} B</div>
+          </button>
+          <div v-if="entries.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No local history snapshots.') }}</div>
+        </div>
+        <pre class="overflow-auto p-4 font-mono text-[11px] whitespace-pre bg-background">{{ content }}</pre>
+      </div>
+    </div>
+  </div>
+</template>

@@ -46,21 +46,39 @@ const appWindow = isTauriWindow ? getCurrentWindow() : null;
 let unlistenResize: (() => void) | undefined;
 
 async function syncWindowState() {
-  if (appWindow) isMaximized.value = await appWindow.isMaximized();
+  if (appWindow) {
+    try {
+      isMaximized.value = await appWindow.isMaximized();
+    } catch (err) {
+      console.error('Failed to sync window state', err);
+    }
+  }
 }
 
 async function handleMinimize() {
-  await appWindow?.minimize();
+  try {
+    await appWindow?.minimize();
+  } catch (err) {
+    console.error('Failed to minimize window', err);
+  }
 }
 
 async function handleToggleMaximize() {
   if (!appWindow) return;
-  await appWindow.toggleMaximize();
-  await syncWindowState();
+  try {
+    await appWindow.toggleMaximize();
+    await syncWindowState();
+  } catch (err) {
+    console.error('Failed to toggle maximize window', err);
+  }
 }
 
 async function handleCloseWindow() {
-  await appWindow?.close();
+  try {
+    await appWindow?.close();
+  } catch (err) {
+    console.error('Failed to close window', err);
+  }
 }
 
 function handleHeaderDoubleClick(event: MouseEvent) {
@@ -68,21 +86,33 @@ function handleHeaderDoubleClick(event: MouseEvent) {
   if (!target.closest('button, input, select, textarea, a')) void handleToggleMaximize();
 }
 
-function handleSelectRepo(path: string) {
+async function handleSelectRepo(path: string) {
   isRepoDropdownOpen.value = false;
-  repoStore.switchRepo(path);
-  notification.info('Switched Repository', `Active workspace: ${path}`);
+  try {
+    await repoStore.switchRepo(path);
+    notification.info(t('Switched Repository'), t('Active workspace: {path}', { path }));
+  } catch (error) {
+    notification.error(t('Failed to switch repository'), formatGitError(error));
+  }
 }
 
-function handleRemoveRepo(e: Event, path: string) {
+async function handleRemoveRepo(e: Event, path: string) {
   e.stopPropagation();
-  repoStore.removeRepo(path);
-  notification.warning('Repository Removed', path);
+  try {
+    await repoStore.removeRepo(path);
+    notification.warning(t('Repository Removed'), path);
+  } catch (error) {
+    notification.error(t('Failed to remove repository'), formatGitError(error));
+  }
 }
 
 async function handleRefresh() {
-  await repoStore.loadRepo();
-  notification.success('Repository Refreshed', 'Branches, commits and file statuses are up to date.');
+  try {
+    await repoStore.loadRepo();
+    notification.success(t('Repository Refreshed'), t('Branches, commits and file statuses are up to date.'));
+  } catch (error) {
+    notification.error(t('Refresh Failed'), formatGitError(error));
+  }
 }
 
 async function handleOpenTerminal() {
@@ -197,7 +227,7 @@ onUnmounted(() => {
           <div class="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
             <span>{{ t('Managed Repositories') }}</span>
             <button
-              @click.stop="isRepoDropdownOpen = false; repoStore.isAddRepoModalOpen = true"
+              @click.stop="isRepoDropdownOpen = false; repoStore.openModal('addRepo')"
               class="text-primary hover:underline flex items-center space-x-0.5 font-semibold"
             >
               <Plus class="w-3 h-3" />
@@ -209,7 +239,7 @@ onUnmounted(() => {
             <div
               v-for="repo in repoStore.repoList"
               :key="repo.path"
-              @click="handleSelectRepo(repo.path)"
+              @click.stop="handleSelectRepo(repo.path)"
               class="px-3 py-2 flex items-center justify-between hover:bg-secondary cursor-pointer group transition"
               :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'"
             >
@@ -232,7 +262,7 @@ onUnmounted(() => {
 
       <!-- Add Repo Quick Button -->
       <button
-        @click="repoStore.isAddRepoModalOpen = true"
+        @click="repoStore.openModal('addRepo')"
         class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
         :title="t('Add or Clone Repository')"
       >
@@ -335,7 +365,7 @@ onUnmounted(() => {
       </button>
 
       <button
-        @click="settingsStore.isSettingsModalOpen = true"
+        @click="settingsStore.openSettingsModal()"
         class="relative p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
         :title="t('Open Settings')"
       >

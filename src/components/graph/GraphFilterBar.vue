@@ -25,8 +25,15 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:modelValue', filters: GraphFilters): void;
+  (e: 'searchAll', query: string): void;
   (e: 'search-all', query: string): void;
 }>();
+
+function triggerSearchAll() {
+  const query = props.modelValue.query.trim();
+  emit('searchAll', query);
+  emit('search-all', query);
+}
 
 const { t } = useI18n();
 const rootRef = ref<HTMLElement | null>(null);
@@ -108,7 +115,7 @@ onUnmounted(() => window.removeEventListener('click', handleWindowClick));
         class="w-full min-w-0 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
         :placeholder="t('Text or hash')"
         @input="updateFilters({ query: ($event.target as HTMLInputElement).value })"
-        @keydown.enter="emit('search-all', modelValue.query.trim())"
+        @keydown.enter="triggerSearchAll"
       />
       <button
         v-if="modelValue.query"

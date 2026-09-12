@@ -130,8 +130,10 @@ mod tests {
 
     #[test]
     fn repository_key_takes_priority_over_global_key() {
-        let _guard = ResetGlobalSshKey;
         let directory = tempdir().expect("tempdir");
+        // Drop the reset guard before the temporary key files are removed so
+        // parallel tests can never observe a stale global key path.
+        let _guard = ResetGlobalSshKey;
         let global = directory.path().join("global-key");
         let repository = directory.path().join("repo-key");
         std::fs::write(&global, "global").expect("global key");
@@ -158,8 +160,8 @@ mod tests {
 
     #[test]
     fn invalid_repository_key_does_not_fall_back_to_global_key() {
-        let _guard = ResetGlobalSshKey;
         let directory = tempdir().expect("tempdir");
+        let _guard = ResetGlobalSshKey;
         let global = directory.path().join("global-key");
         std::fs::write(&global, "global").expect("global key");
         set_global_ssh_key(Some(global.to_str().expect("global path"))).expect("set global");

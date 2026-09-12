@@ -25,7 +25,16 @@ import {
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
 import { useNotificationStore } from '@/stores/notification';
+import { formatGitError } from '@/composables/useGitApi';
 import type { FileStatusItem } from '@/types/git';
+import {
+  buildChangeTree,
+  flattenChangeTreeRows,
+  getFileName,
+  unifyWorkingFiles,
+  type ChangeTreeNode,
+  type ChangeTreeRow,
+} from '@/utils/changeTree';
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
@@ -47,95 +56,20 @@ const commitFiles = computed(() => repoStore.selectedCommitFiles.slice(0, commit
 const branchFiles = computed(() => repoStore.branchComparisonFiles.slice(0, branchFileLimit.value));
 const changeView = ref<'grouped' | 'flat'>((localStorage.getItem('gitbx_change_view') as 'grouped' | 'flat') || 'grouped');
 
-const workingFiles = computed(() => {
-  const files = new Map<string, FileStatusItem>();
-  for (const file of [
-    ...repoStore.statusSummary.staged_files,
-    ...repoStore.statusSummary.unstaged_files,
-    ...repoStore.statusSummary.untracked_files,
-  ]) {
-    const existing = files.get(file.path);
-    if (!existing) {
-      files.set(file.path, { ...file });
-      continue;
-    }
-    files.set(file.path, {
-      ...existing,
-      ...file,
-      staged_status: file.staged_status !== 'Unmodified' ? file.staged_status : existing.staged_status,
-      unstaged_status: file.unstaged_status !== 'Unmodified' ? file.unstaged_status : existing.unstaged_status,
-      is_staged: existing.is_staged || file.is_staged,
-    });
-  }
-  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
-});
+const workingFiles = computed(() =>
+  unifyWorkingFiles(
+    repoStore.statusSummary.staged_files,
+    repoStore.statusSummary.unstaged_files,
+    repoStore.statusSummary.untracked_files,
+  )
+);
 const visibleWorkingFiles = computed(() => workingFiles.value.slice(0, changeLimit.value));
 
-interface ChangeTreeNode {
-  name: string;
-  path: string;
-  directories: ChangeTreeNode[];
-  files: FileStatusItem[];
-  descendantFiles: FileStatusItem[];
-}
+const changeTree = computed<ChangeTreeNode>(() => buildChangeTree(workingFiles.value));
 
-type ChangeTreeRow =
-  | { type: 'directory'; depth: number; node: ChangeTreeNode }
-  | { type: 'file'; depth: number; file: FileStatusItem };
-
-const changeTree = computed<ChangeTreeNode>(() => {
-  type MutableTreeNode = Omit<ChangeTreeNode, 'directories'> & { directoryMap: Map<string, MutableTreeNode> };
-  const root: MutableTreeNode = { name: '', path: '', directoryMap: new Map(), files: [], descendantFiles: [] };
-
-  for (const file of workingFiles.value) {
-    const parts = file.path.replace(/\\/g, '/').split('/').filter(Boolean);
-    let current = root;
-    current.descendantFiles.push(file);
-    for (const part of parts.slice(0, -1)) {
-      const path = current.path ? `${current.path}/${part}` : part;
-      let child = current.directoryMap.get(part);
-      if (!child) {
-        child = { name: part, path, directoryMap: new Map(), files: [], descendantFiles: [] };
-        current.directoryMap.set(part, child);
-      }
-      child.descendantFiles.push(file);
-      current = child;
-    }
-    current.files.push(file);
-  }
-
-  const finalize = (node: MutableTreeNode): ChangeTreeNode => ({
-    name: node.name,
-    path: node.path,
-    directories: [...node.directoryMap.values()]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(finalize),
-    files: [...node.files].sort((a, b) => fileName(a.path).localeCompare(fileName(b.path))),
-    descendantFiles: node.descendantFiles,
-  });
-  return finalize(root);
-});
-
-const visibleTreeRows = computed<ChangeTreeRow[]>(() => {
-  const rows: ChangeTreeRow[] = [];
-  let renderedFiles = 0;
-
-  const visit = (node: ChangeTreeNode, depth: number) => {
-    for (const directory of node.directories) {
-      if (renderedFiles >= changeLimit.value) return;
-      rows.push({ type: 'directory', depth, node: directory });
-      if (!collapsedDirectories.value.has(directory.path)) visit(directory, depth + 1);
-    }
-    for (const file of node.files) {
-      if (renderedFiles >= changeLimit.value) return;
-      rows.push({ type: 'file', depth, file });
-      renderedFiles += 1;
-    }
-  };
-
-  visit(changeTree.value, 0);
-  return rows;
-});
+const visibleTreeRows = computed<ChangeTreeRow[]>(() =>
+  flattenChangeTreeRows(changeTree.value, collapsedDirectories.value, changeLimit.value)
+);
 const selectedCount = computed(() => repoStore.selectedChangePaths.length);
 const allChangesSelected = computed(() => workingFiles.value.length > 0 && selectedCount.value === workingFiles.value.length);
 const operationsLocked = computed(() => Boolean(
@@ -203,9 +137,7 @@ function toggleDirectorySelection(files: FileStatusItem[]) {
   repoStore.selectedChangePaths = [...selected];
 }
 
-function fileName(filePath: string) {
-  return filePath.replace(/\\/g, '/').split('/').pop() || filePath;
-}
+const fileName = getFileName;
 
 function fileStatus(file: FileStatusItem) {
   return file.unstaged_status !== 'Unmodified' ? file.unstaged_status : file.staged_status;
@@ -226,13 +158,21 @@ function toggleAllChanges() {
 
 async function handleStageSelected() {
   if (!selectedCount.value) return;
-  await repoStore.stageFiles(repoStore.selectedChangePaths);
-  notification.success(t('Changes Staged'), t('{count} selected files were staged.', { count: selectedCount.value }));
+  try {
+    await repoStore.stageFiles(repoStore.selectedChangePaths);
+    notification.success(t('Changes Staged'), t('{count} selected files were staged.', { count: selectedCount.value }));
+  } catch (err) {
+    notification.error(t('Stage Failed'), formatGitError(err));
+  }
 }
 
 async function handleStageAll() {
-  await repoStore.stageAll();
-  notification.success(t('Changes Staged'), t('All changes were staged.'));
+  try {
+    await repoStore.stageAll();
+    notification.success(t('Changes Staged'), t('All changes were staged.'));
+  } catch (err) {
+    notification.error(t('Stage Failed'), formatGitError(err));
+  }
 }
 
 async function handleUnstageSelected() {
@@ -240,20 +180,32 @@ async function handleUnstageSelected() {
     .map((file) => file.path)
     .filter((path) => repoStore.selectedChangePaths.includes(path));
   if (!staged.length) return;
-  await repoStore.unstageFiles(staged);
-  notification.success(t('Changes Unstaged'), t('{count} selected files were unstaged.', { count: staged.length }));
+  try {
+    await repoStore.unstageFiles(staged);
+    notification.success(t('Changes Unstaged'), t('{count} selected files were unstaged.', { count: staged.length }));
+  } catch (err) {
+    notification.error(t('Unstage Failed'), formatGitError(err));
+  }
 }
 
 async function handleUnstageAll() {
-  await repoStore.unstageAll();
-  notification.success(t('Changes Unstaged'), t('All changes were unstaged.'));
+  try {
+    await repoStore.unstageAll();
+    notification.success(t('Changes Unstaged'), t('All changes were unstaged.'));
+  } catch (err) {
+    notification.error(t('Unstage Failed'), formatGitError(err));
+  }
 }
 
 async function handleStashSelected() {
   if (!selectedCount.value) return;
   const count = selectedCount.value;
-  await repoStore.createShelf(t('Selected changes'), repoStore.selectedChangePaths);
-  notification.success(t('Stash Created'), t('{count} selected files were stashed.', { count }));
+  try {
+    await repoStore.createShelf(t('Selected changes'), repoStore.selectedChangePaths);
+    notification.success(t('Stash Created'), t('{count} selected files were stashed.', { count }));
+  } catch (err) {
+    notification.error(t('Stash Failed'), formatGitError(err));
+  }
 }
 
 function getStatusIcon(status: string) {
@@ -284,8 +236,13 @@ function getStatusColor(status: string) {
 
 async function handleDiscardFile(e: Event, filePath: string) {
   e.stopPropagation();
-  if (await confirmation.confirm({ title: 'Discard Changes', message: `Discard changes to '${filePath}'? This cannot be undone.`, danger: true, confirmText: 'Discard' })) {
-    repoStore.discardFile(filePath);
+  if (await confirmation.confirm({ title: t('Discard Changes'), message: t('Discard changes to \'{path}\'? This cannot be undone.', { path: filePath }), danger: true, confirmText: t('Discard') })) {
+    try {
+      await repoStore.discardFile(filePath);
+      notification.success(t('Changes Discarded'), filePath);
+    } catch (err) {
+      notification.error(t('Discard Failed'), formatGitError(err));
+    }
   }
 }
 </script>

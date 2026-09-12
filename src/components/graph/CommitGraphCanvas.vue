@@ -233,6 +233,7 @@ function formatTime(timestamp: number) {
       v-model="filters"
       :commits="repoStore.commitNodes"
       :result-count="visibleCommits.length"
+      @searchAll="handleSearchAll"
       @search-all="handleSearchAll"
     />
 

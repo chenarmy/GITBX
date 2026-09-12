@@ -6,7 +6,7 @@ import type {
   ConflictResolutionSuggestion,
 } from '@/types/ai';
 import type { Locale } from '@/i18n/config';
-import { isTauri, getConsole } from '@/api/common';
+import { isTauri, getConsole, gitbxFetch } from '@/api/common';
 
 export const generateCommitMessage = async (
   diffText: string,
@@ -30,7 +30,7 @@ export const generateCommitMessage = async (
       language,
     });
   }
-  const res = await fetch('/api/ai/commit', {
+  const res = await gitbxFetch('/api/ai/commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ diff_text: diffText, config, language }),
@@ -89,7 +89,7 @@ export const analyzeConflict = async (
       language,
     });
   }
-  const res = await fetch('/api/ai/conflict', {
+  const res = await gitbxFetch('/api/ai/conflict', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file_path: filePath, ours, theirs, base, config: requestConfig, language }),

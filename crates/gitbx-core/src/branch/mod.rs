@@ -23,6 +23,12 @@ pub struct TagItem {
     pub timestamp: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BranchCheckoutResult {
+    pub conflicts: bool,
+    pub stash_kept: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StashItem {
     pub index: usize,
@@ -206,6 +212,102 @@ impl Repository {
         }
 
         Ok(())
+    }
+
+    /// IDEA-style Smart Checkout: temporarily stash all local work, switch the
+    /// branch, then restore the work (including its staged state).
+    pub fn smart_checkout_branch(&mut self, name: &str) -> Result<BranchCheckoutResult> {
+        let signature = self
+            .inner()
+            .signature()
+            .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+        let mut stashed = true;
+        if let Err(stash_error) = self.inner_mut().stash_save(
+            &signature,
+            "GITBX Smart Checkout backup",
+            Some(git2::StashFlags::INCLUDE_UNTRACKED),
+        ) {
+            // A clean worktree has nothing to stash; the UI state may simply be
+            // stale (changes were committed or discarded elsewhere), so proceed
+            // with a plain checkout instead of failing the whole operation.
+            let nothing_to_stash = stash_error.code() == git2::ErrorCode::NotFound;
+            if !nothing_to_stash {
+                return Err(stash_error.into());
+            }
+            stashed = false;
+        }
+
+        if let Err(checkout_error) = self.checkout_branch(name) {
+            if !stashed {
+                // Nothing to restore; surface the original checkout error.
+                return Err(checkout_error);
+            }
+            let mut restore_options = git2::StashApplyOptions::new();
+            restore_options.reinstantiate_index();
+            return match self.inner_mut().stash_apply(0, Some(&mut restore_options)) {
+                Ok(()) => {
+                    self.inner_mut().stash_drop(0)?;
+                    Err(checkout_error)
+                }
+                Err(restore_error) => Err(crate::GitbxError::General(format!(
+                    "{checkout_error}; local changes were saved in stash because restoring them failed: {restore_error}"
+                ))),
+            };
+        }
+
+        if !stashed {
+            // Plain checkout of a clean worktree finished successfully.
+            return Ok(BranchCheckoutResult {
+                conflicts: false,
+                stash_kept: false,
+            });
+        }
+
+        let mut apply_options = git2::StashApplyOptions::new();
+        apply_options.reinstantiate_index();
+        match self.inner_mut().stash_apply(0, Some(&mut apply_options)) {
+            Ok(()) => {
+                let conflicts = self.inner().index()?.has_conflicts();
+                if conflicts {
+                    Ok(BranchCheckoutResult {
+                        conflicts: true,
+                        stash_kept: true,
+                    })
+                } else {
+                    self.inner_mut().stash_drop(0)?;
+                    Ok(BranchCheckoutResult {
+                        conflicts: false,
+                        stash_kept: false,
+                    })
+                }
+            }
+            Err(error) => {
+                let index_has_conflicts = self
+                    .inner()
+                    .index()
+                    .map(|index| index.has_conflicts())
+                    .unwrap_or(false);
+                // With `reinstantiate_index`, libgit2 may report a bare
+                // `Conflict` error without writing conflict entries into the
+                // index. In that case the branch switch already succeeded and
+                // the stash is kept as a recovery copy, so surface it as a
+                // conflict result instead of a hard failure.
+                if index_has_conflicts
+                    || error.code() == git2::ErrorCode::Conflict
+                    || error.class() == git2::ErrorClass::Checkout
+                {
+                    Ok(BranchCheckoutResult {
+                        conflicts: true,
+                        stash_kept: true,
+                    })
+                } else {
+                    Err(crate::GitbxError::General(format!(
+                        "{error}; the branch was switched, but restoring local changes failed. \
+                         A backup remains in Stashes."
+                    )))
+                }
+            }
+        }
     }
 
     pub fn list_tags(&self) -> Result<Vec<TagItem>> {

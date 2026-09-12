@@ -33,11 +33,11 @@ async function handleMerge() {
       customMessage.value.trim() || undefined
     );
     if (res.conflict) {
-      repoStore.isMergeModalOpen = false;
+      repoStore.closeModal('merge');
       const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
       if (firstConflict) diffStore.selectConflictFile(firstConflict);
     } else if (res.success) {
-      repoStore.isMergeModalOpen = false;
+      repoStore.closeModal('merge');
     } else {
       errorMsg.value = res.error || 'Failed to merge branch';
     }
@@ -53,7 +53,7 @@ async function handleMerge() {
   <div
     v-if="repoStore.isMergeModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.isMergeModalOpen = false"
+    @keydown.esc.window="repoStore.closeModal('merge')"
   >
     <div
       role="dialog"
@@ -70,7 +70,7 @@ async function handleMerge() {
           </span>
         </div>
         <button
-          @click="repoStore.isMergeModalOpen = false"
+          @click="repoStore.closeModal('merge')"
           aria-label="Close"
           class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
@@ -138,7 +138,7 @@ async function handleMerge() {
 
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
-          @click="repoStore.isMergeModalOpen = false"
+          @click="repoStore.closeModal('merge')"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}

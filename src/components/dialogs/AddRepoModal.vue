@@ -66,7 +66,7 @@ async function handleAddLocal() {
   try {
     await repoStore.addRepo(localPath.value.trim());
     localPath.value = '';
-    repoStore.isAddRepoModalOpen = false;
+    repoStore.closeModal('addRepo');
   } catch (err: any) {
     errorMsg.value = err?.message || t('Failed to add repository');
   } finally {
@@ -84,7 +84,7 @@ async function handleClone() {
       await repoStore.addRepo(res.path);
       cloneUrl.value = '';
       cloneDestination.value = '';
-      repoStore.isAddRepoModalOpen = false;
+      repoStore.closeModal('addRepo');
     }
   } catch (err: any) {
     errorMsg.value = err?.message || t('Failed to clone repository');
@@ -102,7 +102,7 @@ async function handleInit() {
     if (res.success) {
       await repoStore.addRepo(res.path);
       initPath.value = '';
-      repoStore.isAddRepoModalOpen = false;
+      repoStore.closeModal('addRepo');
     }
   } catch (err: any) {
     errorMsg.value = err?.message || t('Failed to initialize repository');
@@ -116,21 +116,28 @@ async function handleInit() {
   <div
     v-if="repoStore.isAddRepoModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('addRepo')"
   >
     <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Add Repository')"
       class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
     >
       <!-- Header -->
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <FolderGit2 class="w-4 h-4 text-primary" />
+          <FolderGit2 class="w-4 h-4 text-primary" aria-hidden="true" />
           <span class="font-bold text-sm text-foreground">{{ t('Add Repository') }}</span>
         </div>
         <button
-          @click="repoStore.isAddRepoModalOpen = false"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          type="button"
+          aria-label="Close dialog"
+          @click="repoStore.closeModal('addRepo')"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -270,7 +277,7 @@ async function handleInit() {
       <!-- Footer CTA -->
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
-          @click="repoStore.isAddRepoModalOpen = false"
+          @click="repoStore.closeModal('addRepo')"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}

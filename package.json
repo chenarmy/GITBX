@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build": "vite build",
+    "build:check": "vue-tsc && vite build",
     "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:frontend": "vitest run",
     "test:rust": "cargo test --workspace",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "version:check": "node scripts/sync-version.mjs --check",
     "version:set": "node scripts/sync-version.mjs",
     "preview": "vite preview",
+    "tauri:dev:stable": "node scripts/tauri-stable-dev.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -46,6 +50,7 @@
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.11",
+    "vitest": "^1.6.1",
     "vue-tsc": "^2.0.19"
   },
   "packageManager": "pnpm@9.15.9"

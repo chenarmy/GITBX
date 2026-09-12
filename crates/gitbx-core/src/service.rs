@@ -1,4 +1,4 @@
-use crate::process::hidden_command;
+use crate::process::{create_git_command, hidden_command};
 use crate::ssh::configure_git_ssh;
 use crate::{open_repo, GitbxError, Repository, RepositoryInfo, Result};
 use git2::{BranchType, ObjectType, ResetType};
@@ -258,7 +258,7 @@ impl GitService {
         })
     }
     fn git_output(path: &str, args: &[&str]) -> Result<String> {
-        let output = hidden_command("git")
+        let output = create_git_command()
             .arg("-C")
             .arg(path)
             .args(args)
@@ -604,7 +604,7 @@ impl GitService {
             std::fs::write(&todo_path, todo)?;
             std::fs::write(&editor_path, "#!/bin/sh\ncat \"$GITBX_TODO\" > \"$1\"\n")?;
             let editor_command = format!("sh \"{}\"", shell_path(&editor_path));
-            let output = hidden_command("git")
+            let output = create_git_command()
                 .arg("-C")
                 .arg(path)
                 .args(["rebase", "-i", upstream])
@@ -722,7 +722,7 @@ impl GitService {
             if sign {
                 args.push("--gpg-sign".into());
             }
-            let output = hidden_command("git")
+            let output = create_git_command()
                 .arg("-C")
                 .arg(path)
                 .args(&args)
@@ -874,6 +874,7 @@ impl GitService {
         let mut fetch_options = git2::FetchOptions::new();
         fetch_options.remote_callbacks(crate::remote::authenticated_remote_callbacks(
             git2::Config::open_default().ok(),
+            None,
         )?);
         fetch_options.proxy_options(crate::proxy_options());
         let mut builder = git2::build::RepoBuilder::new();
@@ -895,6 +896,10 @@ impl GitService {
             }
             Ok(())
         })
+    }
+
+    pub fn smart_checkout_branch(path: &str, name: &str) -> Result<crate::BranchCheckoutResult> {
+        Self::with_write_lock(path, |repo| repo.smart_checkout_branch(name))
     }
 
     pub fn delete_branch(path: &str, name: &str, _force: bool) -> Result<()> {
@@ -996,7 +1001,7 @@ impl GitService {
     }
 
     fn run_git(path: &str, args: &[String]) -> Result<()> {
-        let mut command = hidden_command("git");
+        let mut command = create_git_command();
         let config = Self::open(path)
             .ok()
             .and_then(|repo| repo.inner().config().ok());
@@ -1668,9 +1673,44 @@ impl GitService {
 #[cfg(test)]
 mod tests {
     use super::GitService;
-    use git2::Repository;
+    use git2::{IndexAddOption, Repository, Signature};
     use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
+
+    fn commit_all(repo: &Repository, message: &str) {
+        let mut index = repo.index().expect("index");
+        index
+            .add_all(["*"], IndexAddOption::DEFAULT, None)
+            .expect("stage all");
+        index.write().expect("write index");
+        let tree_id = index.write_tree().expect("tree id");
+        let tree = repo.find_tree(tree_id).expect("tree");
+        let signature = Signature::now("Test", "test@example.com").expect("signature");
+        let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit<'_>> = parent.iter().collect();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents,
+        )
+        .expect("commit");
+    }
+
+    fn init_branch_fixture(path: &Path) -> Repository {
+        let repo = Repository::init(path).expect("init");
+        repo.set_head("refs/heads/main").expect("set main");
+        fs::write(path.join("shared.txt"), "base\n").expect("base file");
+        commit_all(&repo, "base");
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature", &head, false)
+            .expect("feature branch");
+        drop(head);
+        repo
+    }
 
     #[test]
     fn rejects_paths_outside_repository() {
@@ -1709,6 +1749,59 @@ mod tests {
                 .as_deref(),
             Some("feature/test")
         );
+    }
+
+    #[test]
+    fn safe_checkout_preserves_non_conflicting_local_changes() {
+        let dir = tempdir().expect("tempdir");
+        let repo = init_branch_fixture(dir.path());
+        drop(repo);
+        let path = dir.path().to_str().unwrap();
+
+        fs::write(dir.path().join("shared.txt"), "local edit\n").expect("local edit");
+        fs::write(dir.path().join("untracked.txt"), "untracked\n").expect("untracked file");
+        GitService::with_write_lock(path, |repo| repo.checkout_branch("feature"))
+            .expect("safe checkout");
+
+        let repo = Repository::open(dir.path()).expect("reopen");
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("shared.txt")).unwrap(),
+            "local edit\n"
+        );
+        assert!(dir.path().join("untracked.txt").exists());
+    }
+
+    #[test]
+    fn smart_checkout_switches_and_keeps_backup_when_restore_conflicts() {
+        let dir = tempdir().expect("tempdir");
+        let repo = init_branch_fixture(dir.path());
+        drop(repo);
+        let path = dir.path().to_str().unwrap();
+
+        GitService::with_write_lock(path, |repo| repo.checkout_branch("feature"))
+            .expect("checkout feature");
+        fs::write(dir.path().join("shared.txt"), "feature version\n").expect("feature edit");
+        let repo = Repository::open(dir.path()).expect("feature repo");
+        commit_all(&repo, "feature change");
+        drop(repo);
+        GitService::with_write_lock(path, |repo| repo.checkout_branch("main"))
+            .expect("checkout main");
+
+        fs::write(dir.path().join("shared.txt"), "local version\n").expect("local edit");
+        assert!(GitService::with_write_lock(path, |repo| repo.checkout_branch("feature")).is_err());
+
+        let result = GitService::smart_checkout_branch(path, "feature").expect("smart checkout");
+        assert!(result.conflicts);
+        assert!(result.stash_kept);
+        let repo = Repository::open(dir.path()).expect("reopen");
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+        assert!(repo.index().unwrap().has_conflicts());
+        drop(repo);
+        let stash_count = GitService::with_write_lock(path, |repo| repo.list_stashes())
+            .expect("list stashes")
+            .len();
+        assert_eq!(stash_count, 1);
     }
 
     #[test]
@@ -2430,5 +2523,124 @@ mod tests {
                 >= 3
         );
         assert_ne!(first.id, second.id);
+    }
+
+    fn smart_checkout_fixture(path: &Path) {
+        let repo = init_branch_fixture(path);
+        drop(repo);
+    }
+
+    #[test]
+    fn smart_checkout_succeeds_on_clean_worktree() {
+        let dir = tempdir().unwrap();
+        smart_checkout_fixture(dir.path());
+        let path = dir.path().to_str().unwrap();
+
+        let result = GitService::smart_checkout_branch(path, "feature").expect("smart checkout");
+        assert!(!result.conflicts);
+        assert!(!result.stash_kept);
+
+        let repo = Repository::open(dir.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+        drop(repo);
+
+        let stash_count = GitService::with_write_lock(path, |repo| repo.list_stashes())
+            .unwrap()
+            .len();
+        assert_eq!(stash_count, 0);
+    }
+
+    #[test]
+    fn smart_checkout_carries_staged_unstaged_and_untracked_work() {
+        let dir = tempdir().unwrap();
+        smart_checkout_fixture(dir.path());
+        let path = dir.path().to_str().unwrap();
+
+        fs::write(dir.path().join("staged_new.txt"), "staged\n").unwrap();
+        GitService::with_write_lock(path, |repo| repo.stage_file("staged_new.txt")).unwrap();
+        fs::write(dir.path().join("shared.txt"), "modified not staged\n").unwrap();
+        fs::write(dir.path().join("untracked.txt"), "untracked\n").unwrap();
+
+        let result = GitService::smart_checkout_branch(path, "feature").expect("smart checkout");
+        assert!(!result.conflicts);
+        assert!(!result.stash_kept);
+
+        let repo = Repository::open(dir.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+        drop(repo);
+        assert!(dir.path().join("untracked.txt").exists());
+        assert!(dir.path().join("staged_new.txt").exists());
+
+        let stash_count = GitService::with_write_lock(path, |repo| repo.list_stashes())
+            .unwrap()
+            .len();
+        assert_eq!(stash_count, 0);
+    }
+
+    #[test]
+    fn smart_checkout_restores_untracked_only_changes() {
+        let dir = tempdir().unwrap();
+        smart_checkout_fixture(dir.path());
+        let path = dir.path().to_str().unwrap();
+
+        fs::write(dir.path().join("only_untracked.txt"), "data\n").unwrap();
+        let result = GitService::smart_checkout_branch(path, "feature").expect("smart checkout");
+        assert!(!result.conflicts);
+        assert!(!result.stash_kept);
+        assert!(dir.path().join("only_untracked.txt").exists());
+
+        let repo = Repository::open(dir.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+    }
+
+    #[test]
+    fn smart_checkout_restores_deleted_files() {
+        let dir = tempdir().unwrap();
+        smart_checkout_fixture(dir.path());
+        let path = dir.path().to_str().unwrap();
+
+        fs::remove_file(dir.path().join("shared.txt")).unwrap();
+        let result = GitService::smart_checkout_branch(path, "feature").expect("smart checkout");
+        assert!(!result.conflicts);
+        assert!(!result.stash_kept);
+
+        let repo = Repository::open(dir.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+    }
+
+    #[test]
+    fn smart_checkout_reports_conflict_for_staged_clash() {
+        let dir = tempdir().unwrap();
+        smart_checkout_fixture(dir.path());
+        let path = dir.path().to_str().unwrap();
+
+        // feature has a different version of shared.txt committed
+        GitService::with_write_lock(path, |repo| repo.checkout_branch("feature")).unwrap();
+        fs::write(dir.path().join("shared.txt"), "feature version\n").unwrap();
+        let repo = Repository::open(dir.path()).unwrap();
+        commit_all(&repo, "feature change");
+        drop(repo);
+        GitService::with_write_lock(path, |repo| repo.checkout_branch("main")).unwrap();
+
+        // stage a conflicting local version on main
+        fs::write(dir.path().join("shared.txt"), "staged local version\n").unwrap();
+        GitService::with_write_lock(path, |repo| repo.stage_file("shared.txt")).unwrap();
+
+        // libgit2 may report a bare `Conflict` apply error without index
+        // markers; the operation must still be surfaced as a conflict with the
+        // branch switched and the backup kept.
+        let result =
+            GitService::smart_checkout_branch(path, "feature").expect("conflict is not an error");
+        assert!(result.conflicts);
+        assert!(result.stash_kept);
+
+        let repo = Repository::open(dir.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("feature"));
+        drop(repo);
+
+        let stash_count = GitService::with_write_lock(path, |repo| repo.list_stashes())
+            .unwrap()
+            .len();
+        assert_eq!(stash_count, 1);
     }
 }

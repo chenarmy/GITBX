@@ -151,21 +151,21 @@ async function handleDiscardAll() {
 }
 
 function handleOpenBranch() {
-  repoStore.isBranchModalOpen = true;
+  repoStore.openModal('branch');
 }
 
 function handleOpenMerge() {
   repoStore.targetBranchForAction = '';
-  repoStore.isMergeModalOpen = true;
+  repoStore.openModal('merge');
 }
 
 function handleOpenRebase() {
   repoStore.targetBranchForAction = '';
-  repoStore.isRebaseModalOpen = true;
+  repoStore.openModal('rebase');
 }
 
 function handleOpenStash() {
-  repoStore.isStashModalOpen = true;
+  repoStore.openModal('stash');
 }
 
 async function handleCherryPick() {
@@ -430,7 +430,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
               <GitCommit class="w-3.5 h-3.5 text-indigo-500" />
               <span>{{ t('Cherry-pick') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.isWorktreeManagerOpen = true">
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('worktreeManager')">
               <FolderGit2 class="w-3.5 h-3.5 text-teal-500" />
               <span>{{ t('Worktrees') }}</span>
             </button>
@@ -438,7 +438,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
               <ListTodo class="w-3.5 h-3.5 text-violet-500" />
               <span>{{ t('Changelists') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.isPullRequestOpen = true">
+            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('pullRequest')">
               <GitPullRequest class="w-3.5 h-3.5 text-fuchsia-500" />
               <span>{{ t('PR/MR') }}</span>
             </button>
@@ -458,7 +458,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
 
       <!-- Active Branch Badge -->
       <div class="flex items-center space-x-2">
-        <button class="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-secondary text-[10px]" :title="t('Incoming and Outgoing Commits')" @click="repoStore.isSyncStatusOpen = true">
+        <button class="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-secondary text-[10px]" :title="t('Incoming and Outgoing Commits')" @click="repoStore.openModal('syncStatus')">
           <span class="text-emerald-500">↓{{ repoStore.syncStatus.incoming.length }}</span><span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
         </button>
         <button class="p-1 rounded hover:bg-secondary" :class="autoFetchEnabled ? 'text-primary' : 'text-muted-foreground'" :title="t(autoFetchEnabled ? 'Background Fetch Enabled' : 'Background Fetch Disabled')" @click="toggleAutoFetch"><Timer class="w-3.5 h-3.5" /></button>

@@ -171,7 +171,7 @@ onMounted(async () => {
   if (repoStore.activeRepoPath) {
     await repoStore.loadRepo();
   } else {
-    repoStore.isAddRepoModalOpen = true;
+    repoStore.openModal('addRepo');
   }
 });
 

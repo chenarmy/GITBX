@@ -11,7 +11,7 @@ pub mod ssh;
 pub mod status;
 
 pub use auth::KeyringManager;
-pub use branch::{BranchItem, StashItem, TagItem};
+pub use branch::{BranchCheckoutResult, BranchItem, StashItem, TagItem};
 pub use error::{GitbxError, Result};
 pub use path::path_for_display;
 pub use proxy::{proxy_options, set_proxy_config, ProxyConfig, ProxyMode};

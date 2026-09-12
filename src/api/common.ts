@@ -1,6 +1,19 @@
 ﻿import { useConsoleStore } from '@/stores/console';
+import { CONFIG_KEYS } from '@/services/appConfig';
 
 export const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+export function gitbxFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  try {
+    const token = localStorage.getItem(CONFIG_KEYS.webToken)?.trim();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  } catch {
+    // Storage can be unavailable in hardened browser contexts. The server will
+    // return a structured authentication error in that case.
+  }
+  return fetch(input, { ...init, headers });
+}
 
 export function formatGitError(error: unknown, fallback = 'Git operation failed'): string {
   if (typeof error === 'string' && error.trim()) {

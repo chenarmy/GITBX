@@ -57,22 +57,42 @@ async function handleRebase() {
       const result = await repoStore.rebase(upstreamBranch.value.trim());
       if (!result.success) throw new Error(result.error || t('Failed to rebase'));
     }
-    repoStore.isRebaseModalOpen = false;
+    repoStore.closeModal('rebase');
   } catch (error) {
     errorMsg.value = formatGitError(error, t('Failed to rebase'));
     await repoStore.loadRepo();
     const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
-    if (firstConflict) { repoStore.isRebaseModalOpen = false; diffStore.selectConflictFile(firstConflict); }
+    if (firstConflict) { repoStore.closeModal('rebase'); diffStore.selectConflictFile(firstConflict); }
   } finally { isSubmitting.value = false; }
 }
 </script>
 
 <template>
-  <div v-if="repoStore.isRebaseModalOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-4xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
+  <div
+    v-if="repoStore.isRebaseModalOpen"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('rebase')"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Rebase Branch')"
+      class="w-full max-w-4xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border">
-        <div class="flex items-center gap-2"><GitPullRequest class="w-4 h-4 text-purple-400" /><span class="font-bold text-sm">{{ t('Rebase Branch') }} '{{ repoStore.repoInfo?.head_branch || 'HEAD' }}'</span></div>
-        <button class="p-1 rounded hover:bg-accent text-muted-foreground" @click="repoStore.isRebaseModalOpen = false"><X class="w-4 h-4" /></button>
+        <div class="flex items-center gap-2">
+          <GitPullRequest class="w-4 h-4 text-purple-400" aria-hidden="true" />
+          <span class="font-bold text-sm">{{ t('Rebase Branch') }} '{{ repoStore.repoInfo?.head_branch || 'HEAD' }}'</span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close dialog"
+          class="p-1 rounded hover:bg-accent text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/50"
+          @click="repoStore.closeModal('rebase')"
+        >
+          <X class="w-4 h-4" aria-hidden="true" />
+        </button>
       </div>
       <div class="p-3 border-b border-border flex gap-3 items-end">
         <label class="flex-1 space-y-1"><span class="font-semibold text-muted-foreground">{{ t('Upstream Branch to Rebase Onto') }}</span>
@@ -99,8 +119,8 @@ async function handleRebase() {
       </div>
       <div v-else class="flex-1 p-6 text-muted-foreground">{{ t('Rebase all unique commits onto the selected upstream branch.') }}</div>
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end gap-2 border-t border-border">
-        <button class="px-3 py-1.5 rounded hover:bg-accent" @click="repoStore.isRebaseModalOpen = false">{{ t('Cancel') }}</button>
-        <button class="px-4 py-1.5 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40" :disabled="!upstreamBranch || isSubmitting || (interactive && commits.length === 0)" @click="handleRebase">{{ isSubmitting ? t('Rebasing...') : t('Start Rebase') }}</button>
+        <button type="button" class="px-3 py-1.5 rounded hover:bg-accent" @click="repoStore.closeModal('rebase')">{{ t('Cancel') }}</button>
+        <button type="button" class="px-4 py-1.5 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40" :disabled="!upstreamBranch || isSubmitting || (interactive && commits.length === 0)" @click="handleRebase">{{ isSubmitting ? t('Rebasing...') : t('Start Rebase') }}</button>
       </div>
     </div>
   </div>

@@ -91,7 +91,7 @@ async function handleSave() {
       await gitApi.saveSshPassphrase(repositorySshKey.value, repositorySshPassphrase.value);
     }
     notification.success(t('Remote URLs Updated'), t('The remote configuration was saved.'));
-    repoStore.isRemoteModalOpen = false;
+    repoStore.closeModal('remote');
   } catch (err: any) {
     errorMsg.value = err?.message || t('Failed to update remote URL');
   } finally {
@@ -113,19 +113,28 @@ async function selectRepositorySshKey() {
   <div
     v-if="repoStore.isRemoteModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('remote')"
   >
-    <div class="w-full max-w-2xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Git Remotes')"
+      class="w-full max-w-2xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <GitFork class="w-4 h-4 text-primary" />
+          <GitFork class="w-4 h-4 text-primary" aria-hidden="true" />
           <span class="font-bold text-sm text-foreground">{{ t('Git Remotes') }}</span>
         </div>
         <button
-          @click="repoStore.isRemoteModalOpen = false"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          type="button"
+          aria-label="Close dialog"
+          @click="repoStore.closeModal('remote')"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
           :title="t('Close')"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -209,7 +218,8 @@ async function selectRepositorySshKey() {
 
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
-          @click="repoStore.isRemoteModalOpen = false"
+          type="button"
+          @click="repoStore.closeModal('remote')"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}

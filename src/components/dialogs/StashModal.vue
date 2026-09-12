@@ -87,11 +87,31 @@ async function dropSelected() {
 </script>
 
 <template>
-  <div v-if="repoStore.isStashModalOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
+  <div
+    v-if="repoStore.isStashModalOpen"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('stash')"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Stash and Shelf Manager')"
+      class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border">
-        <div class="flex items-center gap-2"><Archive class="w-4 h-4 text-orange-400" /><span class="font-bold text-sm">{{ t('Stash and Shelf Manager') }}</span></div>
-        <button class="p-1 rounded hover:bg-accent text-muted-foreground" @click="repoStore.isStashModalOpen = false"><X class="w-4 h-4" /></button>
+        <div class="flex items-center gap-2">
+          <Archive class="w-4 h-4 text-orange-400" aria-hidden="true" />
+          <span class="font-bold text-sm">{{ t('Stash and Shelf Manager') }}</span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close dialog"
+          class="p-1 rounded hover:bg-accent text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/50"
+          @click="repoStore.closeModal('stash')"
+        >
+          <X class="w-4 h-4" aria-hidden="true" />
+        </button>
       </div>
       <div v-if="errorMsg" class="m-3 mb-0 p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-500 flex gap-2"><AlertCircle class="w-4 h-4" />{{ errorMsg }}</div>
       <div class="flex-1 min-h-0 grid grid-cols-[300px_1fr]">

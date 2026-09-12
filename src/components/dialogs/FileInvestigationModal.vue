@@ -94,14 +94,32 @@ watch(
 </script>
 
 <template>
-  <div v-if="diffStore.isFileInvestigationOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
+  <div
+    v-if="diffStore.isFileInvestigationOpen"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="close"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('File Investigation')"
+      class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border">
         <div class="min-w-0">
           <div class="font-bold text-sm">{{ t('File Investigation') }}</div>
           <div class="text-[10px] text-muted-foreground font-mono truncate">{{ diffStore.selectedFile }}</div>
         </div>
-        <button class="p-1 rounded hover:bg-accent text-muted-foreground" :title="t('Close')" @click="close"><X class="w-4 h-4" /></button>
+        <button
+          type="button"
+          aria-label="Close dialog"
+          class="p-1 rounded hover:bg-accent text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/50"
+          :title="t('Close')"
+          @click="close"
+        >
+          <X class="w-4 h-4" aria-hidden="true" />
+        </button>
       </div>
 
       <div class="flex border-b border-border bg-muted/20 px-3 pt-2 gap-1">

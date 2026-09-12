@@ -8,12 +8,19 @@ import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { ChevronRight } from 'lucide-vue-next';
 import { usePushRecovery } from '@/composables/usePushRecovery';
+import { useBranchCheckout } from '@/composables/useBranchCheckout';
 
-const props = defineProps<{
-  branch: BranchItem;
-  x: number;
-  y: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    branch: BranchItem;
+    x?: number;
+    y?: number;
+  }>(),
+  {
+    x: 0,
+    y: 0,
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -25,6 +32,7 @@ const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
 const { pushWithRecovery } = usePushRecovery();
+const { checkoutBranch } = useBranchCheckout();
 
 const isCurrentBranch = computed(() => {
   return props.branch.is_head || props.branch.name === repoStore.repoInfo?.head_branch;
@@ -53,7 +61,7 @@ const menuStyle = computed(() => {
 
 async function handleCheckout() {
   try {
-    await repoStore.checkoutBranch(props.branch.name);
+    await checkoutBranch(props.branch.name);
   } finally {
     emit('close');
   }
@@ -62,7 +70,7 @@ async function handleCheckout() {
 function handleNewBranchFrom() {
   repoStore.selectedCommit = repoStore.commitNodes.find(c => c.id === props.branch.target_commit_id) || null;
   repoStore.targetBranchForAction = props.branch.name;
-  repoStore.isBranchModalOpen = true;
+  repoStore.openModal('branch');
   emit('close');
 }
 
@@ -70,7 +78,7 @@ async function handleCheckoutAndRebase() {
   const previousBranch = repoStore.repoInfo?.head_branch;
   try {
     if (!previousBranch) throw new Error('The current branch could not be determined.');
-    await repoStore.checkoutBranch(props.branch.name);
+    if (!await checkoutBranch(props.branch.name)) return;
     await repoStore.rebase(previousBranch);
   } catch (error) {
     notification.error(t('Operation Failed'), formatGitError(error));
@@ -81,7 +89,7 @@ async function handleCheckoutAndRebase() {
 
 async function handleCheckoutAndUpdate() {
   try {
-    await repoStore.checkoutBranch(props.branch.name);
+    if (!await checkoutBranch(props.branch.name)) return;
     await repoStore.pullRemote();
   } finally {
     emit('close');
@@ -126,13 +134,13 @@ async function handleNewWorktree() {
 
 function handleRebaseOnto() {
   repoStore.targetBranchForAction = props.branch.name;
-  repoStore.isRebaseModalOpen = true;
+  repoStore.openModal('rebase');
   emit('close');
 }
 
 function handleMergeInto() {
   repoStore.targetBranchForAction = props.branch.name;
-  repoStore.isMergeModalOpen = true;
+  repoStore.openModal('merge');
   emit('close');
 }
 
@@ -157,7 +165,7 @@ async function handlePush() {
 
 function handleRename() {
   repoStore.targetBranchForAction = props.branch.name;
-  repoStore.isRenameBranchModalOpen = true;
+  repoStore.openModal('renameBranch');
   emit('close');
 }
 

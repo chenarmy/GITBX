@@ -50,6 +50,11 @@ export interface BranchItem {
   behind_count: number;
 }
 
+export interface BranchCheckoutResult {
+  conflicts: boolean;
+  stash_kept: boolean;
+}
+
 export interface RemoteItem {
   name: string;
   url?: string;

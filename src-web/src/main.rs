@@ -20,7 +20,15 @@ async fn main() -> anyhow::Result<()> {
         );
     }
     if state.allowed_roots.is_empty() {
-        tracing::warn!("GITBX_ALLOWED_REPOS is not set; Web API repository allowlist is disabled");
+        if state.open_mode {
+            tracing::warn!(
+                "GITBX_ALLOWED_REPOS is not set, but open mode is explicitly enabled (GITBX_ALLOW_ALL_REPOS/GITBX_OPEN_MODE); all repositories allowed"
+            );
+        } else {
+            tracing::warn!(
+                "GITBX_ALLOWED_REPOS is not set and open mode is disabled; Web API will reject repository access (fail-closed)"
+            );
+        }
     }
     let app = Router::new()
         .merge(api::router(state.clone()))

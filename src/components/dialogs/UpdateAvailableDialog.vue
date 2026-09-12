@@ -15,16 +15,25 @@ const renderedNotes = computed(() => renderReleaseMarkdown(
   <div
     v-if="updates.isDialogOpen"
     class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    @keydown.esc.window="updates.status !== 'downloading' && updates.cancelUpdate()"
   >
-    <div class="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-card text-xs">
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('New version available')"
+      class="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-card text-xs"
+      @click.stop
+    >
       <header class="flex h-12 items-center justify-between border-b border-border px-4">
         <h2 class="text-sm font-bold">{{ t('New version available') }}</h2>
         <button
-          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+          type="button"
+          aria-label="Close dialog"
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-foreground/50"
           :disabled="updates.status === 'downloading'"
           @click="updates.cancelUpdate()"
         >
-          <X class="h-4 w-4" />
+          <X class="h-4 w-4" aria-hidden="true" />
         </button>
       </header>
 

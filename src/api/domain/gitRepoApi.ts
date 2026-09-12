@@ -10,6 +10,7 @@ import type {
   RebaseCommit,
   RebasePlanItem,
   SyncStatus,
+  BranchCheckoutResult,
 } from '@/types/git';
 import {
   isTauri,
@@ -19,6 +20,7 @@ import {
   isConflictError,
   redactRemoteUrl,
   getConsole,
+  gitbxFetch,
 } from '@/api/common';
 
 export const validateRepo = async (repoPath: string): Promise<{ valid: boolean; path?: string; name?: string; message?: string }> => {
@@ -31,7 +33,7 @@ export const validateRepo = async (repoPath: string): Promise<{ valid: boolean; 
       return { valid: false, message: err.toString() };
     }
   }
-  const res = await fetch('/api/repo/validate', {
+  const res = await gitbxFetch('/api/repo/validate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: repoPath }),
@@ -46,7 +48,7 @@ export const initRepo = async (repoPath: string): Promise<{ success: boolean; pa
     getConsole().logSuccess(`Initialized Git repository in ${repoPath}`);
     return { success: true, path: info.path, name: info.name };
   }
-  const res = await fetch('/api/repo/init', {
+  const res = await gitbxFetch('/api/repo/init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: repoPath }),
@@ -67,7 +69,7 @@ export const cloneRepo = async (url: string, destination: string): Promise<{ suc
     getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
     return { success: true, path: info.path, name: info.name };
   }
-  const res = await fetch('/api/repo/clone', {
+  const res = await gitbxFetch('/api/repo/clone', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, destination }),
@@ -85,7 +87,7 @@ export const getRepoInfo = async (repoPath: string): Promise<RepositoryInfo> => 
   if (isTauri()) {
     return await invoke<RepositoryInfo>('get_repo_info', { repoPath });
   }
-  const res = await fetch(`/api/repo/info?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/info?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<RepositoryInfo>(res, 'Failed to load repository information');
 };
 
@@ -93,7 +95,7 @@ export const getRepoStatus = async (repoPath: string): Promise<RepoStatusSummary
   if (isTauri()) {
     return await invoke<RepoStatusSummary>('get_repo_status', { repoPath });
   }
-  const res = await fetch(`/api/repo/status?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/status?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<RepoStatusSummary>(res, 'Failed to load repository status');
 };
 
@@ -101,7 +103,7 @@ export const listBranches = async (repoPath: string): Promise<BranchItem[]> => {
   if (isTauri()) {
     return await invoke<BranchItem[]>('list_branches', { repoPath });
   }
-  const res = await fetch(`/api/repo/branches?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/branches?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<BranchItem[]>(res, 'Failed to load branches');
 };
 
@@ -109,7 +111,7 @@ export const listRemotes = async (repoPath: string): Promise<RemoteItem[]> => {
   if (isTauri()) {
     return await invoke<RemoteItem[]>('list_remotes', { repoPath });
   }
-  const res = await fetch(`/api/repo/remotes?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/remotes?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<RemoteItem[]>(res, 'Failed to load remotes');
 };
 
@@ -121,7 +123,7 @@ export const setRemoteUrl = async (
 ): Promise<void> => {
   const fetchUrl = url.trim();
   const separatePushUrl = pushUrl?.trim() || undefined;
-  const cmd = `git remote set-url "${remoteName}" "${fetchUrl}"`;
+  const cmd = `git remote set-url "${remoteName}" "${redactRemoteUrl(fetchUrl)}"`;
   getConsole().logCommand(cmd);
 
   if (isTauri()) {
@@ -141,7 +143,7 @@ export const setRemoteUrl = async (
     }
   }
 
-  const res = await fetch('/api/repo/remote/set-url', {
+  const res = await gitbxFetch('/api/repo/remote/set-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -177,7 +179,7 @@ export const createBranch = async (
     getConsole().logSuccess(`Branch '${name}' created.`);
     return;
   }
-  const res = await fetch('/api/repo/branch/create', {
+  const res = await gitbxFetch('/api/repo/branch/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, name, start_point: startPoint, checkout }),
@@ -190,19 +192,21 @@ export const createBranch = async (
   getConsole().logSuccess(`Branch '${name}' created successfully.`);
 };
 
-export const checkoutBranch = async (repoPath: string, name: string): Promise<void> => {
-  const cmd = `git checkout "${name}"`;
+export const checkoutBranch = async (repoPath: string, name: string, smart = false): Promise<BranchCheckoutResult> => {
+  const cmd = smart ? `git checkout "${name}" (Smart Checkout)` : `git checkout "${name}"`;
   getConsole().logCommand(cmd);
 
   if (isTauri()) {
-    await invoke('checkout_branch', { repoPath, branchName: name });
+    const result = smart
+      ? await invoke<BranchCheckoutResult>('smart_checkout_branch', { repoPath, branchName: name })
+      : (await invoke('checkout_branch', { repoPath, branchName: name }), { conflicts: false, stash_kept: false });
     getConsole().logSuccess(`Switched to branch '${name}'.`);
-    return;
+    return result;
   }
-  const res = await fetch('/api/repo/branch/checkout', {
+  const res = await gitbxFetch('/api/repo/branch/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_path: repoPath, name }),
+    body: JSON.stringify({ repo_path: repoPath, name, smart }),
   });
   const data = await res.json();
   if (data.error) {
@@ -210,6 +214,7 @@ export const checkoutBranch = async (repoPath: string, name: string): Promise<vo
     throw new Error(data.error);
   }
   getConsole().logSuccess(`Switched to branch '${name}'.`);
+  return data.value || { conflicts: false, stash_kept: false };
 };
 
 export const renameBranch = async (repoPath: string, oldName: string, newName: string): Promise<void> => {
@@ -220,7 +225,7 @@ export const renameBranch = async (repoPath: string, oldName: string, newName: s
     getConsole().logSuccess(`Renamed branch '${oldName}' to '${newName}'.`);
     return;
   }
-  const res = await fetch('/api/repo/branch/rename', {
+  const res = await gitbxFetch('/api/repo/branch/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, old_name: oldName, new_name: newName }),
@@ -238,7 +243,7 @@ export const deleteBranch = async (repoPath: string, name: string, force = false
     getConsole().logSuccess(`Deleted branch '${name}'.`);
     return;
   }
-  const res = await fetch('/api/repo/branch/delete', {
+  const res = await gitbxFetch('/api/repo/branch/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, name, force }),
@@ -255,7 +260,7 @@ export const listTags = async (repoPath: string): Promise<TagItem[]> => {
   if (isTauri()) {
     return await invoke<TagItem[]>('list_tags', { repoPath });
   }
-  const res = await fetch(`/api/repo/tags?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/tags?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<TagItem[]>(res, 'Failed to load tags');
 };
 
@@ -272,7 +277,7 @@ export const createTag = async (
     getConsole().logSuccess(`Tag '${name}' created.`);
     return;
   }
-  const res = await fetch('/api/repo/tag/create', {
+  const res = await gitbxFetch('/api/repo/tag/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, name, message, commit_id: commitId }),
@@ -289,7 +294,7 @@ export const listStashes = async (repoPath: string): Promise<StashItem[]> => {
   if (isTauri()) {
     return await invoke<StashItem[]>('list_stashes', { repoPath });
   }
-  const res = await fetch(`/api/repo/stashes?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/stashes?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<StashItem[]>(res, 'Failed to load stashes');
 };
 
@@ -301,7 +306,7 @@ export const createStash = async (repoPath: string, message?: string): Promise<v
     getConsole().logSuccess('Saved working directory and index state to stash.');
     return;
   }
-  const res = await fetch('/api/repo/stash/create', {
+  const res = await gitbxFetch('/api/repo/stash/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, message }),
@@ -322,7 +327,7 @@ export const popStash = async (repoPath: string, index = 0): Promise<void> => {
     getConsole().logSuccess(`Applied stash@{${index}}.`);
     return;
   }
-  const res = await fetch('/api/repo/stash/pop', {
+  const res = await gitbxFetch('/api/repo/stash/pop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, index }),
@@ -342,7 +347,7 @@ export const stageFile = async (repoPath: string, filePath: string): Promise<voi
     await invoke('stage_file', { repoPath, filePath });
     return;
   }
-  await fetch('/api/repo/stage', {
+  await gitbxFetch('/api/repo/stage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, file_path: filePath }),
@@ -356,7 +361,7 @@ export const stageAll = async (repoPath: string): Promise<void> => {
     await invoke('stage_all', { repoPath });
     return;
   }
-  await fetch('/api/repo/stage-all', {
+  await gitbxFetch('/api/repo/stage-all', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -371,7 +376,7 @@ export const unstageFile = async (repoPath: string, filePath: string): Promise<v
     await invoke('unstage_file', { repoPath, filePath });
     return;
   }
-  await fetch('/api/repo/unstage', {
+  await gitbxFetch('/api/repo/unstage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, file_path: filePath }),
@@ -386,7 +391,7 @@ export const unstageAll = async (repoPath: string): Promise<void> => {
     getConsole().logSuccess('All changes unstaged.');
     return;
   }
-  await fetch('/api/repo/unstage-all', {
+  await gitbxFetch('/api/repo/unstage-all', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -402,7 +407,7 @@ export const discardFile = async (repoPath: string, filePath?: string): Promise<
     getConsole().logWarning(`Discarded changes: ${filePath || 'All files'}`);
     return;
   }
-  await fetch('/api/repo/discard', {
+  await gitbxFetch('/api/repo/discard', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, file_path: filePath }),
@@ -433,7 +438,7 @@ export const createCommit = async (
     getConsole().logSuccess(`Commit ${cid.slice(0, 7)} created: ${message}`);
     return cid;
   }
-  const res = await fetch('/api/repo/commit', {
+  const res = await gitbxFetch('/api/repo/commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, message, author, email, amend: options.amend, sign: options.sign, pre_commit_command: options.preCommitCommand }),
@@ -460,7 +465,7 @@ export const commitAndPush = async (
     getConsole().logSuccess(`Commit ${cid.slice(0, 7)} created and pushed.`);
     return cid;
   }
-  const res = await fetch('/api/repo/commit-and-push', {
+  const res = await gitbxFetch('/api/repo/commit-and-push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, message, author, email }),
@@ -477,7 +482,7 @@ export const commitAndPush = async (
 
 export const getCommitTemplate = async (repoPath: string): Promise<string | null> => {
   if (isTauri()) return await invoke<string | null>('get_commit_template', { repoPath });
-  const res = await fetch(`/api/repo/commit-template?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/commit-template?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<string | null>(res, 'Failed to load commit template');
 };
 
@@ -489,7 +494,7 @@ export const stashOperation = async (repoPath: string, operation: 'apply' | 'dro
     else await invoke(`${operation}_stash`, { repoPath, index });
     return;
   }
-  const res = await fetch(`/api/repo/stash/${operation}`, {
+  const res = await gitbxFetch(`/api/repo/stash/${operation}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, index, message }),
   });
@@ -499,7 +504,7 @@ export const stashOperation = async (repoPath: string, operation: 'apply' | 'dro
 export const getStashChanges = async (repoPath: string, commitId: string): Promise<FileStatusItem[]> => {
   if (isTauri()) return await invoke<FileStatusItem[]>('get_stash_changes', { repoPath, commitId });
   const params = new URLSearchParams({ path: repoPath, commit_id: commitId });
-  const res = await fetch(`/api/repo/stash/changes?${params.toString()}`);
+  const res = await gitbxFetch(`/api/repo/stash/changes?${params.toString()}`);
   return await parseGitResponse<FileStatusItem[]>(res, 'Failed to load stash changes');
 };
 
@@ -527,7 +532,7 @@ export const mergeBranch = async (
     }
   }
 
-  const res = await fetch('/api/repo/merge', {
+  const res = await gitbxFetch('/api/repo/merge', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, target, strategy, message }),
@@ -551,7 +556,7 @@ export const abortMerge = async (repoPath: string): Promise<void> => {
     getConsole().logInfo('Merge aborted. Working tree restored.');
     return;
   }
-  const res = await fetch('/api/repo/merge/abort', {
+  const res = await gitbxFetch('/api/repo/merge/abort', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -566,7 +571,7 @@ export const continueMerge = async (repoPath: string): Promise<void> => {
   if (isTauri()) {
     await invoke('merge_continue', { repoPath });
   } else {
-    const res = await fetch('/api/repo/merge/continue', {
+    const res = await gitbxFetch('/api/repo/merge/continue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
@@ -591,7 +596,7 @@ export const rebase = async (
       return { success: false, conflict: isConflictError(err), error: formatGitError(err) };
     }
   }
-  const res = await fetch('/api/repo/rebase', {
+  const res = await gitbxFetch('/api/repo/rebase', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, upstream }),
@@ -613,7 +618,7 @@ export const continueRebase = async (repoPath: string): Promise<void> => {
   if (isTauri()) {
     await invoke('rebase_continue', { repoPath });
   } else {
-    const res = await fetch('/api/repo/rebase/continue', {
+    const res = await gitbxFetch('/api/repo/rebase/continue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
@@ -631,7 +636,7 @@ export const abortRebase = async (repoPath: string): Promise<void> => {
     getConsole().logInfo('Rebase aborted.');
     return;
   }
-  const res = await fetch('/api/repo/rebase/abort', {
+  const res = await gitbxFetch('/api/repo/rebase/abort', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -655,7 +660,7 @@ export const cherryPick = async (
       return { success: false, conflict: isConflictError(err), error: formatGitError(err) };
     }
   }
-  const res = await fetch('/api/repo/cherry-pick', {
+  const res = await gitbxFetch('/api/repo/cherry-pick', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, commit_id: commitId }),
@@ -677,7 +682,7 @@ export const continueCherryPick = async (repoPath: string): Promise<void> => {
   if (isTauri()) {
     await invoke('cherry_pick_continue', { repoPath });
   } else {
-    const res = await fetch('/api/repo/cherry-pick/continue', {
+    const res = await gitbxFetch('/api/repo/cherry-pick/continue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_path: repoPath }),
@@ -695,7 +700,7 @@ export const abortCherryPick = async (repoPath: string): Promise<void> => {
     getConsole().logInfo('Cherry-pick aborted.');
     return;
   }
-  const res = await fetch('/api/repo/cherry-pick/abort', {
+  const res = await gitbxFetch('/api/repo/cherry-pick/abort', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -717,7 +722,7 @@ export const revertCommit = async (repoPath: string, commitId: string): Promise<
       return { success: false };
     }
   }
-  const res = await fetch('/api/repo/revert', {
+  const res = await gitbxFetch('/api/repo/revert', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, commit_id: commitId }),
@@ -739,7 +744,7 @@ export const reset = async (repoPath: string, target: string, mode: '--soft' | '
     getConsole().logSuccess(`Branch reset ${mode} to ${target.slice(0, 7)}.`);
     return;
   }
-  const res = await fetch('/api/repo/reset', {
+  const res = await gitbxFetch('/api/repo/reset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, target, mode }),
@@ -760,7 +765,7 @@ export const fetchRemote = async (repoPath: string): Promise<void> => {
     getConsole().logSuccess('Fetched remote references.');
     return;
   }
-  const res = await fetch('/api/repo/fetch', {
+  const res = await gitbxFetch('/api/repo/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -781,7 +786,7 @@ export const pullRemote = async (repoPath: string, strategy: 'merge' | 'rebase' 
     getConsole().logSuccess('Pull completed.');
     return;
   }
-  const res = await fetch('/api/repo/pull', {
+  const res = await gitbxFetch('/api/repo/pull', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, strategy }),
@@ -810,7 +815,7 @@ export const pushRemote = async (repoPath: string, forceWithLease = false): Prom
       throw new Error(message);
     }
   }
-  const res = await fetch('/api/repo/push', {
+  const res = await gitbxFetch('/api/repo/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, force_with_lease: forceWithLease }),
@@ -833,7 +838,7 @@ export const continueRevert = async (repoPath: string): Promise<string> => {
     getConsole().logSuccess(`Revert continued. Created commit ${commitId.slice(0, 7)}.`);
     return commitId;
   }
-  const res = await fetch('/api/repo/revert/continue', {
+  const res = await gitbxFetch('/api/repo/revert/continue', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -850,7 +855,7 @@ export const abortRevert = async (repoPath: string): Promise<void> => {
     getConsole().logInfo('Revert aborted. Working tree restored.');
     return;
   }
-  const res = await fetch('/api/repo/revert/abort', {
+  const res = await gitbxFetch('/api/repo/revert/abort', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
@@ -861,14 +866,14 @@ export const abortRevert = async (repoPath: string): Promise<void> => {
 
 export const getSyncStatus = async (repoPath: string): Promise<SyncStatus> => {
   if (isTauri()) return await invoke<SyncStatus>('get_sync_status', { repoPath });
-  const res = await fetch(`/api/repo/sync-status?path=${encodeURIComponent(repoPath)}`);
+  const res = await gitbxFetch(`/api/repo/sync-status?path=${encodeURIComponent(repoPath)}`);
   return await parseGitResponse<SyncStatus>(res, 'Failed to load sync status');
 };
 
 export const getInteractiveRebaseCommits = async (repoPath: string, upstream: string): Promise<RebaseCommit[]> => {
   if (isTauri()) return await invoke<RebaseCommit[]>('get_interactive_rebase_commits', { repoPath, upstream });
   const params = new URLSearchParams({ path: repoPath, upstream });
-  const res = await fetch(`/api/repo/rebase/commits?${params.toString()}`);
+  const res = await gitbxFetch(`/api/repo/rebase/commits?${params.toString()}`);
   return await parseGitResponse<RebaseCommit[]>(res, 'Failed to load rebase commits');
 };
 
@@ -878,7 +883,7 @@ export const interactiveRebase = async (repoPath: string, upstream: string, plan
     await invoke('interactive_rebase', { repoPath, upstream, plan });
     return;
   }
-  const res = await fetch('/api/repo/rebase/interactive', {
+  const res = await gitbxFetch('/api/repo/rebase/interactive', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, upstream, plan }),
   });

@@ -1,6 +1,6 @@
-﻿import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import type { DiffResponse, ConflictFileContent } from '@/types/diff';
-import { isTauri, parseGitResponse, getConsole } from '@/api/common';
+import { isTauri, parseGitResponse, getConsole, gitbxFetch } from '@/api/common';
 
 export const getFileDiff = async (
   repoPath: string,
@@ -31,7 +31,7 @@ export const getFileDiff = async (
       oldFilePath: comparison?.oldFilePath || null,
     });
   }
-  const res = await fetch(`/api/repo/diff?${params.toString()}`);
+  const res = await gitbxFetch(`/api/repo/diff?${params.toString()}`);
   return await parseGitResponse<DiffResponse>(res, 'Failed to fetch diff');
 };
 
@@ -40,7 +40,7 @@ export const getConflictFile = async (repoPath: string, filePath: string): Promi
     return await invoke<ConflictFileContent>('get_conflict_file', { repoPath, filePath });
   }
   const params = new URLSearchParams({ path: repoPath, file_path: filePath });
-  const res = await fetch(`/api/repo/conflict?${params.toString()}`);
+  const res = await gitbxFetch(`/api/repo/conflict?${params.toString()}`);
   return await parseGitResponse<ConflictFileContent>(res, 'Failed to load conflict file');
 };
 
@@ -58,7 +58,7 @@ export const resolveConflict = async (
     });
     return;
   }
-  const res = await fetch('/api/repo/conflict/resolve', {
+  const res = await gitbxFetch('/api/repo/conflict/resolve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -85,7 +85,7 @@ export const applyPartialPatch = async (
     await invoke('apply_partial_patch', { repoPath, filePath, patch, target });
     return;
   }
-  const res = await fetch('/api/repo/patch/apply', {
+  const res = await gitbxFetch('/api/repo/patch/apply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, file_path: filePath, patch, target }),
@@ -99,7 +99,7 @@ export const createShelf = async (repoPath: string, message: string, filePaths: 
     await invoke('create_shelf', { repoPath, message, filePaths });
     return;
   }
-  const res = await fetch('/api/repo/shelf/create', {
+  const res = await gitbxFetch('/api/repo/shelf/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath, message, file_paths: filePaths }),

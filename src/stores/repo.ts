@@ -151,24 +151,27 @@ export const useRepoStore = defineStore('repo', () => {
   let loadSequence = 0;
 
   const loadRepo = async (targetPath?: string) => {
-    const path = targetPath || activeRepoPath.value;
+    const path = normalizeStoredRepoPath(targetPath || activeRepoPath.value);
     if (!path) {
       clearLoadedRepoData();
       return false;
     }
     const seq = ++loadSequence;
-    if (path !== activeRepoPath.value) {
-      diffStore.clearSelection();
-    }
     isLoading.value = true;
     errorMessage.value = null;
-    activeRepoPath.value = path;
-    saveReposToStorage();
-    clearLoadedRepoData();
 
     try {
+      // Validate/open the target before replacing the currently displayed repo.
+      // A failed switch must not leave the UI pointing at an empty workspace.
       const info = await gitApi.getRepoInfo(path);
-      if (seq !== loadSequence || path !== activeRepoPath.value) return false;
+      if (seq !== loadSequence) return false;
+
+      if (path !== activeRepoPath.value) {
+        diffStore.clearSelection();
+        activeRepoPath.value = path;
+        saveReposToStorage();
+      }
+      clearLoadedRepoData();
       repoInfo.value = info;
 
       const existing = repoList.value.find((r) => r.path === path);
@@ -224,8 +227,7 @@ export const useRepoStore = defineStore('repo', () => {
       }
       return true;
     } catch (err: any) {
-      if (seq !== loadSequence || path !== activeRepoPath.value) return false;
-      clearLoadedRepoData();
+      if (seq !== loadSequence) return false;
       errorMessage.value = formatGitError(err, 'Failed to open repository');
       consoleStore.logError('Failed to open repository.', errorMessage.value);
       return false;
@@ -271,7 +273,14 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const switchRepo = async (path: string) => {
-    await loadRepo(path);
+    const cleanPath = normalizeStoredRepoPath(path);
+    if (cleanPath === activeRepoPath.value && repoInfo.value) return true;
+
+    const loaded = await loadRepo(cleanPath);
+    if (!loaded) {
+      throw new Error(errorMessage.value || 'Failed to switch repository');
+    }
+    return true;
   };
 
   const stageFile = async (filePath: string) => {
@@ -357,9 +366,10 @@ export const useRepoStore = defineStore('repo', () => {
     await loadRepo(activeRepoPath.value);
   };
 
-  const checkoutBranch = async (branchName: string) => {
-    await gitApi.checkoutBranch(activeRepoPath.value, branchName);
+  const checkoutBranch = async (branchName: string, smart = false) => {
+    const result = await gitApi.checkoutBranch(activeRepoPath.value, branchName, smart);
     await loadRepo(activeRepoPath.value);
+    return result;
   };
 
   const createBranch = async (name: string, startPoint?: string, checkout = true) => {

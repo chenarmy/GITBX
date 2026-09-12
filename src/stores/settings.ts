@@ -37,6 +37,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const proxyAuthEnabled = ref<boolean>(savedProxy.authEnabled);
   const proxyUsername = ref<string>(savedProxy.username);
   const sshKey = ref<string>(localStorage.getItem(CONFIG_KEYS.sshKey) || '');
+  const webToken = ref<string>(localStorage.getItem(CONFIG_KEYS.webToken) || '');
   const isSettingsModalOpen = ref<boolean>(false);
   const skippedVersion = ref<string | null>(localStorage.getItem(CONFIG_KEYS.skippedVersion));
   const savedLastUpdateCheckAt = Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt));
@@ -83,6 +84,7 @@ export const useSettingsStore = defineStore('settings', () => {
       username: proxyUsername.value.trim(),
     }));
     localStorage.setItem(CONFIG_KEYS.sshKey, sshKey.value.trim());
+    localStorage.setItem(CONFIG_KEYS.webToken, webToken.value.trim());
     localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
     localStorage.setItem(CONFIG_KEYS.locale, language.value);
     if (skippedVersion.value) {
@@ -106,6 +108,14 @@ export const useSettingsStore = defineStore('settings', () => {
     await persistSettings();
   };
 
+  const openSettingsModal = () => {
+    isSettingsModalOpen.value = true;
+  };
+
+  const closeSettingsModal = () => {
+    isSettingsModalOpen.value = false;
+  };
+
   // Apply on startup
   applyTheme();
 
@@ -119,6 +129,7 @@ export const useSettingsStore = defineStore('settings', () => {
     proxyAuthEnabled,
     proxyUsername,
     sshKey,
+    webToken,
     isSettingsModalOpen,
     skippedVersion,
     lastUpdateCheckAt,
@@ -129,5 +140,7 @@ export const useSettingsStore = defineStore('settings', () => {
     persistSettings,
     setSkippedVersion,
     setLastUpdateCheckAt,
+    openSettingsModal,
+    closeSettingsModal,
   };
 });

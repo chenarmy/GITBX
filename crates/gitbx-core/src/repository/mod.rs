@@ -232,6 +232,7 @@ impl Repository {
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
 
         let mut commits = Vec::new();
+        let mut commit_oids = Vec::new();
         for oid_res in revwalk.take(max_count) {
             let oid = oid_res?;
             let commit = self.inner.find_commit(oid)?;
@@ -240,19 +241,7 @@ impl Repository {
             let author = commit.author();
             let committer = commit.committer();
 
-            let mut changed_paths = Vec::new();
-            for file in self
-                .get_commit_changes(&commit.id().to_string())
-                .unwrap_or_default()
-            {
-                changed_paths.push(file.path);
-                if let Some(old_path) = file.old_path {
-                    changed_paths.push(old_path);
-                }
-            }
-            changed_paths.sort();
-            changed_paths.dedup();
-
+            commit_oids.push(oid);
             commits.push(CommitDetail {
                 id: commit.id().to_string(),
                 short_id: commit
@@ -273,8 +262,16 @@ impl Repository {
                 branch_refs: branch_map.get(&commit.id()).cloned().unwrap_or_default(),
                 containing_branch_refs: Vec::new(),
                 tag_refs: tag_map.get(&commit.id()).cloned().unwrap_or_default(),
-                changed_paths,
+                changed_paths: Vec::new(),
             });
+        }
+
+        // Resolve changed paths in parallel: one full tree diff per commit is
+        // the dominant cost of loading the commit graph, and the diffs are
+        // independent, so spread them across worker threads.
+        let resolved_paths = resolve_changed_paths_parallel(&self.path, &commit_oids);
+        for (commit, paths) in commits.iter_mut().zip(resolved_paths) {
+            commit.changed_paths = paths;
         }
 
         for commit in &mut commits {
@@ -533,6 +530,81 @@ impl Repository {
         }
         Ok(items)
     }
+}
+
+fn changed_paths_for(repo: &Git2Repo, commit: &git2::Commit<'_>) -> Vec<String> {
+    let Ok(tree) = commit.tree() else {
+        return Vec::new();
+    };
+    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+    if let Some(ref pt) = parent_tree {
+        if pt.id() == tree.id() {
+            return Vec::new();
+        }
+    }
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.include_unmodified(false);
+    diff_opts.skip_binary_check(true);
+    diff_opts.ignore_filemode(true);
+    diff_opts.ignore_submodules(true);
+    let Ok(diff) = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))
+    else {
+        return Vec::new();
+    };
+    let mut paths = Vec::with_capacity(diff.deltas().len() * 2);
+    for delta in diff.deltas() {
+        if let Some(p) = delta.new_file().path().and_then(|p| p.to_str()) {
+            paths.push(p.replace('\\', "/"));
+        }
+        if let Some(p) = delta.old_file().path().and_then(|p| p.to_str()) {
+            paths.push(p.replace('\\', "/"));
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn resolve_changed_paths_parallel(repo_path: &Path, oids: &[git2::Oid]) -> Vec<Vec<String>> {
+    let len = oids.len();
+    if len == 0 {
+        return Vec::new();
+    }
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(8)
+        .min(len);
+    let chunk_size = len.div_ceil(threads);
+
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(threads);
+        for chunk in oids.chunks(chunk_size) {
+            let repo_path = repo_path.to_path_buf();
+            let chunk = chunk.to_vec();
+            handles.push(scope.spawn(move || {
+                let Ok(repo) = Git2Repo::open(&repo_path) else {
+                    return vec![Vec::new(); chunk.len()];
+                };
+                let mut out = Vec::with_capacity(chunk.len());
+                for oid in &chunk {
+                    let paths = repo
+                        .find_commit(*oid)
+                        .map(|commit| changed_paths_for(&repo, &commit))
+                        .unwrap_or_default();
+                    out.push(paths);
+                }
+                out
+            }));
+        }
+        let mut result = Vec::with_capacity(len);
+        for handle in handles {
+            if let Ok(part) = handle.join() {
+                result.extend(part);
+            }
+        }
+        result
+    })
 }
 
 #[cfg(test)]

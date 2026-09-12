@@ -54,9 +54,32 @@ async function prune() { try { await gitApi.pruneWorktrees(repoStore.activeRepoP
 </script>
 
 <template>
-  <div v-if="repoStore.isWorktreeManagerOpen" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl h-[70vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
-      <div class="h-11 px-4 flex items-center justify-between border-b border-border bg-muted/50"><div class="flex gap-2 items-center"><FolderGit2 class="w-4 h-4 text-teal-500" /><span class="font-bold text-sm">{{ t('Worktree Manager') }}</span></div><button class="p-1 rounded hover:bg-accent" @click="repoStore.isWorktreeManagerOpen = false"><X class="w-4 h-4" /></button></div>
+  <div
+    v-if="repoStore.isWorktreeManagerOpen"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('worktreeManager')"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Worktree Manager')"
+      class="w-full max-w-5xl h-[70vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
+    >
+      <div class="h-11 px-4 flex items-center justify-between border-b border-border bg-muted/50">
+        <div class="flex gap-2 items-center">
+          <FolderGit2 class="w-4 h-4 text-teal-500" aria-hidden="true" />
+          <span class="font-bold text-sm">{{ t('Worktree Manager') }}</span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close dialog"
+          class="p-1 rounded hover:bg-accent focus:outline-none focus:ring-1 focus:ring-foreground/50"
+          @click="repoStore.closeModal('worktreeManager')"
+        >
+          <X class="w-4 h-4" aria-hidden="true" />
+        </button>
+      </div>
       <div class="p-3 border-b border-border grid grid-cols-[1fr_220px_auto_auto] gap-2">
         <input v-model="destination" class="bg-background border border-border rounded px-3 py-2 font-mono" :placeholder="t('Destination path')" />
         <select v-model="branch" class="bg-background border border-border rounded px-2"><option v-for="item in repoStore.branches.filter(item => !item.is_remote && !item.is_head)" :key="item.name" :value="item.name">{{ item.name }}</option></select>

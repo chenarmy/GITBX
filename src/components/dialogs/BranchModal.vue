@@ -51,7 +51,7 @@ async function handleCreate() {
     );
     branchName.value = '';
     repoStore.targetBranchForAction = '';
-    repoStore.isBranchModalOpen = false;
+    repoStore.closeModal('branch');
   } catch (err: any) {
     errorMsg.value = err?.message || 'Failed to create branch';
   } finally {
@@ -64,20 +64,27 @@ async function handleCreate() {
   <div
     v-if="repoStore.isBranchModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+    @keydown.esc.window="repoStore.closeModal('branch')"
   >
     <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('Create new branch')"
       class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
     >
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <GitBranch class="w-4 h-4 text-purple-400" />
+          <GitBranch class="w-4 h-4 text-purple-400" aria-hidden="true" />
           <span class="font-bold text-sm text-foreground">{{ t('Create new branch') }}</span>
         </div>
         <button
-          @click="repoStore.isBranchModalOpen = false"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          type="button"
+          aria-label="Close dialog"
+          @click="repoStore.closeModal('branch')"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -86,7 +93,7 @@ async function handleCreate() {
           v-if="errorMsg"
           class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center space-x-2"
         >
-          <AlertCircle class="w-4 h-4 shrink-0" />
+          <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>{{ errorMsg }}</span>
         </div>
 
@@ -120,12 +127,14 @@ async function handleCreate() {
 
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
-          @click="repoStore.isBranchModalOpen = false"
+          type="button"
+          @click="repoStore.closeModal('branch')"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}
         </button>
         <button
+          type="button"
           @click="handleCreate"
           :disabled="!branchName.trim() || isSubmitting"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"

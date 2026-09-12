@@ -5,7 +5,8 @@ import type { LlmProvider } from '@/types/ai';
 import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useUpdatesStore } from '@/stores/updates';
-import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen } from 'lucide-vue-next';
+import { useRepoStore } from '@/stores/repo';
+import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen, ShieldCheck } from 'lucide-vue-next';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
@@ -18,6 +19,7 @@ const aiStore = useAiStore();
 const gitApi = useGitApi();
 const notification = useNotificationStore();
 const updatesStore = useUpdatesStore();
+const repoStore = useRepoStore();
 const { t } = useI18n();
 const activeTab = ref<'settings' | 'about'>('settings');
 const proxyPassword = ref('');
@@ -28,6 +30,7 @@ const draftProxyPort = ref(settingsStore.proxyPort);
 const draftProxyAuthEnabled = ref(settingsStore.proxyAuthEnabled);
 const draftProxyUsername = ref(settingsStore.proxyUsername);
 const draftSshKey = ref(settingsStore.sshKey);
+const draftWebToken = ref(settingsStore.webToken);
 const draftSshPassphrase = ref('');
 const draftAuthorName = ref(settingsStore.authorName);
 const draftAuthorEmail = ref(settingsStore.authorEmail);
@@ -42,6 +45,7 @@ function resetDraft() {
   draftProxyAuthEnabled.value = settingsStore.proxyAuthEnabled;
   draftProxyUsername.value = settingsStore.proxyUsername;
   draftSshKey.value = settingsStore.sshKey;
+  draftWebToken.value = settingsStore.webToken;
   draftSshPassphrase.value = '';
   draftAuthorName.value = settingsStore.authorName;
   draftAuthorEmail.value = settingsStore.authorEmail;
@@ -97,6 +101,7 @@ async function saveSettings() {
     settingsStore.proxyAuthEnabled = draftProxyAuthEnabled.value;
     settingsStore.proxyUsername = draftProxyUsername.value;
     settingsStore.sshKey = normalizedSshKey;
+    settingsStore.webToken = draftWebToken.value.trim();
     settingsStore.authorName = draftAuthorName.value;
     settingsStore.authorEmail = draftAuthorEmail.value;
     settingsStore.changeLanguage(draftLanguage.value);
@@ -105,8 +110,15 @@ async function saveSettings() {
     });
     await aiStore.persistConfig();
     await settingsStore.persistSettings();
+    if (!gitApi.isTauri() && repoStore.activeRepoPath) {
+      const loaded = await repoStore.loadRepo();
+      if (!loaded) {
+        notification.error(t('Failed to save settings'), repoStore.errorMessage || t('Authentication required'));
+        return;
+      }
+    }
     notification.success(t('Settings Saved'), t('Configuration was saved to the user directory.'));
-    settingsStore.isSettingsModalOpen = false;
+    settingsStore.closeSettingsModal();
   } catch (error: any) {
     notification.error(t('Failed to save settings'), error?.message || String(error));
   }
@@ -143,7 +155,7 @@ function providerModels() {
 
 function closeSettings() {
   resetDraft();
-  settingsStore.isSettingsModalOpen = false;
+  settingsStore.closeSettingsModal();
 }
 </script>
 
@@ -151,22 +163,29 @@ function closeSettings() {
   <div
     v-if="settingsStore.isSettingsModalOpen"
     @click.self="closeSettings"
+    @keydown.esc.window="closeSettings"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
   >
     <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('GITBX Settings')"
       class="w-full max-w-3xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
+      @click.stop
     >
       <!-- Modal Header -->
       <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
         <div class="flex items-center space-x-2">
-          <Settings class="w-4 h-4 text-primary" />
+          <Settings class="w-4 h-4 text-primary" aria-hidden="true" />
           <span class="font-bold text-sm text-foreground">{{ t('GITBX Settings') }}</span>
         </div>
         <button
+          type="button"
+          aria-label="Close dialog"
           @click="closeSettings"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -209,6 +228,24 @@ function closeSettings() {
               {{ item.nativeLabel }} · {{ item.label }}
             </option>
           </select>
+        </div>
+
+        <!-- Web authentication -->
+        <div v-if="!gitApi.isTauri()" class="space-y-2 border-t border-border pt-3">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <ShieldCheck class="h-3.5 w-3.5 text-emerald-400" />
+            <span>{{ t('Web API Token') }}</span>
+          </div>
+          <input
+            v-model="draftWebToken"
+            type="password"
+            autocomplete="current-password"
+            :placeholder="t('Enter the token configured by GITBX_WEB_TOKEN')"
+            class="w-full rounded border border-border bg-background px-2.5 py-1.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <p class="text-[10px] text-muted-foreground">
+            {{ t('Stored only in this browser and sent to the local GITBX Web API.') }}
+          </p>
         </div>
 
         <!-- Network Proxy -->

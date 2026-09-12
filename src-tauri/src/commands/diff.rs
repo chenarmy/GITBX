@@ -1,7 +1,7 @@
 use gitbx_core::{BlameLine, CommitDetail, GitService};
 use gitbx_diff::{
-    load_conflict_file, resolve_conflict_file, ConflictChunk, ConflictFileContent, DiffEngine,
-    FileDiff, Merge3Engine,
+    load_conflict_file, resolve_conflict_file, ConflictChunk, ConflictFileContent, FileDiff,
+    Merge3Engine,
 };
 use std::fs;
 
@@ -15,137 +15,16 @@ pub async fn get_file_diff(
     target_commit_id: Option<String>,
     old_file_path: Option<String>,
 ) -> Result<FileDiff, String> {
-    let repo = GitService::open(&repo_path).map_err(|e| e.to_string())?;
-    GitService::validate_file_path(&repo_path, &file_path).map_err(|e| e.to_string())?;
-
-    let (old_bytes, new_bytes) = if let (Some(base_id), Some(target_id)) =
-        (base_commit_id, target_commit_id)
-    {
-        let old_path = old_file_path.as_deref().unwrap_or(&file_path);
-        let read_revision_file = |revision: &str, path: &str| -> Vec<u8> {
-            repo.inner()
-                .revparse_single(revision)
-                .ok()
-                .and_then(|object| object.peel_to_commit().ok())
-                .and_then(|commit| {
-                    commit
-                        .tree()
-                        .ok()?
-                        .get_path(std::path::Path::new(path))
-                        .ok()
-                })
-                .and_then(|entry| repo.inner().find_blob(entry.id()).ok())
-                .map(|blob| blob.content().to_vec())
-                .unwrap_or_default()
-        };
-        (
-            read_revision_file(&base_id, old_path),
-            read_revision_file(&target_id, &file_path),
-        )
-    } else if let Some(commit_id) = commit_id {
-        let commit = repo
-            .inner()
-            .find_commit(git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        let old = commit
-            .parent(0)
-            .ok()
-            .and_then(|parent| {
-                parent
-                    .tree()
-                    .ok()?
-                    .get_path(std::path::Path::new(&file_path))
-                    .ok()
-                    .and_then(|entry| {
-                        repo.inner()
-                            .find_blob(entry.id())
-                            .ok()
-                            .map(|blob| blob.content().to_vec())
-                    })
-            })
-            .unwrap_or_default();
-        let new = commit
-            .tree()
-            .ok()
-            .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
-            .and_then(|entry| {
-                repo.inner()
-                    .find_blob(entry.id())
-                    .ok()
-                    .map(|blob| blob.content().to_vec())
-            })
-            .unwrap_or_default();
-        (old, new)
-    } else if staged {
-        let old = repo
-            .inner()
-            .head()
-            .ok()
-            .and_then(|head| head.peel_to_commit().ok())
-            .and_then(|commit| {
-                commit
-                    .tree()
-                    .ok()?
-                    .get_path(std::path::Path::new(&file_path))
-                    .ok()
-                    .and_then(|entry| {
-                        repo.inner()
-                            .find_blob(entry.id())
-                            .ok()
-                            .map(|blob| blob.content().to_vec())
-                    })
-            })
-            .unwrap_or_default();
-        let new = repo.index_file(&file_path).unwrap_or_default();
-        (old, new)
-    } else {
-        let old = repo
-            .index_file(&file_path)
-            .or_else(|_| {
-                repo.inner()
-                    .head()
-                    .ok()
-                    .and_then(|head| head.peel_to_commit().ok())
-                    .and_then(|commit| {
-                        commit
-                            .tree()
-                            .ok()?
-                            .get_path(std::path::Path::new(&file_path))
-                            .ok()
-                            .and_then(|entry| {
-                                repo.inner()
-                                    .find_blob(entry.id())
-                                    .ok()
-                                    .map(|blob| blob.content().to_vec())
-                            })
-                    })
-                    .ok_or_else(|| gitbx_core::GitbxError::General("No previous version".into()))
-            })
-            .unwrap_or_default();
-        let new = repo.workdir_file(&file_path).unwrap_or_default();
-        (old, new)
-    };
-
-    let is_binary =
-        std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err();
-    if is_binary {
-        return Ok(FileDiff {
-            old_path: Some(file_path.clone()),
-            new_path: Some(file_path),
-            is_binary: true,
-            hunks: Vec::new(),
-            additions: 0,
-            deletions: 0,
-        });
-    }
-    let old_content = String::from_utf8_lossy(&old_bytes);
-    let new_content = String::from_utf8_lossy(&new_bytes);
-    Ok(DiffEngine::diff_strings(
-        &old_content,
-        &new_content,
-        Some(old_file_path.as_deref().unwrap_or(&file_path)),
-        Some(&file_path),
-    ))
+    gitbx_diff::get_file_diff(
+        &repo_path,
+        &file_path,
+        staged,
+        commit_id.as_deref(),
+        base_commit_id.as_deref(),
+        target_commit_id.as_deref(),
+        old_file_path.as_deref(),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

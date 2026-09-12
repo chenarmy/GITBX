@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::process::hidden_command;
+use crate::process::create_git_command;
 use crate::proxy_options;
 use crate::repository::Repository;
 use crate::ssh::{
@@ -16,8 +16,112 @@ pub struct RemoteItem {
     pub push_url: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ParsedGitUrl {
+    pub protocol: String,
+    pub host: String,
+    pub path: Option<String>,
+    pub username: Option<String>,
+}
+
+pub(crate) fn parse_git_url(raw: &str) -> Option<ParsedGitUrl> {
+    let (protocol, rest) = if let Some(stripped) = raw.strip_prefix("https://") {
+        ("https", stripped)
+    } else if let Some(stripped) = raw.strip_prefix("http://") {
+        ("http", stripped)
+    } else {
+        return None;
+    };
+
+    let (user_host, path) = match rest.split_once('/') {
+        Some((uh, p)) => (uh, Some(p.to_string())),
+        None => (rest, None),
+    };
+
+    let (username, host) = match user_host.split_once('@') {
+        Some((u, h)) => {
+            let user = if let Some((u, _pass)) = u.split_once(':') {
+                u
+            } else {
+                u
+            };
+            (Some(user.to_string()), h)
+        }
+        None => (None, user_host),
+    };
+
+    if host.is_empty() {
+        return None;
+    }
+
+    Some(ParsedGitUrl {
+        protocol: protocol.to_string(),
+        host: host.to_string(),
+        path,
+        username,
+    })
+}
+
+fn find_credentials_with_helper(
+    repo_path: Option<&std::path::Path>,
+    url: &str,
+    username_from_url: Option<&str>,
+) -> Option<Cred> {
+    let parsed = parse_git_url(url)?;
+    let mut command = create_git_command();
+    if let Some(path) = repo_path {
+        command.current_dir(path);
+    }
+    command.args(["credential", "fill"]);
+    command.stdin(std::process::Stdio::piped());
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+
+    let mut child = command.spawn().ok()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = writeln!(stdin, "protocol={}", parsed.protocol);
+        let _ = writeln!(stdin, "host={}", parsed.host);
+        if let Some(ref path) = parsed.path {
+            let _ = writeln!(stdin, "path={}", path);
+        }
+        let username = username_from_url
+            .filter(|u| !u.is_empty())
+            .or(parsed.username.as_deref());
+        if let Some(user) = username {
+            let _ = writeln!(stdin, "username={}", user);
+        }
+        let _ = writeln!(stdin);
+    }
+
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut found_username = None;
+    let mut found_password = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if let Some(val) = line.strip_prefix("username=") {
+            found_username = Some(val.to_string());
+        } else if let Some(val) = line.strip_prefix("password=") {
+            found_password = Some(val.to_string());
+        }
+    }
+
+    if let (Some(u), Some(p)) = (found_username, found_password) {
+        if !p.is_empty() {
+            return Cred::userpass_plaintext(&u, &p).ok();
+        }
+    }
+    None
+}
+
 pub fn authenticated_remote_callbacks(
     config: Option<git2::Config>,
+    repo_path: Option<std::path::PathBuf>,
 ) -> Result<RemoteCallbacks<'static>> {
     let configured_key = configured_ssh_key(config.as_ref())?;
     let configured_passphrase = configured_key.as_deref().and_then(passphrase_for);
@@ -25,17 +129,10 @@ pub fn authenticated_remote_callbacks(
     callbacks.credentials(
         move |url: &str, username_from_url: Option<&str>, allowed: CredentialType| {
             if allowed.is_user_pass_plaintext() {
-                if let Some(ref cfg) = config {
-                    if let Ok(credential) = Cred::credential_helper(cfg, url, username_from_url) {
-                        return Ok(credential);
-                    }
-                }
-                if let Ok(default_cfg) = git2::Config::open_default() {
-                    if let Ok(credential) =
-                        Cred::credential_helper(&default_cfg, url, username_from_url)
-                    {
-                        return Ok(credential);
-                    }
+                if let Some(credential) =
+                    find_credentials_with_helper(repo_path.as_deref(), url, username_from_url)
+                {
+                    return Ok(credential);
                 }
             }
 
@@ -94,26 +191,12 @@ pub fn authenticated_remote_callbacks(
     Ok(callbacks)
 }
 
-fn create_git_command() -> std::process::Command {
-    if cfg!(target_os = "windows") {
-        for candidate in &[
-            r"C:\Program Files\Git\cmd\git.exe",
-            r"C:\Program Files\Git\bin\git.exe",
-            r"C:\Program Files (x86)\Git\cmd\git.exe",
-            r"C:\Program Files (x86)\Git\bin\git.exe",
-            "git",
-        ] {
-            if *candidate == "git" || std::path::Path::new(candidate).exists() {
-                return hidden_command(candidate);
-            }
-        }
-    }
-    hidden_command("git")
-}
-
 impl Repository {
     fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
-        authenticated_remote_callbacks(self.inner().config().ok())
+        authenticated_remote_callbacks(
+            self.inner().config().ok(),
+            Some(self.path().to_path_buf()),
+        )
     }
 
     pub fn list_remotes(&self) -> Result<Vec<RemoteItem>> {
@@ -340,5 +423,48 @@ mod tests {
 
         repo.set_repository_ssh_key(None).expect("clear key");
         assert_eq!(repo.repository_ssh_key().expect("read cleared key"), None);
+    }
+
+    #[test]
+    fn parses_git_urls_accurately() {
+        use super::{parse_git_url, ParsedGitUrl};
+
+        let parsed = parse_git_url("https://github.com/chenarmy/GITBX.git").expect("parse url");
+        assert_eq!(
+            parsed,
+            ParsedGitUrl {
+                protocol: "https".to_string(),
+                host: "github.com".to_string(),
+                path: Some("chenarmy/GITBX.git".to_string()),
+                username: None,
+            }
+        );
+
+        let parsed_with_user =
+            parse_git_url("https://user123@gitlab.com/team/repo.git").expect("parse url");
+        assert_eq!(
+            parsed_with_user,
+            ParsedGitUrl {
+                protocol: "https".to_string(),
+                host: "gitlab.com".to_string(),
+                path: Some("team/repo.git".to_string()),
+                username: Some("user123".to_string()),
+            }
+        );
+
+        let parsed_http_port =
+            parse_git_url("http://192.168.1.100:8080/org/project").expect("parse url");
+        assert_eq!(
+            parsed_http_port,
+            ParsedGitUrl {
+                protocol: "http".to_string(),
+                host: "192.168.1.100:8080".to_string(),
+                path: Some("org/project".to_string()),
+                username: None,
+            }
+        );
+
+        assert_eq!(parse_git_url("git@github.com:chenarmy/GITBX.git"), None);
+        assert_eq!(parse_git_url("ssh://git@github.com/chenarmy/GITBX.git"), None);
     }
 }
