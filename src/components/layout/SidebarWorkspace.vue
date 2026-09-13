@@ -261,7 +261,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           </div>
           <div
             v-else
-            @dblclick="handleCheckout(row.branch.name)"
+            @dblclick="handleCheckout(row.branch.name, row.branch.is_head)"
             @click="handleLocateCommit(row.branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"

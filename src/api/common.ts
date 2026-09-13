@@ -16,6 +16,7 @@ export function gitbxFetch(input: RequestInfo | URL, init: RequestInit = {}): Pr
 }
 
 export function formatGitError(error: unknown, fallback = 'Git operation failed'): string {
+  let message = '';
   if (typeof error === 'string' && error.trim()) {
     try {
       const parsed = JSON.parse(error);
@@ -25,27 +26,47 @@ export function formatGitError(error: unknown, fallback = 'Git operation failed'
     } catch {
       // not JSON string
     }
-    return error;
-  }
-  if (error instanceof Error && error.message) return error.message;
-  if (error && typeof error === 'object') {
+    message = error;
+  } else if (error instanceof Error && error.message) {
+    message = error.message;
+  } else if (error && typeof error === 'object') {
     const value = error as Record<string, unknown>;
     for (const key of ['message', 'detail', 'error', 'description']) {
       const nested = value[key];
-      if (typeof nested === 'string' && nested.trim()) return nested;
+      if (typeof nested === 'string' && nested.trim()) {
+        message = nested;
+        break;
+      }
       if (nested && nested !== error) {
         const formatted = formatGitError(nested, '');
-        if (formatted) return formatted;
+        if (formatted) {
+          message = formatted;
+          break;
+        }
       }
     }
-    try {
-      const serialized = JSON.stringify(error);
-      if (serialized && serialized !== '{}') return serialized;
-    } catch {
-      // Fall through to the stable fallback.
+    if (!message) {
+      try {
+        const serialized = JSON.stringify(error);
+        if (serialized && serialized !== '{}') message = serialized;
+      } catch {
+        // Fall through to the stable fallback.
+      }
     }
   }
-  return fallback;
+
+  if (!message) message = fallback;
+
+  const lower = message.toLowerCase();
+  if (
+    lower.includes('conflict prevents checkout')
+    || lower.includes('conflicts prevent checkout')
+    || lower.includes('would be overwritten by checkout')
+  ) {
+    return t('Local changes conflict with target branch. Please commit or stash your changes first.');
+  }
+
+  return message;
 }
 
 export function isNonFastForwardPushError(error: unknown): boolean {

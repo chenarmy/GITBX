@@ -91,6 +91,8 @@ async function handleCheckoutAndUpdate() {
   try {
     if (!await checkoutBranch(props.branch.name)) return;
     await repoStore.pullRemote();
+  } catch (error) {
+    notification.error(t('Checkout Failed'), formatGitError(error));
   } finally {
     emit('close');
   }
