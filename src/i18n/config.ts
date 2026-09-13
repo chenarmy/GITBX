@@ -2357,3 +2357,17 @@ const smartCheckoutTranslations: Record<Locale, MessageCatalog> = {
 for (const loc of Object.keys(smartCheckoutTranslations) as Locale[]) {
   Object.assign(messages[loc], smartCheckoutTranslations[loc]);
 }
+
+Object.assign(messages.en, {
+  'Already Merged': 'Already Merged',
+  "'{source}' is already fully merged into '{target}'.": "'{source}' is already fully merged into '{target}'.",
+  'Merge Completed': 'Merge Completed',
+  "Merged '{source}' into '{target}'.": "Merged '{source}' into '{target}'.",
+});
+
+Object.assign(messages['zh-CN'], {
+  'Already Merged': '已经合并',
+  "'{source}' is already fully merged into '{target}'.": "“{source}”已经全部合并到“{target}”中。",
+  'Merge Completed': '合并完成',
+  "Merged '{source}' into '{target}'.": "已将“{source}”合并到“{target}”。",
+});

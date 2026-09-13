@@ -2,11 +2,13 @@
 import { ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
+import { useNotificationStore } from '@/stores/notification';
 import { GitMerge, X, AlertCircle } from 'lucide-vue-next';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const diffStore = useDiffStore();
+const notification = useNotificationStore();
 const { t } = useI18n();
 
 const targetBranch = ref('');
@@ -26,9 +28,12 @@ async function handleMerge() {
   if (!targetBranch.value.trim()) return;
   isSubmitting.value = true;
   errorMsg.value = null;
+  const previousHead = repoStore.repoInfo?.head_commit_id;
+  const sourceBranch = targetBranch.value.trim();
+  const currentBranch = repoStore.repoInfo?.head_branch || 'HEAD';
   try {
     const res = await repoStore.mergeBranch(
-      targetBranch.value.trim(),
+      sourceBranch,
       strategy.value,
       customMessage.value.trim() || undefined
     );
@@ -38,6 +43,23 @@ async function handleMerge() {
       if (firstConflict) diffStore.selectConflictFile(firstConflict);
     } else if (res.success) {
       repoStore.closeModal('merge');
+      if (previousHead === repoStore.repoInfo?.head_commit_id) {
+        notification.info(
+          t('Already Merged'),
+          t("'{source}' is already fully merged into '{target}'.", {
+            source: sourceBranch,
+            target: currentBranch,
+          }),
+        );
+      } else {
+        notification.success(
+          t('Merge Completed'),
+          t("Merged '{source}' into '{target}'.", {
+            source: sourceBranch,
+            target: currentBranch,
+          }),
+        );
+      }
     } else {
       errorMsg.value = res.error || 'Failed to merge branch';
     }

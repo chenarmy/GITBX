@@ -141,6 +141,22 @@ function handleRebaseOnto() {
 }
 
 function handleMergeInto() {
+  const currentBranch = repoStore.repoInfo?.head_branch;
+  const targetCommit = repoStore.commitNodes.find((commit) => commit.id === props.branch.target_commit_id);
+  if (
+    currentBranch
+    && targetCommit?.containing_branch_refs?.includes(currentBranch)
+  ) {
+    notification.info(
+      t('Already Merged'),
+      t("'{source}' is already fully merged into '{target}'.", {
+        source: props.branch.name,
+        target: currentBranch,
+      }),
+    );
+    emit('close');
+    return;
+  }
   repoStore.targetBranchForAction = props.branch.name;
   repoStore.openModal('merge');
   emit('close');
