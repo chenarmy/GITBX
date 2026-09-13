@@ -232,6 +232,7 @@ function formatTime(timestamp: number) {
     <GraphFilterBar
       v-model="filters"
       :commits="repoStore.commitNodes"
+      :remote-branches="repoStore.branches.filter((branch) => branch.is_remote).map((branch) => branch.name)"
       :result-count="visibleCommits.length"
       @searchAll="handleSearchAll"
       @search-all="handleSearchAll"

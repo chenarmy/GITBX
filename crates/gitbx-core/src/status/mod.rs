@@ -54,6 +54,8 @@ impl Repository {
         for entry in statuses.iter() {
             let status = entry.status();
             let path = entry.path().unwrap_or("").to_string();
+            let worktree_modified =
+                status.is_wt_modified() && self.worktree_differs_beyond_line_endings(&path);
 
             let mut item = FileStatusItem {
                 path: path.clone(),
@@ -87,7 +89,7 @@ impl Repository {
             // Workdir (Unstaged) status
             if status.is_wt_new() {
                 item.unstaged_status = FileDeltaStatus::Untracked;
-            } else if status.is_wt_modified() {
+            } else if worktree_modified {
                 item.unstaged_status = FileDeltaStatus::Modified;
             } else if status.is_wt_deleted() {
                 item.unstaged_status = FileDeltaStatus::Deleted;
@@ -124,6 +126,27 @@ impl Repository {
             conflicted_files: conflicted,
             total_changes: total,
         })
+    }
+
+    fn worktree_differs_beyond_line_endings(&self, path: &str) -> bool {
+        let Ok(index_bytes) = self.index_file(path) else {
+            return true;
+        };
+        let Ok(worktree_bytes) = self.workdir_file(path) else {
+            return true;
+        };
+        if index_bytes == worktree_bytes {
+            return false;
+        }
+        match (
+            std::str::from_utf8(&index_bytes),
+            std::str::from_utf8(&worktree_bytes),
+        ) {
+            (Ok(index), Ok(worktree)) => {
+                index.replace("\r\n", "\n") != worktree.replace("\r\n", "\n")
+            }
+            _ => true,
+        }
     }
 
     pub fn stage_file(&self, path: &str) -> Result<()> {
@@ -242,5 +265,36 @@ impl Repository {
             .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
 
         Ok(commit_oid.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Repository;
+    use git2::Signature;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn ignores_worktree_changes_that_only_convert_lf_to_crlf() {
+        let directory = tempdir().unwrap();
+        let repo = git2::Repository::init(directory.path()).unwrap();
+        fs::write(directory.path().join("file.txt"), "one\ntwo\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("file.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = Signature::now("Test", "test@example.com").unwrap();
+        repo.commit(Some("HEAD"), &signature, &signature, "base", &tree, &[])
+            .unwrap();
+        drop(tree);
+        drop(index);
+        drop(repo);
+
+        fs::write(directory.path().join("file.txt"), "one\r\ntwo\r\n").unwrap();
+        let repo = Repository::open(directory.path()).unwrap();
+        assert_eq!(repo.get_status().unwrap().total_changes, 0);
+        assert!(!repo.info().unwrap().is_dirty);
     }
 }

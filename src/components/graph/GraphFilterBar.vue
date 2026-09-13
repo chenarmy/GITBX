@@ -7,11 +7,13 @@ import { useI18n } from '@/i18n';
 const props = withDefaults(
   defineProps<{
     commits?: GraphCommitNode[];
+    remoteBranches?: string[];
     modelValue?: GraphFilters;
     resultCount?: number;
   }>(),
   {
     commits: () => [],
+    remoteBranches: () => [],
     modelValue: () => ({
       query: '',
       branch: '',
@@ -40,11 +42,14 @@ const rootRef = ref<HTMLElement | null>(null);
 const activeMenu = ref<'branch' | 'author' | 'date' | 'path' | null>(null);
 
 const branchOptions = computed(() => {
+  const remoteNames = new Set(props.remoteBranches);
   const names = props.commits.flatMap((commit) => [
     ...(commit.containing_branch_refs ?? []),
     ...commit.branch_refs,
   ]);
-  return [...new Set(names)].sort((left, right) => left.localeCompare(right));
+  return [...new Set(names)]
+    .filter((name) => remoteNames.has(name))
+    .sort((left, right) => left.localeCompare(right));
 });
 
 const authorOptions = computed(() =>

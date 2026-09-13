@@ -1,5 +1,6 @@
 ﻿import { useConsoleStore } from '@/stores/console';
 import { CONFIG_KEYS } from '@/services/appConfig';
+import { t } from '@/i18n';
 
 export const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 

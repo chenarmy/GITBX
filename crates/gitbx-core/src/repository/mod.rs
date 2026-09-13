@@ -147,10 +147,13 @@ impl Repository {
             .map(|r| r.iter().filter_map(|s| s.map(|x| x.to_string())).collect())
             .unwrap_or_default();
 
+        // Keep the repository-level flag consistent with the Changes panel.
+        // `statuses(None)` uses libgit2 defaults and can report false positives
+        // on Windows repositories with checkout filters/line-ending rules,
+        // while `get_status` applies the explicit options used by the UI.
         let is_dirty = self
-            .inner
-            .statuses(None)
-            .map(|s| !s.is_empty())
+            .get_status()
+            .map(|status| status.total_changes > 0)
             .unwrap_or(false);
 
         let state = self.inner.state();
