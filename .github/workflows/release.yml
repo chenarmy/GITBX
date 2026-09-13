@@ -29,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
 
@@ -144,6 +146,8 @@ jobs:
       CNB_REPOSITORY: chenarmy/GITBX
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
       - name: Require CNB release credentials
         run: test -n "$CNB_TOKEN" || (echo "Add the CNB_TOKEN Actions secret before publishing a tag." && exit 1)
