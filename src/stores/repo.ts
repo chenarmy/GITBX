@@ -452,13 +452,19 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const abortMerge = async () => {
-    await gitApi.abortMerge(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.abortMerge(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const continueMerge = async () => {
-    await gitApi.continueMerge(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.continueMerge(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const rebase = async (upstream: string) => {
@@ -468,13 +474,19 @@ export const useRepoStore = defineStore('repo', () => {
   };
 
   const continueRebase = async () => {
-    await gitApi.continueRebase(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.continueRebase(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const abortRebase = async () => {
-    await gitApi.abortRebase(activeRepoPath.value);
-    await loadRepo(activeRepoPath.value);
+    try {
+      await gitApi.abortRebase(activeRepoPath.value);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
   };
 
   const cherryPick = async (commitId: string) => {

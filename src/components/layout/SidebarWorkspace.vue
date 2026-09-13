@@ -201,7 +201,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           <div class="ml-1 flex shrink-0 items-center gap-1">
             <span
               v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
-              class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+              class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
               :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
             >
               <ArrowDownCircle class="h-3.5 w-3.5" />

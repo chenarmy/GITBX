@@ -71,6 +71,8 @@ impl Drop for RebaseCleanupGuard {
 pub struct GitService;
 
 impl GitService {
+    const PULL_AUTOSTASH_MARKER: &'static str = "GITBX_PULL_AUTOSTASH";
+
     pub fn discover_git_roots(path: &str) -> Result<Vec<String>> {
         let start = std::fs::canonicalize(path)?;
         let mut roots = Vec::new();
@@ -451,9 +453,10 @@ impl GitService {
                 .and_then(|branch| branch.name().ok().flatten().map(ToOwned::to_owned))
                 .unwrap_or_else(|| format!("{remote}/{branch_name}"))
         };
-        match strategy {
-            "merge" => Self::merge(path, &target, false),
-            "rebase" => Self::rebase(path, &target),
+        let stashed = Self::create_pull_autostash(path)?;
+        let integration = match strategy {
+            "merge" => Self::merge_internal(path, &target, false, !stashed),
+            "rebase" => Self::rebase_internal(path, &target, !stashed),
             "ff-only" => {
                 let repo = Self::open(path)?;
                 let head = repo.inner().head()?.peel_to_commit()?.id();
@@ -463,15 +466,39 @@ impl GitService {
                     .peel_to_commit()?
                     .id();
                 if head != target_id && !repo.inner().graph_descendant_of(target_id, head)? {
-                    return Err(GitbxError::General(
+                    Err(GitbxError::General(
                         "Fast-forward pull is not possible because the branches have diverged"
                             .into(),
-                    ));
+                    ))
+                } else {
+                    drop(repo);
+                    Self::merge_internal(path, &target, false, !stashed)
                 }
-                drop(repo);
-                Self::merge(path, &target, false)
             }
             _ => Err(GitbxError::General("Unknown pull strategy".into())),
+        };
+
+        if !stashed {
+            return integration;
+        }
+        match integration {
+            Ok(()) => Self::restore_pull_autostash(path),
+            Err(error) => {
+                // A conflicted merge/rebase must be resolved or aborted before
+                // the user's local work can safely be restored. The marker is
+                // consumed by continue/abort below.
+                if Self::open(path)?.inner().state() != git2::RepositoryState::Clean {
+                    return Err(error);
+                }
+                match Self::restore_pull_autostash(path) {
+                    Ok(()) => Err(GitbxError::General(format!(
+                        "Pull integration failed after local changes were automatically stashed and restored: {error}"
+                    ))),
+                    Err(restore_error) => Err(GitbxError::General(format!(
+                        "{error}; pulling failed and local changes could not be restored automatically: {restore_error}. A backup remains in Stashes."
+                    ))),
+                }
+            }
         }
     }
 
@@ -759,6 +786,88 @@ impl GitService {
             )));
         }
         Ok(())
+    }
+
+    fn pull_autostash_marker(repo: &Repository) -> PathBuf {
+        repo.inner().path().join(Self::PULL_AUTOSTASH_MARKER)
+    }
+
+    fn create_pull_autostash(path: &str) -> Result<bool> {
+        Self::with_write_lock(path, |repo| {
+            Self::ensure_no_operation(repo, "pulling")?;
+            let marker = Self::pull_autostash_marker(repo);
+            if marker.exists() {
+                return Err(GitbxError::General(
+                    "A previous Pull autostash is still pending recovery".into(),
+                ));
+            }
+            let signature = repo
+                .inner()
+                .signature()
+                .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
+            let oid = match repo.inner_mut().stash_save(
+                &signature,
+                "GITBX Pull autostash",
+                Some(git2::StashFlags::INCLUDE_UNTRACKED),
+            ) {
+                Ok(oid) => oid,
+                Err(error) if error.code() == git2::ErrorCode::NotFound => return Ok(false),
+                Err(error) => return Err(error.into()),
+            };
+            if let Err(error) = std::fs::write(marker, oid.to_string()) {
+                // The stash is newest because this operation owns the repo
+                // write lock. Roll it back if persistence of the recovery
+                // marker fails.
+                let _ = repo.inner_mut().stash_drop(0);
+                return Err(error.into());
+            }
+            Ok(true)
+        })
+    }
+
+    fn restore_pull_autostash(path: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| {
+            let marker = Self::pull_autostash_marker(repo);
+            if !marker.exists() {
+                return Ok(());
+            }
+            let stash_oid = std::fs::read_to_string(&marker)?.trim().to_string();
+            let mut stash_index = None;
+            repo.inner_mut().stash_foreach(|index, _message, oid| {
+                if oid.to_string() == stash_oid {
+                    stash_index = Some(index);
+                    false
+                } else {
+                    true
+                }
+            })?;
+            let stash_index = stash_index.ok_or_else(|| {
+                GitbxError::General("Pull autostash backup could not be found".into())
+            })?;
+            let mut options = git2::StashApplyOptions::new();
+            options.reinstantiate_index();
+            let apply_result = repo
+                .inner_mut()
+                .stash_apply(stash_index, Some(&mut options));
+            let conflicts = repo
+                .inner()
+                .index()
+                .map(|index| index.has_conflicts())
+                .unwrap_or(false);
+            if apply_result.is_ok() && !conflicts {
+                repo.inner_mut().stash_drop(stash_index)?;
+                std::fs::remove_file(marker)?;
+                return Ok(());
+            }
+            // The apply has already materialized as much as Git can merge. Do
+            // not retry it automatically; retain the immutable stash as a
+            // recovery copy while the user resolves the conflict.
+            let _ = std::fs::remove_file(marker);
+            Err(GitbxError::MergeConflict(
+                "Pulled successfully, but restoring local changes produced conflicts. The backup remains in Stashes."
+                    .into(),
+            ))
+        })
     }
 
     pub fn contains_conflict_markers(content: &str) -> bool {
@@ -1135,8 +1244,19 @@ impl GitService {
     }
 
     pub fn merge(path: &str, target: &str, no_ff: bool) -> Result<()> {
+        Self::merge_internal(path, target, no_ff, true)
+    }
+
+    fn merge_internal(
+        path: &str,
+        target: &str,
+        no_ff: bool,
+        require_clean_worktree: bool,
+    ) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            Self::ensure_clean_worktree(repo, "a merge")?;
+            if require_clean_worktree {
+                Self::ensure_clean_worktree(repo, "a merge")?;
+            }
             let annotated = repo
                 .inner()
                 .find_annotated_commit(repo.inner().revparse_single(target)?.id())?;
@@ -1311,8 +1431,14 @@ impl GitService {
     }
 
     pub fn rebase(path: &str, upstream: &str) -> Result<()> {
+        Self::rebase_internal(path, upstream, true)
+    }
+
+    fn rebase_internal(path: &str, upstream: &str, require_clean_worktree: bool) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            Self::ensure_clean_worktree(repo, "a rebase")?;
+            if require_clean_worktree {
+                Self::ensure_clean_worktree(repo, "a rebase")?;
+            }
             let object = repo.inner().revparse_single(upstream)?;
             let annotated = repo.inner().find_annotated_commit(object.id())?;
             let mut rebase = repo.inner().rebase(None, Some(&annotated), None, None)?;
@@ -1348,7 +1474,8 @@ impl GitService {
             drop(head);
             repo.inner_mut().cleanup_state()?;
             Ok(())
-        })
+        })?;
+        Self::restore_pull_autostash(path)
     }
 
     pub fn abort_operation(path: &str) -> Result<()> {
@@ -1383,11 +1510,12 @@ impl GitService {
             _ => Err(GitbxError::General(
                 "No abortable Git operation is in progress".into(),
             )),
-        })
+        })?;
+        Self::restore_pull_autostash(path)
     }
 
     pub fn continue_merge(path: &str) -> Result<String> {
-        Self::with_write_lock(path, |repo| {
+        let id = Self::with_write_lock(path, |repo| {
             if repo.inner().index()?.has_conflicts() {
                 return Err(GitbxError::MergeConflict(
                     "Resolve all conflicts before continuing the merge".into(),
@@ -1426,7 +1554,9 @@ impl GitService {
             repo.inner_mut().cleanup_state()?;
             repo.inner().checkout_head(None)?;
             Ok(id.to_string())
-        })
+        })?;
+        Self::restore_pull_autostash(path)?;
+        Ok(id)
     }
 
     pub fn continue_rebase(path: &str) -> Result<()> {
@@ -1455,7 +1585,8 @@ impl GitService {
             rebase.finish(Some(&signature))?;
             repo.inner().checkout_head(None)?;
             Ok(())
-        })
+        })?;
+        Self::restore_pull_autostash(path)
     }
 
     pub fn continue_cherry_pick(path: &str) -> Result<String> {
@@ -2410,8 +2541,23 @@ mod tests {
         repo.reference("refs/heads/main", local, true, "local tip")
             .unwrap();
         let remote = commit_tree(&repo, base, "remote.txt", "remote");
-        repo.remote("origin", repo_path.to_str().unwrap()).unwrap();
-        repo.reference("refs/remotes/origin/main", remote, true, "remote tip")
+        let origin_path = dir.path().join("origin.git");
+        Repository::init_bare(&origin_path).unwrap();
+        repo.reference("refs/heads/remote-source", remote, true, "remote source")
+            .unwrap();
+        repo.remote("origin", origin_path.to_str().unwrap())
+            .unwrap();
+        let mut origin = repo.find_remote("origin").unwrap();
+        origin
+            .push(
+                &["refs/heads/remote-source:refs/heads/main"],
+                Some(&mut git2::PushOptions::new()),
+            )
+            .unwrap();
+        drop(origin);
+        repo.find_reference("refs/heads/remote-source")
+            .unwrap()
+            .delete()
             .unwrap();
         let mut config = repo.config().unwrap();
         config.set_str("branch.main.remote", "origin").unwrap();
@@ -2421,12 +2567,65 @@ mod tests {
         drop(config);
         drop(repo);
         let path = repo_path.to_str().unwrap();
+        GitService::fetch_all(path).expect("fetch remote tip");
         let status = GitService::get_sync_status(path).expect("sync status");
         assert_eq!(status.incoming.len(), 1);
         assert_eq!(status.outgoing.len(), 1);
         assert_eq!(status.incoming[0].summary, "remote");
         assert_eq!(status.outgoing[0].summary, "local");
         assert!(GitService::pull_with_strategy(path, "origin", "ff-only").is_err());
+    }
+
+    #[test]
+    fn pull_autostash_restores_staged_and_untracked_changes() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = Repository::init(&repo_path).unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        fs::write(repo_path.join("tracked.txt"), "base\n").unwrap();
+        commit_all(&repo, "base");
+
+        fs::write(repo_path.join("tracked.txt"), "staged local change\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("tracked.txt")).unwrap();
+        index.write().unwrap();
+        drop(index);
+        fs::write(repo_path.join("untracked.txt"), "untracked local change\n").unwrap();
+        drop(repo);
+
+        let path = repo_path.to_str().unwrap();
+        assert!(GitService::create_pull_autostash(path).unwrap());
+        let clean = GitService::open(path).unwrap().get_status().unwrap();
+        assert_eq!(clean.total_changes, 0);
+
+        let repo = Repository::open(&repo_path).unwrap();
+        fs::write(repo_path.join("incoming.txt"), "incoming\n").unwrap();
+        commit_all(&repo, "incoming");
+        drop(repo);
+
+        GitService::restore_pull_autostash(path).unwrap();
+        let restored = GitService::open(path).unwrap().get_status().unwrap();
+        assert!(restored
+            .staged_files
+            .iter()
+            .any(|file| file.path == "tracked.txt"));
+        assert!(!restored
+            .unstaged_files
+            .iter()
+            .any(|file| file.path == "tracked.txt"));
+        assert!(restored
+            .untracked_files
+            .iter()
+            .any(|file| file.path == "untracked.txt"));
+        let marker = GitService::open(path)
+            .unwrap()
+            .inner()
+            .path()
+            .join(GitService::PULL_AUTOSTASH_MARKER);
+        assert!(!marker.exists());
+        let mut repo = GitService::open(path).unwrap();
+        assert!(repo.list_stashes().unwrap().is_empty());
     }
 
     #[test]

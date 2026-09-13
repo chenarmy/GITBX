@@ -78,6 +78,12 @@ try {
       beforeDevCommand: null,
       devUrl: `http://${previewHost}:${previewPort}`,
     },
+    app: {
+      windows: [{
+        label: 'main',
+        title: 'GITBX [LOCAL DEBUG]',
+      }],
+    },
   });
   const tauri = start(['tauri', 'dev', '--no-watch', '--no-dev-server-wait', '--config', config]);
   await waitForExit(tauri);

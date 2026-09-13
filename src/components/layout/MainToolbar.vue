@@ -26,6 +26,7 @@ import {
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
 import { usePushRecovery } from '@/composables/usePushRecovery';
+import { formatGitError } from '@/composables/useGitApi';
 
 const repoStore = useRepoStore();
 const notification = useNotificationStore();
@@ -102,7 +103,7 @@ async function handlePull() {
       diffStore.selectConflictFile(firstConflict);
       notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
     } else {
-      notification.error(t('Pull Failed'), err?.message || t('Failed to pull from remote'));
+      notification.error(t('Pull Failed'), formatGitError(err, t('Failed to pull from remote')));
     }
   } finally {
     isPulling.value = false;
@@ -119,7 +120,10 @@ async function handlePush() {
   isPushing.value = true;
   notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: repoStore.repoInfo?.head_branch || 'main' }));
   try {
-    const pushed = await pushWithRecovery({ forceWithLease: forceWithLease.value });
+    const pushed = await pushWithRecovery({
+      forceWithLease: forceWithLease.value,
+      pullStrategy: pullStrategy.value,
+    });
     if (!pushed) return;
     notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (err: any) {
@@ -204,7 +208,13 @@ async function handleContinueOperation(operation: 'merge' | 'rebase' | 'cherry-p
     diffStore.clearSelection();
     notification.success(t('Operation Continued'), t('The Git operation completed successfully.'));
   } catch (error: any) {
-    notification.error(t('Continue Failed'), error?.message || String(error));
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) {
+      diffStore.selectConflictFile(firstConflict);
+      notification.warning(t('Unresolved Conflicts'), t('Resolve every conflicted file before continuing.'));
+    } else {
+      notification.error(t('Continue Failed'), error?.message || String(error));
+    }
   }
 }
 
@@ -342,7 +352,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
           :title="t('Pull latest changes from upstream')"
         >
-          <ArrowDownCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPulling }" />
+          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" :class="{ 'animate-bounce': isPulling }" />
           <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
         <!-- Push Button -->
@@ -459,7 +469,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
       <!-- Active Branch Badge -->
       <div class="flex items-center space-x-2">
         <button class="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-secondary text-[10px]" :title="t('Incoming and Outgoing Commits')" @click="repoStore.openModal('syncStatus')">
-          <span class="text-emerald-500">↓{{ repoStore.syncStatus.incoming.length }}</span><span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
+          <span class="text-rose-600 dark:text-rose-400">↓{{ repoStore.syncStatus.incoming.length }}</span><span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
         </button>
         <button class="p-1 rounded hover:bg-secondary" :class="autoFetchEnabled ? 'text-primary' : 'text-muted-foreground'" :title="t(autoFetchEnabled ? 'Background Fetch Enabled' : 'Background Fetch Disabled')" @click="toggleAutoFetch"><Timer class="w-3.5 h-3.5" /></button>
         <div

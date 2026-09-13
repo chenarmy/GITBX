@@ -782,9 +782,15 @@ export const pullRemote = async (repoPath: string, strategy: 'merge' | 'rebase' 
   const cmd = `git pull --${strategy === 'merge' ? 'no-rebase' : strategy}`;
   getConsole().logCommand(cmd);
   if (isTauri()) {
-    await invoke('pull', { repoPath, strategy });
-    getConsole().logSuccess('Pull completed.');
-    return;
+    try {
+      await invoke('pull', { repoPath, strategy });
+      getConsole().logSuccess('Pull completed.');
+      return;
+    } catch (error) {
+      const message = formatGitError(error, 'Pull failed');
+      getConsole().logError(`Pull error: ${message}`, undefined, cmd);
+      throw new Error(message);
+    }
   }
   const res = await gitbxFetch('/api/repo/pull', {
     method: 'POST',

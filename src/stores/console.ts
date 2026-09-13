@@ -40,7 +40,7 @@ export const useConsoleStore = defineStore('console', () => {
   };
 
   const logCommand = (cmd: string, output?: string) => {
-    addLog('command', output || 'Executed successfully', cmd);
+    addLog('command', output || 'Command started', cmd);
   };
 
   const logInfo = (msg: string, detail?: string) => {
