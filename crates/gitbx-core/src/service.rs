@@ -794,11 +794,11 @@ impl GitService {
 
     fn create_pull_autostash(path: &str) -> Result<bool> {
         Self::with_write_lock(path, |repo| {
-            Self::ensure_no_operation(repo, "pulling")?;
+            Self::ensure_no_operation(repo, "updating the repository")?;
             let marker = Self::pull_autostash_marker(repo);
             if marker.exists() {
                 return Err(GitbxError::General(
-                    "A previous Pull autostash is still pending recovery".into(),
+                    "A previous autostash is still pending recovery".into(),
                 ));
             }
             let signature = repo
@@ -807,7 +807,7 @@ impl GitService {
                 .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
             let oid = match repo.inner_mut().stash_save(
                 &signature,
-                "GITBX Pull autostash",
+                "GITBX automatic backup",
                 Some(git2::StashFlags::INCLUDE_UNTRACKED),
             ) {
                 Ok(oid) => oid,
@@ -841,9 +841,8 @@ impl GitService {
                     true
                 }
             })?;
-            let stash_index = stash_index.ok_or_else(|| {
-                GitbxError::General("Pull autostash backup could not be found".into())
-            })?;
+            let stash_index = stash_index
+                .ok_or_else(|| GitbxError::General("Autostash backup could not be found".into()))?;
             let mut options = git2::StashApplyOptions::new();
             options.reinstantiate_index();
             let apply_result = repo
@@ -864,7 +863,7 @@ impl GitService {
             // recovery copy while the user resolves the conflict.
             let _ = std::fs::remove_file(marker);
             Err(GitbxError::MergeConflict(
-                "Pulled successfully, but restoring local changes produced conflicts. The backup remains in Stashes."
+                "The Git operation completed, but restoring local changes produced conflicts. The backup remains in Stashes."
                     .into(),
             ))
         })
@@ -1244,7 +1243,30 @@ impl GitService {
     }
 
     pub fn merge(path: &str, target: &str, no_ff: bool) -> Result<()> {
-        Self::merge_internal(path, target, no_ff, true)
+        let stashed = Self::create_pull_autostash(path)?;
+        let integration = Self::merge_internal(path, target, no_ff, !stashed);
+
+        if !stashed {
+            return integration;
+        }
+        match integration {
+            Ok(()) => Self::restore_pull_autostash(path),
+            Err(error) => {
+                // Keep the user's work safely stashed while a conflicted merge
+                // is being resolved. continue/abort restores it afterwards.
+                if Self::open(path)?.inner().state() != git2::RepositoryState::Clean {
+                    return Err(error);
+                }
+                match Self::restore_pull_autostash(path) {
+                    Ok(()) => Err(GitbxError::General(format!(
+                        "Merge failed after local changes were automatically stashed and restored: {error}"
+                    ))),
+                    Err(restore_error) => Err(GitbxError::General(format!(
+                        "{error}; merging failed and local changes could not be restored automatically: {restore_error}. A backup remains in Stashes."
+                    ))),
+                }
+            }
+        }
     }
 
     fn merge_internal(
@@ -1268,7 +1290,13 @@ impl GitService {
                 let reference = repo.inner().head()?.name().unwrap_or("HEAD").to_string();
                 let mut reference = repo.inner().find_reference(&reference)?;
                 reference.set_target(annotated.id(), "GITBX fast-forward merge")?;
-                repo.inner().checkout_head(None)?;
+                // The worktree is guaranteed clean here (or was autostashed).
+                // Force the checkout so the index is moved to the new tree as
+                // well; a safe checkout can leave staged deletions behind and
+                // make the subsequent autostash restore conflict spuriously.
+                let mut checkout = git2::build::CheckoutBuilder::new();
+                checkout.force();
+                repo.inner().checkout_head(Some(&mut checkout))?;
                 return Ok(());
             }
             let mut options = git2::MergeOptions::new();
@@ -2624,6 +2652,53 @@ mod tests {
             .path()
             .join(GitService::PULL_AUTOSTASH_MARKER);
         assert!(!marker.exists());
+        let mut repo = GitService::open(path).unwrap();
+        assert!(repo.list_stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn merge_autostash_restores_staged_and_untracked_changes() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = init_branch_fixture(&repo_path);
+
+        repo.set_head("refs/heads/feature").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+        fs::write(repo_path.join("feature.txt"), "feature\n").unwrap();
+        commit_all(&repo, "feature change");
+
+        repo.set_head("refs/heads/main").unwrap();
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.force().remove_untracked(true);
+        repo.checkout_head(Some(&mut checkout)).unwrap();
+        fs::write(repo_path.join("shared.txt"), "staged local change\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("shared.txt")).unwrap();
+        index.write().unwrap();
+        drop(index);
+        fs::write(repo_path.join("untracked.txt"), "untracked local change\n").unwrap();
+        drop(repo);
+
+        let path = repo_path.to_str().unwrap();
+        GitService::merge(path, "feature", false).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(repo_path.join("feature.txt"))
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "feature\n"
+        );
+        let restored = GitService::open(path).unwrap().get_status().unwrap();
+        assert!(restored
+            .staged_files
+            .iter()
+            .any(|file| file.path == "shared.txt"));
+        assert!(restored
+            .untracked_files
+            .iter()
+            .any(|file| file.path == "untracked.txt"));
         let mut repo = GitService::open(path).unwrap();
         assert!(repo.list_stashes().unwrap().is_empty());
     }

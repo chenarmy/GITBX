@@ -41,7 +41,9 @@ const isPulling = ref(false);
 const isPushing = ref(false);
 const pullStrategy = ref<'merge' | 'rebase' | 'ff-only'>((localStorage.getItem('gitbx_pull_strategy') as any) || 'merge');
 const forceWithLease = ref(false);
-const autoFetchEnabled = ref(localStorage.getItem('gitbx_auto_fetch') === 'true');
+// Keep remote-tracking data fresh by default. Users who explicitly disable
+// background fetching keep that preference.
+const autoFetchEnabled = ref(localStorage.getItem('gitbx_auto_fetch') !== 'false');
 const moreActionsRef = ref<HTMLElement | null>(null);
 const isMoreActionsOpen = ref(false);
 let autoFetchTimer: number | undefined;

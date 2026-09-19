@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConfirmationStore } from '@/stores/confirmation';
+import { useNotificationStore } from '@/stores/notification';
+import { formatGitError } from '@/composables/useGitApi';
 import { useI18n } from '@/i18n';
 import type { GraphCommitNode } from '@/types/graph';
 import {
@@ -32,6 +34,7 @@ const emit = defineEmits<{
 
 const repoStore = useRepoStore();
 const confirmation = useConfirmationStore();
+const notification = useNotificationStore();
 const { t } = useI18n();
 
 const menuStyle = computed(() => {
@@ -94,8 +97,20 @@ async function handleRebaseOnto() {
 async function handleMergeInto() {
   try {
     if (await confirmation.confirm({ title: t('Merge Commit'), message: t("Merge {sha} into '{branch}'?", { sha: props.commit.short_id, branch: repoStore.repoInfo?.head_branch || 'HEAD' }), danger: true })) {
-      await repoStore.mergeBranch(props.commit.id);
+      const result = await repoStore.mergeBranch(props.commit.id);
+      if (result.conflict) {
+        notification.warning(t('Merge Conflict'), result.error || t('Resolve every conflicted file before continuing.'));
+      } else if (result.success) {
+        notification.success(t('Merge Completed'), t("Merged '{source}' into '{target}'.", {
+          source: props.commit.short_id,
+          target: repoStore.repoInfo?.head_branch || 'HEAD',
+        }));
+      } else {
+        notification.error(t('Merge Failed'), result.error || t('Operation Failed'));
+      }
     }
+  } catch (error) {
+    notification.error(t('Merge Failed'), formatGitError(error));
   } finally {
     emit('close');
   }

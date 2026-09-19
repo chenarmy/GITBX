@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-ai"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1630,14 +1630,14 @@ dependencies = [
 
 [[package]]
 name = "gitbx-contracts"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "gitbx-core"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1683,11 +1683,13 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "windows-sys 0.59.0",
+ "winreg",
 ]
 
 [[package]]
 name = "gitbx-diff"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "git2",
@@ -1702,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-graph"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1715,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-mcp"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "gitbx-core",
@@ -1731,7 +1733,7 @@ dependencies = [
 
 [[package]]
 name = "gitbx-web"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "axum",

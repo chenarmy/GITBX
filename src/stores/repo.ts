@@ -685,11 +685,40 @@ export const useRepoStore = defineStore('repo', () => {
   const refreshAllRepoSyncStatuses = async (fetchFirst = false) => {
     if (isRefreshingRepoSyncStatuses.value) return;
     isRefreshingRepoSyncStatuses.value = true;
+    const activePath = activeRepoPath.value;
     try {
       await Promise.allSettled(repoList.value.map(async (repo) => {
         if (fetchFirst) await gitApi.fetchRemote(repo.path).catch(() => undefined);
         await refreshSyncStatus(repo.path);
       }));
+
+      // A fetch changes remote-tracking branches and the commit graph, not just
+      // the incoming/outgoing counters. Refresh those visible data sets for the
+      // active repository without replacing working-tree state or selections.
+      if (fetchFirst && activePath && activePath === activeRepoPath.value) {
+        const [branchResult, tagResult, graphResult, syncResult] = await Promise.allSettled([
+          gitApi.listBranches(activePath),
+          gitApi.listTags(activePath),
+          gitApi.getCommitGraph(activePath, 0, 150),
+          gitApi.getSyncStatus(activePath),
+        ]);
+        if (activePath === activeRepoPath.value) {
+          if (branchResult.status === 'fulfilled') branches.value = branchResult.value;
+          if (tagResult.status === 'fulfilled') tags.value = tagResult.value;
+          if (graphResult.status === 'fulfilled') {
+            const selectedId = selectedCommit.value?.id;
+            commitNodes.value = graphResult.value.nodes;
+            graphHasMore.value = graphResult.value.has_more;
+            selectedCommit.value = graphResult.value.nodes.find((commit) => commit.id === selectedId)
+              || graphResult.value.nodes[0]
+              || null;
+          }
+          if (syncResult.status === 'fulfilled') {
+            syncStatus.value = syncResult.value;
+            repoSyncStatuses.value = { ...repoSyncStatuses.value, [activePath]: syncResult.value };
+          }
+        }
+      }
     } finally {
       isRefreshingRepoSyncStatuses.value = false;
     }
