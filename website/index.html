@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GITBX — 轻量、极速、AI 原生的跨平台 Git 客户端。" />
+  <meta name="theme-color" content="#07101d" />
+  <title>GITBX — 轻量、极速、AI 原生的 Git 客户端</title>
+  <link rel="icon" href="./assets/icon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">跳到主要内容</a>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="site-header" id="top">
+    <nav class="nav shell" aria-label="主导航">
+      <a class="brand" href="#top" aria-label="GITBX 首页">
+        <img src="./assets/logo.svg" alt="GITBX" />
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="打开菜单">
+        <span></span><span></span>
+      </button>
+      <div class="nav-links" id="nav-links">
+        <a href="#features" data-i18n="navFeatures">功能</a>
+        <a href="#workflow" data-i18n="navWorkflow">工作流</a>
+        <a href="#platforms" data-i18n="navPlatforms">平台</a>
+        <a href="https://github.com/chenarmy/GITBX/blob/main/README.md" target="_blank" rel="noreferrer" data-i18n="navDocs">文档</a>
+        <a href="https://github.com/chenarmy/GITBX" target="_blank" rel="noreferrer" class="github-link" aria-label="GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.29-5.27-5.7 0-1.26.45-2.29 1.19-3.1-.12-.3-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.6.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.28 5.69.42.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+        </a>
+        <div class="language">
+          <button class="language-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.3 2.47 3.45 5.47 3.45 9S14.3 18.53 12 21c-2.3-2.47-3.45-5.47-3.45-9S9.7 5.47 12 3Z"/></svg>
+            <span id="current-language">简体中文</span>
+            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9.5 5 5 5-5"/></svg>
+          </button>
+          <div class="language-menu" role="listbox" aria-label="选择语言"></div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero shell">
+      <div class="hero-orbit orbit-one" aria-hidden="true"></div>
+      <div class="hero-orbit orbit-two" aria-hidden="true"></div>
+      <div class="eyebrow reveal"><span class="pulse"></span><span data-i18n="eyebrow">为专注工作而生的 Git 客户端</span></div>
+      <h1 class="reveal"><span data-i18n="heroLead">让复杂的 Git，</span><br /><span class="gradient-text" data-i18n="heroAccent">变得清晰而从容。</span></h1>
+      <p class="hero-copy reveal" data-i18n="heroCopy">约 20MB 的轻量体积，装下提交图谱、精细暂存、三方合并与 AI 协作。快到无感，强到够用。</p>
+      <div class="hero-actions reveal">
+        <div class="download-control">
+          <a class="primary-button" id="primary-download" data-download-default href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64-setup.exe" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+            <span><strong data-i18n="download">下载 GITBX</strong><small id="primary-download-platform">Windows 10/11 · x64</small></span>
+          </a>
+          <button class="download-more" type="button" aria-label="更多下载选项" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9.5 5 5 5-5"/></svg>
+          </button>
+          <div class="download-menu">
+            <a data-download="windows-exe" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64-setup.exe" download><span>Windows</span><small>安装程序 · x64 · EXE</small></a>
+            <a data-download="windows-msi" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64_en-US.msi" download><span>Windows</span><small>安装包 · x64 · MSI</small></a>
+            <a data-download="macos-dmg" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_aarch64.dmg" download><span>macOS</span><small>Apple Silicon · DMG</small></a>
+            <a data-download="linux-appimage" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_amd64.AppImage" download><span>Linux</span><small>x64 · AppImage</small></a>
+            <a data-download="linux-deb" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_amd64.deb" download><span>Linux</span><small>x64 · DEB</small></a>
+          </div>
+        </div>
+        <a class="secondary-button" href="https://github.com/chenarmy/GITBX" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.29-5.27-5.7 0-1.26.45-2.29 1.19-3.1-.12-.3-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.6.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.28 5.69.42.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+          <span data-i18n="viewSource">查看源代码</span>
+        </a>
+      </div>
+
+      <div class="product-stage reveal" aria-label="GITBX 产品界面预览">
+        <div class="stage-glow"></div>
+        <div class="app-window">
+          <div class="window-bar">
+            <div class="window-dots"><i></i><i></i><i></i></div>
+            <div class="window-title"><img src="./assets/icon.svg" alt="" /> GITBX <span>·</span> gitbx/main</div>
+            <div class="window-tools"><i></i><i></i><i></i></div>
+          </div>
+          <div class="app-toolbar">
+            <div class="repo-select"><span class="repo-icon">G</span><span>GITBX</span><small>main</small></div>
+            <div class="tool-item"><span>↓</span> Fetch</div><div class="tool-item"><span>↙</span> Pull</div><div class="tool-item"><span>↗</span> Push</div>
+            <div class="toolbar-spacer"></div><div class="ai-pill"><span>✦</span> AI Copilot</div>
+          </div>
+          <div class="app-body">
+            <aside class="app-sidebar">
+              <div class="side-label">WORKSPACE</div>
+              <div class="side-item active"><span>⌁</span> Workspace <b>12</b></div>
+              <div class="side-item"><span>⑂</span> Changes <b class="blue">4</b></div>
+              <div class="side-label gap">REFERENCES</div>
+              <div class="side-item"><span>⑂</span> Local Branches</div>
+              <div class="branch-item"><i></i><span>main</span><em>HEAD</em></div>
+              <div class="branch-item muted"><i></i><span>feature/website</span></div>
+              <div class="side-item"><span>☁</span> Remotes</div>
+            </aside>
+            <section class="graph-panel">
+              <div class="panel-head"><strong>Commit Graph</strong><div><span>All branches</span><span>⌕</span><span>⋯</span></div></div>
+              <div class="graph-table">
+                <div class="graph-row highlighted"><div class="rail"><svg viewBox="0 0 72 34"><path class="line cyan" d="M18-4v42"/><path class="line violet" d="M50-4c0 24-32 13-32 38"/><circle cx="18" cy="17" r="5"/></svg></div><div><strong>feat: add multilingual landing page</strong><small>chenarmy · just now</small></div><span class="hash">a91fc20</span></div>
+                <div class="graph-row"><div class="rail"><svg viewBox="0 0 72 34"><path class="line cyan" d="M18-4v42"/><path class="line violet" d="M50-4c0 24-32 13-32 38"/><circle cx="50" cy="17" r="4"/></svg></div><div><strong>fix: improve branch checkout safety</strong><small>chenarmy · 2h ago</small></div><span class="hash">72bc8da</span></div>
+                <div class="graph-row"><div class="rail"><svg viewBox="0 0 72 34"><path class="line cyan" d="M18-4v42"/><path class="line violet" d="M18-4c0 24 32 13 32 38"/><circle cx="18" cy="17" r="4"/></svg></div><div><strong>refactor: unify Git service layer</strong><small>chenarmy · yesterday</small></div><span class="hash">3e7a0f1</span></div>
+                <div class="graph-row"><div class="rail"><svg viewBox="0 0 72 34"><path class="line violet" d="M50-4v42"/><path class="line cyan" d="M18-4c0 24 32 13 32 38"/><circle cx="50" cy="17" r="4"/></svg></div><div><strong>feat: AI-assisted merge resolution</strong><small>chenarmy · 2 days ago</small></div><span class="hash">c630db2</span></div>
+              </div>
+              <div class="changes-area"><div class="file-list"><div class="panel-head"><strong>Changes</strong><span class="badge">4</span></div><div class="file active"><i class="vue">V</i><span>WebsiteHero.vue</span><b>M</b></div><div class="file"><i class="ts">TS</i><span>i18n.ts</span><b>M</b></div><div class="file"><i class="css">#</i><span>landing.css</span><b>A</b></div></div><div class="diff"><div class="panel-head"><strong>WebsiteHero.vue</strong><span>Unified &nbsp; Split</span></div><code><i>18</i><span class="del">- &lt;h1&gt;Git client&lt;/h1&gt;</span><i>18</i><span class="add">+ &lt;h1&gt;Git, made clear.&lt;/h1&gt;</span><i>19</i><span class="add">+ &lt;p&gt;Fast. Focused. Yours.&lt;/p&gt;</span><i>20</i><span>&nbsp;&nbsp;&lt;DownloadButton /&gt;</span></code></div></div>
+            </section>
+          </div>
+          <div class="status-bar"><span>⑂ main</span><span>✓ Git Engine Online</span><span class="grow"></span><span>UTF-8</span><span>Ln 18, Col 24</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="metrics shell reveal" aria-label="GITBX 核心指标">
+      <div><strong>~20 MB</strong><span data-i18n="metricSize">轻量安装包</span></div>
+      <div><strong>60 FPS</strong><span data-i18n="metricGraph">流畅提交图谱</span></div>
+      <div><strong>3-Way</strong><span data-i18n="metricMerge">可视化冲突合并</span></div>
+      <div><strong>8</strong><span data-i18n="metricLanguages">内置界面语言</span></div>
+    </section>
+
+    <section class="section shell" id="features">
+      <div class="section-heading reveal"><span class="kicker" data-i18n="featureKicker">核心能力</span><h2 data-i18n="featureTitle">你每天需要的，<br />每一样都恰到好处。</h2><p data-i18n="featureCopy">从查看历史到解决冲突，GITBX 把高频 Git 工作流放进一个快速、克制且可信赖的界面。</p></div>
+      <div class="feature-grid">
+        <article class="feature-card feature-large reveal"><div class="card-copy"><span class="card-icon cyan-icon">⌁</span><h3 data-i18n="f1Title">提交历史，一眼看清</h3><p data-i18n="f1Copy">Canvas 虚拟拓扑图在大型仓库中依然流畅。分支、标签与提交关系清晰呈现，定位上下文不再费力。</p></div><div class="mini-graph" aria-hidden="true"><div class="mini-row"><svg><path d="M22-5v70"/><circle cx="22" cy="18" r="6"/></svg><span><b>feat: release v0.1.20</b><small>main · 2 minutes ago</small></span></div><div class="mini-row"><svg><path d="M22-5c0 36 38 18 38 70"/><path class="purple" d="M60-5v70"/><circle cx="60" cy="18" r="5"/></svg><span><b>fix: safer terminal launch</b><small>feature/safe-terminal</small></span></div><div class="mini-row"><svg><path d="M60-5c0 35-38 20-38 70"/><circle cx="22" cy="18" r="5"/></svg><span><b>merge: bring release fixes</b><small>main · yesterday</small></span></div></div></article>
+        <article class="feature-card reveal"><span class="card-icon violet-icon">±</span><h3 data-i18n="f2Title">改哪行，就提交哪行</h3><p data-i18n="f2Copy">Hunk 与行级暂存让每次提交都保持干净、专注、可审阅。</p><div class="line-stage" aria-hidden="true"><span><i>+</i> add responsive navigation</span><span><i>+</i> support RTL layout</span><span class="dim"><i>−</i> remove legacy fallback</span></div></article>
+        <article class="feature-card reveal"><span class="card-icon green-icon">⌘</span><h3 data-i18n="f3Title">冲突解决，不再心慌</h3><p data-i18n="f3Copy">三方合并编辑器并排展示来源、目标与结果，配合 AI 建议更快做出正确选择。</p><div class="merge-visual" aria-hidden="true"><div>OURS<span>Keep</span></div><div>RESULT<strong>✓</strong></div><div>THEIRS<span>Accept</span></div></div></article>
+        <article class="feature-card feature-wide reveal"><div class="card-copy"><span class="card-icon amber-icon">✦</span><h3 data-i18n="f4Title">AI 懂代码，也懂你的变更</h3><p data-i18n="f4Copy">生成准确的提交信息、分析冲突、探测敏感凭据。通过原生 MCP Server，让 Coding Agent 直接参与 Git 协作。</p></div><div class="ai-conversation" aria-hidden="true"><div class="ai-line user"><span>4 files changed</span><b>Generate commit message</b></div><div class="ai-line bot"><i>✦</i><p><strong>feat(i18n): add multilingual website</strong><br />Add eight locales with automatic RTL support.</p></div></div></article>
+      </div>
+    </section>
+
+    <section class="section workflow-section" id="workflow">
+      <div class="shell"><div class="section-heading centered reveal"><span class="kicker" data-i18n="workflowKicker">一个完整的工作流</span><h2 data-i18n="workflowTitle">从第一行改动，到最后一次推送。</h2><p data-i18n="workflowCopy">不用在窗口和命令之间来回切换，保持上下文，专注完成工作。</p></div>
+        <div class="workflow-steps reveal"><article><span>01</span><div class="step-icon">⌁</div><h3 data-i18n="w1Title">看见上下文</h3><p data-i18n="w1Copy">浏览提交图谱与分支关系</p></article><i></i><article><span>02</span><div class="step-icon">±</div><h3 data-i18n="w2Title">组织变更</h3><p data-i18n="w2Copy">按文件、Hunk 或行精细暂存</p></article><i></i><article><span>03</span><div class="step-icon">✦</div><h3 data-i18n="w3Title">放心提交</h3><p data-i18n="w3Copy">AI 生成信息并检查敏感内容</p></article><i></i><article><span>04</span><div class="step-icon">↗</div><h3 data-i18n="w4Title">安全同步</h3><p data-i18n="w4Copy">Fetch、Pull 与 Push 尽在掌控</p></article></div>
+      </div>
+    </section>
+
+    <section class="section shell" id="platforms">
+      <div class="platform-card reveal"><div class="platform-copy"><span class="kicker" data-i18n="platformKicker">一个内核，两种工作方式</span><h2 data-i18n="platformTitle">在桌面极速工作，<br />也在浏览器随时访问。</h2><p data-i18n="platformCopy">原生桌面应用与自托管 Web 服务共享同一套 Rust Git 内核。个人工作站或团队服务器，都得到一致、可靠的体验。</p><div class="platform-tags"><span>Windows</span><span>macOS</span><span>Linux</span><span>Docker / Web</span></div></div><div class="platform-visual" aria-hidden="true"><div class="laptop"><div><span class="tiny-logo">G</span><i></i><i></i><i></i><i></i><i></i></div></div><div class="browser-card"><div><i></i><i></i><i></i><span>git.your-team.dev</span></div><section><b>G</b><i></i><i></i><i></i></section></div></div></div>
+    </section>
+
+    <section class="cta-section shell reveal"><div class="cta-glow"></div><img src="./assets/icon.svg" alt="" /><h2 data-i18n="ctaTitle">准备好，用更轻的方式驾驭 Git？</h2><p data-i18n="ctaCopy">免费、开源、跨平台。现在就开始。</p><div class="cta-actions"><a class="primary-button compact" data-download-default href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64-setup.exe" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg><strong data-i18n="downloadNow">下载最新版本</strong></a><a class="text-link" href="https://github.com/chenarmy/GITBX" target="_blank" rel="noreferrer"><span data-i18n="githubVisit">访问 GitHub</span> <b>→</b></a></div></section>
+  </main>
+
+  <footer class="footer shell"><a class="brand footer-brand" href="#top"><img src="./assets/logo.svg" alt="GITBX" /></a><p data-i18n="footerTagline">轻量、极速、AI 原生的 Git 客户端。</p><div class="footer-links"><a href="https://github.com/chenarmy/GITBX" target="_blank" rel="noreferrer">GitHub</a><a href="https://github.com/chenarmy/GITBX/releases" target="_blank" rel="noreferrer" data-i18n="releases">版本发布</a><a href="https://github.com/chenarmy/GITBX/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="changelog">更新日志</a><a href="https://github.com/chenarmy/GITBX/issues" target="_blank" rel="noreferrer" data-i18n="issues">问题反馈</a></div><small>© 2026 GITBX. Open source with care.</small></footer>
+  <script src="./app.js"></script>
+</body>
+</html>
