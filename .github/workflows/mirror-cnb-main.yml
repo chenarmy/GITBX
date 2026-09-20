@@ -1,0 +1,31 @@
+name: Mirror main branch to CNB
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-cnb-main
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      CNB_TOKEN: ${{ secrets.CNB }}
+      CNB_REPOSITORY: chenarmy/GITBX
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror main to CNB
+        run: |
+          test -n "$CNB_TOKEN" || (echo "Missing CNB repository token." && exit 1)
+          git push "https://cnb:${CNB_TOKEN}@cnb.cool/${CNB_REPOSITORY}.git" HEAD:main
