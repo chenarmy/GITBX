@@ -16,4 +16,4 @@ python -m http.server 4173
 ## 部署
 
 - GitHub Pages：由 `.github/workflows/pages.yml` 自动发布。
-- EdgeOne Pages：GitHub `main` 经 `.github/workflows/mirror-cnb-main.yml` 镜像到 CNB，再由仓库根目录的 `.cnb.yml` 使用 1 核构建节点将 `website/` 发布到中国区 `gitbx-cn` 项目。
+- EdgeOne Pages：GitHub `main` 经 `.github/workflows/mirror-cnb-main.yml` 镜像到 CNB，再由仓库根目录的 `.cnb.yml` 使用 1 核构建节点，通过中国站账号将 `website/` 发布到 `gitbx-cn` 项目（全球可用区）。
