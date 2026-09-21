@@ -14,4 +14,4 @@ main:
         - name: Deploy to EdgeOne Pages
           image: tencentcom/deploy-eopages:latest
           script: |
-            edgeone pages deploy ./website --name gitbx --site china --token "$EDGEONE_PAGES_API_TOKEN"
+            edgeone pages deploy ./website --name gitbx-cn --site china --token "$EDGEONE_PAGES_API_TOKEN"
