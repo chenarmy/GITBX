@@ -1,0 +1,17 @@
+main:
+  push:
+    - name: Deploy GITBX website to EdgeOne Pages
+      runner:
+        cpus: 1
+      imports: https://cnb.cool/chenarmy/GITBX-secrets/-/blob/main/envs.yml
+      stages:
+        - name: Validate website artifact
+          image: alpine:3.20
+          script: |
+            test -f ./website/index.html
+            test -n "$EDGEONE_PAGES_API_TOKEN"
+
+        - name: Deploy to EdgeOne Pages
+          image: tencentcom/deploy-eopages:latest
+          script: |
+            edgeone pages deploy ./website --name gitbx --token "$EDGEONE_PAGES_API_TOKEN"
