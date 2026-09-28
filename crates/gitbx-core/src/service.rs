@@ -502,6 +502,63 @@ impl GitService {
         }
     }
 
+    /// Fetch remote references and fast-forward a local branch without checking
+    /// it out. This intentionally refuses diverged branches and branches that
+    /// are checked out in any worktree.
+    pub fn update_branch_fast_forward(path: &str, branch_name: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| {
+            repo.fetch_all()?;
+
+            if Self::list_worktrees(path)?
+                .iter()
+                .any(|worktree| worktree.branch.as_deref() == Some(branch_name))
+            {
+                return Err(GitbxError::General(format!(
+                    "Branch '{branch_name}' is checked out in a worktree and cannot be updated without switching that worktree"
+                )));
+            }
+
+            let branch = repo
+                .inner()
+                .find_branch(branch_name, BranchType::Local)
+                .map_err(|_| {
+                    GitbxError::General(format!("Local branch '{branch_name}' was not found"))
+                })?;
+            let local_id = branch.get().peel_to_commit()?.id();
+            let upstream = branch
+                .upstream()
+                .or_else(|_| {
+                    repo.inner()
+                        .find_branch(&format!("origin/{branch_name}"), BranchType::Remote)
+                })
+                .map_err(|_| {
+                    GitbxError::General(format!(
+                        "Branch '{branch_name}' has no tracked remote branch"
+                    ))
+                })?;
+            let upstream_name = upstream.name()?.unwrap_or("upstream").to_string();
+            let upstream_id = upstream.get().peel_to_commit()?.id();
+            let (ahead, behind) = repo.inner().graph_ahead_behind(local_id, upstream_id)?;
+
+            if behind == 0 {
+                return Ok(());
+            }
+            if ahead > 0 {
+                return Err(GitbxError::General(format!(
+                    "Branch '{branch_name}' has diverged from '{upstream_name}' and cannot be fast-forwarded"
+                )));
+            }
+
+            let reference_name = format!("refs/heads/{branch_name}");
+            let mut reference = repo.inner().find_reference(&reference_name)?;
+            reference.set_target(
+                upstream_id,
+                &format!("GITBX fast-forward from {upstream_name}"),
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn push_force_with_lease(path: &str, remote: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
             let branch = repo
@@ -1832,7 +1889,7 @@ impl GitService {
 #[cfg(test)]
 mod tests {
     use super::GitService;
-    use git2::{IndexAddOption, Repository, Signature};
+    use git2::{BranchType, IndexAddOption, Repository, Signature};
     use std::fs;
     use std::path::Path;
     use tempfile::tempdir;
@@ -2602,6 +2659,93 @@ mod tests {
         assert_eq!(status.incoming[0].summary, "remote");
         assert_eq!(status.outgoing[0].summary, "local");
         assert!(GitService::pull_with_strategy(path, "origin", "ff-only").is_err());
+    }
+
+    #[test]
+    fn fast_forwards_inactive_branch_without_switching() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = init_branch_fixture(&repo_path);
+        let origin_path = dir.path().join("origin.git");
+        Repository::init_bare(&origin_path).unwrap();
+        repo.remote("origin", origin_path.to_str().unwrap())
+            .unwrap();
+        let mut remote = repo.find_remote("origin").unwrap();
+        remote
+            .push(
+                &[
+                    "refs/heads/main:refs/heads/main",
+                    "refs/heads/feature:refs/heads/feature",
+                ],
+                Some(&mut git2::PushOptions::new()),
+            )
+            .unwrap();
+        drop(remote);
+        let mut config = repo.config().unwrap();
+        config.set_str("branch.feature.remote", "origin").unwrap();
+        config
+            .set_str("branch.feature.merge", "refs/heads/feature")
+            .unwrap();
+        drop(config);
+        let old_feature_id = repo
+            .find_branch("feature", BranchType::Local)
+            .unwrap()
+            .get()
+            .target()
+            .unwrap();
+        drop(repo);
+
+        let publisher_path = dir.path().join("publisher");
+        let publisher = Repository::clone(origin_path.to_str().unwrap(), &publisher_path).unwrap();
+        let remote_feature = publisher
+            .find_branch("origin/feature", BranchType::Remote)
+            .unwrap()
+            .get()
+            .peel_to_commit()
+            .unwrap();
+        publisher.branch("feature", &remote_feature, false).unwrap();
+        drop(remote_feature);
+        publisher.set_head("refs/heads/feature").unwrap();
+        publisher.checkout_head(None).unwrap();
+        fs::write(publisher_path.join("remote.txt"), "remote update\n").unwrap();
+        commit_all(&publisher, "remote update");
+        let new_feature_id = publisher.head().unwrap().target().unwrap();
+        let mut remote = publisher.find_remote("origin").unwrap();
+        remote
+            .push(
+                &["refs/heads/feature:refs/heads/feature"],
+                Some(&mut git2::PushOptions::new()),
+            )
+            .unwrap();
+        drop(remote);
+        drop(publisher);
+
+        let path = repo_path.to_str().unwrap();
+        GitService::fetch_all(path).unwrap();
+        let feature = GitService::open(path)
+            .unwrap()
+            .list_branches(None)
+            .unwrap()
+            .into_iter()
+            .find(|branch| branch.name == "feature")
+            .unwrap();
+        assert_eq!(feature.ahead_count, 0);
+        assert_eq!(feature.behind_count, 1);
+
+        GitService::update_branch_fast_forward(path, "feature").unwrap();
+        let updated = GitService::open(path).unwrap();
+        assert_eq!(updated.info().unwrap().head_branch.as_deref(), Some("main"));
+        assert_eq!(
+            updated
+                .inner()
+                .find_branch("feature", BranchType::Local)
+                .unwrap()
+                .get()
+                .target(),
+            Some(new_feature_id)
+        );
+        assert_ne!(old_feature_id, new_feature_id);
     }
 
     #[test]

@@ -97,6 +97,7 @@ fn main() {
             repo::get_branch_changes,
             repo::fetch_remote,
             repo::pull,
+            repo::update_branch,
             repo::push,
             repo::get_sync_status,
             repo::rebase,

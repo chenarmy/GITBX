@@ -2359,6 +2359,9 @@ for (const loc of Object.keys(smartCheckoutTranslations) as Locale[]) {
 }
 
 Object.assign(messages.en, {
+  'Branch Updated': 'Branch Updated',
+  'Update Failed': 'Update Failed',
+  "Branch '{branch}' is up to date with its tracked remote branch.": "Branch '{branch}' is up to date with its tracked remote branch.",
   'Already Merged': 'Already Merged',
   "'{source}' is already fully merged into '{target}'.": "'{source}' is already fully merged into '{target}'.",
   'Merge Completed': 'Merge Completed',
@@ -2368,6 +2371,9 @@ Object.assign(messages.en, {
 });
 
 Object.assign(messages['zh-CN'], {
+  'Branch Updated': '分支已更新',
+  'Update Failed': '更新失败',
+  "Branch '{branch}' is up to date with its tracked remote branch.": '分支“{branch}”已与跟踪的远程分支保持一致。',
   'Already Merged': '已经合并',
   "'{source}' is already fully merged into '{target}'.": "“{source}”已经全部合并到“{target}”中。",
   'Merge Completed': '合并完成',

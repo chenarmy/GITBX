@@ -724,6 +724,14 @@ export const useRepoStore = defineStore('repo', () => {
     }
   };
 
+  const updateBranch = async (branchName: string) => {
+    try {
+      await gitApi.updateBranch(activeRepoPath.value, branchName);
+    } finally {
+      await loadRepo(activeRepoPath.value);
+    }
+  };
+
   const discoverRoots = async () => {
     const roots = await gitApi.discoverGitRoots(activeRepoPath.value);
     for (const path of roots) {
@@ -823,6 +831,7 @@ export const useRepoStore = defineStore('repo', () => {
     reset,
     fetchRemote,
     pullRemote,
+    updateBranch,
     pushRemote,
     refreshSyncStatus,
     refreshAllRepoSyncStatuses,

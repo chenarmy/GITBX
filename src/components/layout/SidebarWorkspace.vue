@@ -275,6 +275,22 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
             </div>
 
             <div class="ml-1 flex shrink-0 items-center space-x-1">
+              <span
+                v-if="row.branch.behind_count"
+                class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                :title="`${t('Incoming')} (${row.branch.behind_count})`"
+              >
+                <ArrowDownCircle class="h-3.5 w-3.5" />
+                <span>{{ row.branch.behind_count }}</span>
+              </span>
+              <span
+                v-if="row.branch.ahead_count"
+                class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                :title="`${t('Outgoing')} (${row.branch.ahead_count})`"
+              >
+                <ArrowUpCircle class="h-3.5 w-3.5" />
+                <span>{{ row.branch.ahead_count }}</span>
+              </span>
               <Check v-if="row.branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
               <button
                 @click.stop="openContextMenu($event, row.branch)"

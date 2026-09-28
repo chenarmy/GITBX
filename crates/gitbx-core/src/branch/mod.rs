@@ -74,7 +74,15 @@ impl Repository {
             let is_head = branch.is_head();
             let target_commit_id = branch.get().peel_to_commit()?.id().to_string();
 
-            let upstream = branch.upstream().ok();
+            let upstream = if is_remote {
+                None
+            } else {
+                branch.upstream().ok().or_else(|| {
+                    self.inner()
+                        .find_branch(&format!("origin/{name}"), BranchType::Remote)
+                        .ok()
+                })
+            };
             let upstream_name = upstream
                 .as_ref()
                 .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));

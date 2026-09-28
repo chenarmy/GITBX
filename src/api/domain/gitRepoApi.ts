@@ -807,6 +807,34 @@ export const pullRemote = async (repoPath: string, strategy: 'merge' | 'rebase' 
   }
 };
 
+export const updateBranch = async (repoPath: string, branchName: string): Promise<void> => {
+  const cmd = `git fetch --all; git branch --force "${branchName}" "${branchName}@{upstream}"`;
+  getConsole().logCommand(cmd);
+  if (isTauri()) {
+    try {
+      await invoke('update_branch', { repoPath, branchName });
+      getConsole().logSuccess(`Updated '${branchName}' from its tracked remote branch.`);
+      return;
+    } catch (error) {
+      const message = formatGitError(error, `Failed to update '${branchName}'`);
+      getConsole().logError(`Branch update failed: ${message}`, undefined, cmd);
+      throw new Error(message);
+    }
+  }
+  const res = await gitbxFetch('/api/repo/branch/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath, branch_name: branchName }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.success) {
+    const message = formatGitError(data?.error ?? data, `Failed to update '${branchName}'`);
+    getConsole().logError(`Branch update failed: ${message}`, undefined, cmd);
+    throw new Error(message);
+  }
+  getConsole().logSuccess(`Updated '${branchName}' from its tracked remote branch.`);
+};
+
 export const pushRemote = async (repoPath: string, forceWithLease = false): Promise<void> => {
   const cmd = `git push${forceWithLease ? ' --force-with-lease' : ''}`;
   getConsole().logCommand(cmd);

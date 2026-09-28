@@ -364,6 +364,11 @@ pub async fn pull(repo_path: String, strategy: Option<String>) -> CommandResult<
 }
 
 #[tauri::command]
+pub async fn update_branch(repo_path: String, branch_name: String) -> CommandResult<()> {
+    GitService::update_branch_fast_forward(&repo_path, &branch_name).map_err(format_gitbx_err)
+}
+
+#[tauri::command]
 pub async fn push(repo_path: String, force_with_lease: Option<bool>) -> CommandResult<()> {
     if force_with_lease.unwrap_or(false) {
         GitService::push_force_with_lease(&repo_path, "origin")

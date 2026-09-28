@@ -164,7 +164,17 @@ function handleMergeInto() {
 
 async function handleUpdate() {
   try {
-    await repoStore.pullRemote();
+    if (isCurrentBranch.value) {
+      await repoStore.pullRemote();
+    } else {
+      await repoStore.updateBranch(props.branch.name);
+    }
+    notification.success(
+      t('Branch Updated'),
+      t("Branch '{branch}' is up to date with its tracked remote branch.", { branch: props.branch.name }),
+    );
+  } catch (error) {
+    notification.error(t('Update Failed'), formatGitError(error));
   } finally {
     emit('close');
   }

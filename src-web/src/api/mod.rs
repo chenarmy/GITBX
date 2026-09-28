@@ -624,6 +624,15 @@ async fn repo_handler(
                     .unwrap_or("merge"),
             )
         }),
+        (Method::POST, "branch/update") => write_op(&path, || {
+            GitService::update_branch_fast_forward(
+                &path,
+                body_json
+                    .get("branch_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            )
+        }),
         (Method::POST, "push") => write_op(&path, || {
             if body_json
                 .get("force_with_lease")
