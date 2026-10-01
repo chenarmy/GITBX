@@ -110,10 +110,16 @@ impl GitService {
 
     pub fn pull_request_url(path: &str, base: &str, compare: &str) -> Result<String> {
         let repo = Self::open(path)?;
-        let remote = repo.inner().find_remote("origin")?;
+        let remote = repo.inner().find_remote("origin").or_else(|_| {
+            let remotes = repo.inner().remotes()?;
+            let first_name = remotes
+                .get(0)
+                .ok_or_else(|| git2::Error::from_str("No remotes configured"))?;
+            repo.inner().find_remote(first_name)
+        })?;
         let raw = remote
             .url()
-            .ok_or_else(|| GitbxError::General("Origin has no URL".into()))?;
+            .ok_or_else(|| GitbxError::General("Origin remote has no URL".into()))?;
         let normalized = if let Some(rest) = raw.strip_prefix("git@") {
             let (host, repository) = rest
                 .split_once(':')
@@ -134,6 +140,8 @@ impl GitService {
         let compare = compare.trim();
         if root.contains("github.com") {
             Ok(format!("{root}/compare/{base}...{compare}?expand=1"))
+        } else if root.contains("gitee.com") {
+            Ok(format!("{root}/compare/{base}...{compare}"))
         } else if root.contains("gitlab") {
             Ok(format!("{root}/-/merge_requests/new?merge_request[source_branch]={compare}&merge_request[target_branch]={base}"))
         } else if root.contains("bitbucket") {
@@ -141,7 +149,8 @@ impl GitService {
                 "{root}/pull-requests/new?source={compare}&dest={base}"
             ))
         } else {
-            Err(GitbxError::General("Pull/Merge request creation is supported for GitHub, GitLab, and Bitbucket remotes".into()))
+            // Support Gitea, Forgejo, Codeup, or generic git web UI compare
+            Ok(format!("{root}/compare/{base}...{compare}"))
         }
     }
 
@@ -341,9 +350,12 @@ impl GitService {
         worktree_path: &str,
         allow_main: bool,
     ) -> Result<WorktreeInfo> {
+        let normalized_target = worktree_path.trim_end_matches(['/', '\\']).replace('\\', "/");
         let item = Self::list_worktrees(path)?
             .into_iter()
-            .find(|item| item.path == worktree_path)
+            .find(|item| {
+                item.path.trim_end_matches(['/', '\\']).replace('\\', "/").eq_ignore_ascii_case(&normalized_target)
+            })
             .ok_or_else(|| {
                 GitbxError::General("Worktree is not registered in this repository".into())
             })?;
@@ -1888,11 +1900,43 @@ impl GitService {
 
     pub fn worktree(path: &str, destination: &str, branch_name: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            let branch = repo.inner().find_branch(branch_name, BranchType::Local)?;
+            let local_name = if repo
+                .inner()
+                .find_branch(branch_name, BranchType::Local)
+                .is_ok()
+            {
+                branch_name.to_string()
+            } else {
+                let remote_branch = repo.inner().find_branch(branch_name, BranchType::Remote)?;
+                let local_name = branch_name
+                    .split_once('/')
+                    .map(|(_, name)| name)
+                    .filter(|name| !name.is_empty())
+                    .ok_or_else(|| {
+                        GitbxError::General(format!(
+                            "Remote branch '{branch_name}' has no local branch name"
+                        ))
+                    })?
+                    .to_string();
+                drop(remote_branch);
+
+                if repo
+                    .inner()
+                    .find_branch(&local_name, BranchType::Local)
+                    .is_err()
+                {
+                    repo.create_branch(&local_name, Some(branch_name))?;
+                }
+                local_name
+            };
+            let branch = repo.inner().find_branch(&local_name, BranchType::Local)?;
             let reference = branch.get();
-            let name = branch_name.replace(['/', '\\'], "-");
+            let name = local_name.replace(['/', '\\'], "-");
             let mut options = git2::WorktreeAddOptions::new();
             options.checkout_existing(true).reference(Some(reference));
+            if let Some(parent) = Path::new(destination).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
             repo.inner()
                 .worktree(&name, Path::new(destination), Some(&options))?;
             Ok(())
@@ -2948,6 +2992,45 @@ mod tests {
         GitService::remove_worktree(path, &listed_secondary, false).expect("remove");
         assert_eq!(GitService::list_worktrees(path).unwrap().len(), 1);
         assert!(!worktree_path.exists());
+    }
+
+    #[test]
+    fn creates_tracking_worktree_from_remote_branch() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        let worktree_path = dir.path().join("remote-feature-worktree");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = Repository::init(&repo_path).unwrap();
+        fs::write(repo_path.join("base.txt"), "base\n").unwrap();
+        commit_all(&repo, "base");
+        let commit_id = repo.head().unwrap().target().unwrap();
+        repo.remote("origin", dir.path().join("origin.git").to_str().unwrap())
+            .unwrap();
+        repo.reference(
+            "refs/remotes/origin/feature/test",
+            commit_id,
+            false,
+            "test remote branch",
+        )
+        .unwrap();
+        drop(repo);
+
+        let path = repo_path.to_str().unwrap();
+        GitService::worktree(path, worktree_path.to_str().unwrap(), "origin/feature/test")
+            .expect("add tracking worktree");
+
+        let repo = Repository::open(&repo_path).unwrap();
+        let branch = repo
+            .find_branch("feature/test", BranchType::Local)
+            .expect("local tracking branch");
+        assert_eq!(
+            branch.upstream().unwrap().name().unwrap(),
+            Some("origin/feature/test")
+        );
+        assert!(GitService::list_worktrees(path)
+            .unwrap()
+            .iter()
+            .any(|item| item.branch.as_deref() == Some("feature/test")));
     }
 
     #[test]

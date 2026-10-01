@@ -17,16 +17,15 @@ watch(
   (isOpen) => {
     if (isOpen) {
       errorMsg.value = null;
-      if (repoStore.targetBranchForAction) {
-        const raw = repoStore.targetBranchForAction;
-        const slashIdx = raw.indexOf('/');
-        branchName.value = slashIdx !== -1 ? raw.slice(slashIdx + 1) : raw;
-      } else {
-        branchName.value = '';
-      }
+      branchName.value = '';
     }
   }
 );
+
+function closeModal() {
+  repoStore.targetBranchForAction = '';
+  repoStore.closeModal('branch');
+}
 
 const startingPointDisplay = computed(() => {
   if (repoStore.targetBranchForAction) {
@@ -51,7 +50,7 @@ async function handleCreate() {
     );
     branchName.value = '';
     repoStore.targetBranchForAction = '';
-    repoStore.closeModal('branch');
+    closeModal();
   } catch (err: any) {
     errorMsg.value = err?.message || 'Failed to create branch';
   } finally {
@@ -64,7 +63,7 @@ async function handleCreate() {
   <div
     v-if="repoStore.isBranchModalOpen"
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('branch')"
+    @keydown.esc.window="closeModal"
   >
     <div
       role="dialog"
@@ -81,7 +80,7 @@ async function handleCreate() {
         <button
           type="button"
           aria-label="Close dialog"
-          @click="repoStore.closeModal('branch')"
+          @click="closeModal"
           class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
         >
           <X class="w-4 h-4" aria-hidden="true" />
@@ -128,7 +127,7 @@ async function handleCreate() {
       <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
         <button
           type="button"
-          @click="repoStore.closeModal('branch')"
+          @click="closeModal"
           class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
         >
           {{ t('Cancel') }}

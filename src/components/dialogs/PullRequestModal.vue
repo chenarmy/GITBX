@@ -7,7 +7,19 @@ import { useGitApi, formatGitError } from '@/composables/useGitApi';
 import { useI18n } from '@/i18n';
 const repoStore = useRepoStore(); const notification = useNotificationStore(); const gitApi = useGitApi(); const { t } = useI18n();
 const base = ref('main'); const compare = ref(''); const submitting = ref(false);
-watch(() => repoStore.isPullRequestOpen, (open) => { if (open) { compare.value = repoStore.repoInfo?.head_branch || ''; base.value = compare.value === 'main' ? 'develop' : 'main'; } });
+watch(() => repoStore.isPullRequestOpen, (open) => {
+  if (open) {
+    compare.value = repoStore.repoInfo?.head_branch || '';
+    const defaultBranch = repoStore.branches.some(b => b.name === 'main' || b.name === 'origin/main')
+      ? 'main'
+      : repoStore.branches.some(b => b.name === 'master' || b.name === 'origin/master')
+      ? 'master'
+      : 'main';
+    base.value = compare.value === defaultBranch
+      ? (repoStore.branches.some(b => b.name === 'develop' || b.name === 'origin/develop') ? 'develop' : defaultBranch)
+      : defaultBranch;
+  }
+});
 async function open() {
   submitting.value = true;
   try {

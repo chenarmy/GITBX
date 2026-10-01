@@ -305,6 +305,21 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       </div>
     </div>
 
+    <!-- Worktrees Section -->
+    <div class="p-2 border-b border-border">
+      <button
+        class="w-full flex items-center justify-between rounded-md px-1.5 py-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition"
+        :title="t('Manage Worktrees')"
+        @click="repoStore.openModal('worktreeManager')"
+      >
+        <span class="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase">
+          <FolderGit2 class="w-3.5 h-3.5 text-teal-500" />
+          {{ t('Worktrees') }}
+        </span>
+        <span class="text-[10px]">{{ t('Manage') }}</span>
+      </button>
+    </div>
+
     <!-- Remote Branches Section -->
     <div class="p-2 border-b border-border">
       <div

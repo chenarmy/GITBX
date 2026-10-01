@@ -701,7 +701,8 @@ async fn repo_handler(
             GitService::worktree(
                 &path,
                 body_json
-                    .get("dest_path")
+                    .get("destination")
+                    .or_else(|| body_json.get("dest_path"))
                     .and_then(Value::as_str)
                     .unwrap_or(""),
                 body_json

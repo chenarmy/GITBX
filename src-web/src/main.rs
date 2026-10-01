@@ -38,8 +38,11 @@ async fn main() -> anyhow::Result<()> {
                 .allow_origin([
                     HeaderValue::from_static("http://localhost:5173"),
                     HeaderValue::from_static("http://127.0.0.1:5173"),
+                    HeaderValue::from_static("http://localhost:5188"),
+                    HeaderValue::from_static("http://127.0.0.1:5188"),
                 ])
-                .allow_methods([Method::GET, Method::POST, Method::OPTIONS]),
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers(tower_http::cors::Any),
         )
         .layer(TraceLayer::new_for_http());
 

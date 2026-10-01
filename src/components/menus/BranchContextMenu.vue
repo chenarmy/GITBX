@@ -6,7 +6,6 @@ import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
-import { ChevronRight } from 'lucide-vue-next';
 import { usePushRecovery } from '@/composables/usePushRecovery';
 import { useBranchCheckout } from '@/composables/useBranchCheckout';
 
@@ -52,7 +51,7 @@ const trackedBranchName = computed(() => {
 const menuStyle = computed(() => {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
   const height = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const menuHeight = isCurrentBranch.value ? 260 : isRemoteBranch.value ? 280 : 420;
+  const menuHeight = isCurrentBranch.value ? 290 : isRemoteBranch.value ? 310 : 450;
   return {
     left: `${Math.min(props.x, width - 300)}px`,
     top: `${Math.min(props.y, height - menuHeight)}px`,
@@ -115,16 +114,41 @@ async function handleCompare() {
 
 function handleShowDiffWithWorkingTree() {
   void repoStore.selectCommit(null);
+  notification.info(
+    t('Working Tree'),
+    repoStore.statusSummary.total_changes > 0
+      ? t('{count} uncommitted changes', { count: repoStore.statusSummary.total_changes })
+      : t('Working tree clean'),
+  );
   emit('close');
 }
 
 async function handleNewWorktree() {
   try {
-    const destPath = await confirmation.prompt({ title: t('Create Worktree'), message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }), inputLabel: t('Destination path') });
+    const worktrees = await gitApi.listWorktrees(repoStore.activeRepoPath);
+    const localBranchName = props.branch.is_remote
+      ? props.branch.name.split('/').slice(1).join('/')
+      : props.branch.name;
+    const existing = worktrees.find((item) => item.branch === localBranchName);
+    if (existing) {
+      notification.info(t('Worktrees'), existing.path);
+      repoStore.openModal('worktreeManager');
+      return;
+    }
+    const sanitizedBranch = props.branch.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const defaultDest = `${repoStore.activeRepoPath}\\worktrees\\${sanitizedBranch}`;
+    const destPath = await confirmation.prompt({
+      title: t('Create Worktree'),
+      message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }),
+      inputLabel: t('Destination path'),
+      defaultValue: defaultDest,
+    });
     if (destPath && destPath.trim()) {
       try {
         await gitApi.createWorktree(repoStore.activeRepoPath, destPath.trim(), props.branch.name);
+        await repoStore.loadRepo(repoStore.activeRepoPath);
         notification.success(t('Worktree created'), destPath.trim());
+        repoStore.openModal('worktreeManager');
       } catch (err: unknown) {
         notification.error(t('Worktree creation failed'), formatGitError(err));
       }
@@ -159,6 +183,11 @@ function handleMergeInto() {
   }
   repoStore.targetBranchForAction = props.branch.name;
   repoStore.openModal('merge');
+  emit('close');
+}
+
+function handleManageWorktrees() {
+  repoStore.openModal('worktreeManager');
   emit('close');
 }
 
@@ -201,7 +230,10 @@ async function handleDelete() {
   try {
     if (await confirmation.confirm({ title: t('Delete Branch'), message: t("Delete branch '{branch}'?", { branch: props.branch.name }), danger: true, confirmText: t('Delete') })) {
       await repoStore.deleteBranch(props.branch.name, true);
+      notification.success(t('Delete'), props.branch.name);
     }
+  } catch (error) {
+    notification.error(t('Operation Failed'), formatGitError(error));
   } finally {
     emit('close');
   }
@@ -251,6 +283,12 @@ onUnmounted(() => {
         >
           {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
         </button>
+        <button
+          @click="handleManageWorktrees"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t('Manage Worktrees') }}
+        </button>
       </div>
 
       <div class="py-1">
@@ -268,12 +306,9 @@ onUnmounted(() => {
           {{ t('Push...') }}
         </button>
 
-        <button
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
-        >
+        <div class="w-full px-3 py-1.5 flex items-center text-muted-foreground font-medium">
           <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
-          <ChevronRight class="w-3.5 h-3.5" />
-        </button>
+        </div>
       </div>
 
       <div class="py-1">
@@ -342,6 +377,12 @@ onUnmounted(() => {
           class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
         >
           {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
+        </button>
+        <button
+          @click="handleManageWorktrees"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t('Manage Worktrees') }}
         </button>
       </div>
 
@@ -425,6 +466,12 @@ onUnmounted(() => {
         >
           {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
         </button>
+        <button
+          @click="handleManageWorktrees"
+          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+        >
+          {{ t('Manage Worktrees') }}
+        </button>
       </div>
 
       <div class="py-1">
@@ -440,12 +487,9 @@ onUnmounted(() => {
         >
           {{ t('Push...') }}
         </button>
-        <button
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between text-muted-foreground hover:text-foreground font-medium transition"
-        >
+        <div class="w-full px-3 py-1.5 flex items-center text-muted-foreground font-medium">
           <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
-          <ChevronRight class="w-3.5 h-3.5" />
-        </button>
+        </div>
       </div>
 
       <div class="py-1">
