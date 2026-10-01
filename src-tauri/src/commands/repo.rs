@@ -369,9 +369,15 @@ pub async fn update_branch(repo_path: String, branch_name: String) -> CommandRes
 }
 
 #[tauri::command]
-pub async fn push(repo_path: String, force_with_lease: Option<bool>) -> CommandResult<()> {
+pub async fn push(
+    repo_path: String,
+    force_with_lease: Option<bool>,
+    branch_name: Option<String>,
+) -> CommandResult<()> {
     if force_with_lease.unwrap_or(false) {
-        GitService::push_force_with_lease(&repo_path, "origin")
+        GitService::push_force_with_lease(&repo_path, "origin", branch_name.as_deref())
+    } else if let Some(branch_name) = branch_name.as_deref() {
+        GitService::push_branch(&repo_path, "origin", branch_name)
     } else {
         GitService::push(&repo_path, "origin")
     }

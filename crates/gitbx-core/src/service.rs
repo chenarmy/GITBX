@@ -559,14 +559,24 @@ impl GitService {
         })
     }
 
-    pub fn push_force_with_lease(path: &str, remote: &str) -> Result<()> {
+    pub fn push_force_with_lease(
+        path: &str,
+        remote: &str,
+        branch_name: Option<&str>,
+    ) -> Result<()> {
         Self::with_write_lock(path, |repo| {
-            let branch = repo
-                .inner()
-                .head()?
-                .shorthand()
-                .ok_or_else(|| GitbxError::General("HEAD is detached".into()))?
-                .to_string();
+            let branch = match branch_name {
+                Some(branch) => {
+                    repo.inner().find_branch(branch, BranchType::Local)?;
+                    branch.to_string()
+                }
+                None => repo
+                    .inner()
+                    .head()?
+                    .shorthand()
+                    .ok_or_else(|| GitbxError::General("HEAD is detached".into()))?
+                    .to_string(),
+            };
 
             // Refresh the lease immediately before the destructive update. This
             // lets a confirmed retry replace commits already seen by the user,
@@ -1479,6 +1489,10 @@ impl GitService {
 
     pub fn push(path: &str, remote: &str) -> Result<()> {
         Self::with_write_lock(path, |repo| repo.push_current(remote))
+    }
+
+    pub fn push_branch(path: &str, remote: &str, branch: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| repo.push_branch(remote, branch))
     }
 
     /// Stage the complete working tree, create a commit, and push the checked-out
@@ -2746,6 +2760,44 @@ mod tests {
             Some(new_feature_id)
         );
         assert_ne!(old_feature_id, new_feature_id);
+    }
+
+    #[test]
+    fn pushes_inactive_branch_without_switching_head() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = init_branch_fixture(&repo_path);
+
+        repo.set_head("refs/heads/feature").unwrap();
+        repo.checkout_head(None).unwrap();
+        fs::write(repo_path.join("feature.txt"), "feature change\n").unwrap();
+        commit_all(&repo, "feature change");
+        let feature_id = repo.head().unwrap().target().unwrap();
+
+        repo.set_head("refs/heads/main").unwrap();
+        repo.checkout_head(None).unwrap();
+        let origin_path = dir.path().join("origin.git");
+        Repository::init_bare(&origin_path).unwrap();
+        repo.remote("origin", origin_path.to_str().unwrap())
+            .unwrap();
+        drop(repo);
+
+        let path = repo_path.to_str().unwrap();
+        GitService::push_branch(path, "origin", "feature").unwrap();
+
+        assert_eq!(
+            GitService::info(path).unwrap().head_branch.as_deref(),
+            Some("main")
+        );
+        let origin = Repository::open_bare(origin_path).unwrap();
+        assert_eq!(
+            origin
+                .find_reference("refs/heads/feature")
+                .unwrap()
+                .target(),
+            Some(feature_id)
+        );
     }
 
     #[test]

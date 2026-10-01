@@ -835,12 +835,13 @@ export const updateBranch = async (repoPath: string, branchName: string): Promis
   getConsole().logSuccess(`Updated '${branchName}' from its tracked remote branch.`);
 };
 
-export const pushRemote = async (repoPath: string, forceWithLease = false): Promise<void> => {
-  const cmd = `git push${forceWithLease ? ' --force-with-lease' : ''}`;
+export const pushRemote = async (repoPath: string, forceWithLease = false, branchName?: string): Promise<void> => {
+  const refspec = branchName ? ` origin refs/heads/${branchName}:refs/heads/${branchName}` : '';
+  const cmd = `git push${forceWithLease ? ' --force-with-lease' : ''}${refspec}`;
   getConsole().logCommand(cmd);
   if (isTauri()) {
     try {
-      await invoke('push', { repoPath, forceWithLease });
+      await invoke('push', { repoPath, forceWithLease, branchName });
       getConsole().logSuccess('Push completed.');
       return;
     } catch (error) {
@@ -852,7 +853,7 @@ export const pushRemote = async (repoPath: string, forceWithLease = false): Prom
   const res = await gitbxFetch('/api/repo/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_path: repoPath, force_with_lease: forceWithLease }),
+    body: JSON.stringify({ repo_path: repoPath, force_with_lease: forceWithLease, branch_name: branchName }),
   });
   const data = await res.json().catch(() => null);
   if (res.ok && data?.success) {

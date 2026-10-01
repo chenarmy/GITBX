@@ -184,7 +184,7 @@ async function handlePush() {
   emit('close');
   notification.info(t('Git Push'), t("Pushing commits to remote..."));
   try {
-    const pushed = await pushWithRecovery();
+    const pushed = await pushWithRecovery({ branchName: props.branch.name });
     if (pushed) notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
   } catch (error) {
     notification.error(t('Push Failed'), formatGitError(error, t('Failed to push to remote')));

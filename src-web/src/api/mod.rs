@@ -634,12 +634,15 @@ async fn repo_handler(
             )
         }),
         (Method::POST, "push") => write_op(&path, || {
+            let branch_name = body_json.get("branch_name").and_then(Value::as_str);
             if body_json
                 .get("force_with_lease")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
             {
-                GitService::push_force_with_lease(&path, "origin")
+                GitService::push_force_with_lease(&path, "origin", branch_name)
+            } else if let Some(branch_name) = branch_name {
+                GitService::push_branch(&path, "origin", branch_name)
             } else {
                 GitService::push(&path, "origin")
             }

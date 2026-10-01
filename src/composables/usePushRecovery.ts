@@ -6,6 +6,7 @@ import { useI18n } from '@/i18n';
 interface PushOptions {
   forceWithLease?: boolean;
   pullStrategy?: 'merge' | 'rebase' | 'ff-only';
+  branchName?: string;
 }
 
 export function usePushRecovery() {
@@ -31,13 +32,16 @@ export function usePushRecovery() {
     if (forceWithLease && !(await confirmReplacement())) return false;
 
     try {
-      await repoStore.pushRemote(forceWithLease);
+      await repoStore.pushRemote(forceWithLease, options.branchName);
       return true;
     } catch (error) {
       if (forceWithLease || !isNonFastForwardPushError(error)) throw error;
+      // Pull operates on the checked-out branch. Never recover a push of a
+      // different branch by pulling unrelated commits into the current one.
+      if (options.branchName && options.branchName !== repoStore.repoInfo?.head_branch) throw error;
       if (!(await confirmPullAndPush())) return false;
       await repoStore.pullRemote(options.pullStrategy || 'merge');
-      await repoStore.pushRemote(false);
+      await repoStore.pushRemote(false, options.branchName);
       return true;
     }
   };

@@ -669,8 +669,8 @@ export const useRepoStore = defineStore('repo', () => {
     }
   };
 
-  const pushRemote = async (forceWithLease = false) => {
-    await gitApi.pushRemote(activeRepoPath.value, forceWithLease);
+  const pushRemote = async (forceWithLease = false, branchName?: string) => {
+    await gitApi.pushRemote(activeRepoPath.value, forceWithLease, branchName);
     await loadRepo(activeRepoPath.value);
     syncStatus.value = await gitApi.getSyncStatus(activeRepoPath.value).catch(() => ({ incoming: [], outgoing: [] }));
   };

@@ -193,10 +193,7 @@ pub fn authenticated_remote_callbacks(
 
 impl Repository {
     fn authenticated_callbacks(&self) -> Result<RemoteCallbacks<'static>> {
-        authenticated_remote_callbacks(
-            self.inner().config().ok(),
-            Some(self.path().to_path_buf()),
-        )
+        authenticated_remote_callbacks(self.inner().config().ok(), Some(self.path().to_path_buf()))
     }
 
     pub fn list_remotes(&self) -> Result<Vec<RemoteItem>> {
@@ -312,6 +309,13 @@ impl Repository {
             .shorthand()
             .ok_or_else(|| crate::error::GitbxError::General("HEAD is detached".into()))?
             .to_string();
+        self.push_branch(remote_name, &branch)
+    }
+
+    pub fn push_branch(&self, remote_name: &str, branch: &str) -> Result<()> {
+        // Resolve the branch before building a refspec. Besides producing a
+        // useful error, this prevents arbitrary refspecs from entering here.
+        self.inner().find_branch(branch, git2::BranchType::Local)?;
         let mut remote = self.inner().find_remote(remote_name)?;
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
         let mut options = PushOptions::new();
@@ -325,7 +329,7 @@ impl Repository {
             configure_git_ssh(&mut command, config.as_ref())?;
             if let Ok(output) = command
                 .current_dir(self.path())
-                .args(["push", remote_name, &branch])
+                .args(["push", remote_name, &refspec])
                 .output()
             {
                 if output.status.success() {
@@ -465,6 +469,9 @@ mod tests {
         );
 
         assert_eq!(parse_git_url("git@github.com:chenarmy/GITBX.git"), None);
-        assert_eq!(parse_git_url("ssh://git@github.com/chenarmy/GITBX.git"), None);
+        assert_eq!(
+            parse_git_url("ssh://git@github.com/chenarmy/GITBX.git"),
+            None
+        );
     }
 }
