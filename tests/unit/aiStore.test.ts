@@ -128,4 +128,48 @@ describe('AI Store and Agent Service', () => {
     // Restore to zh-CN
     setLocale('zh-CN');
   });
+
+  it('recovers provider and model from legacy ai config when aiSelectedProvider is absent', () => {
+    store['gitbx_ai_config'] = JSON.stringify({
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      api_base: 'https://api.deepseek.com/v1',
+    });
+    const aiStore = useAiStore();
+    expect(aiStore.activeProviderId).toBe('deepseek');
+    expect(aiStore.activeModelId).toBe('deepseek-chat');
+  });
+
+  it('persists AI providers and selected provider/model in AppConfig and restores them on clean launch', async () => {
+    const { readLocalConfig, applyConfig } = await import('../../src/services/appConfig');
+    const aiStore = useAiStore();
+
+    // User switches to DeepSeek and sets model
+    aiStore.setProvider('deepseek');
+    aiStore.setModel('deepseek-reasoner');
+
+    expect(store['gitbx_ai_selected_provider']).toBe('deepseek');
+    expect(store['gitbx_ai_selected_model']).toBe('deepseek-reasoner');
+
+    const diskSnapshot = readLocalConfig();
+    expect(diskSnapshot.aiSelectedProvider).toBe('deepseek');
+    expect(diskSnapshot.aiSelectedModel).toBe('deepseek-reasoner');
+
+    // Simulate app reinstallation: localStorage is completely wiped!
+    for (const key in store) delete store[key];
+    expect(store['gitbx_ai_selected_provider']).toBeUndefined();
+
+    // Reinstalled app boots and applies saved disk config
+    applyConfig(diskSnapshot);
+
+    // Verify localStorage has been fully restored from disk config
+    expect(store['gitbx_ai_selected_provider']).toBe('deepseek');
+    expect(store['gitbx_ai_selected_model']).toBe('deepseek-reasoner');
+
+    // Pinia store initializes in newly installed app
+    setActivePinia(createPinia());
+    const reinstalledAiStore = useAiStore();
+    expect(reinstalledAiStore.activeProviderId).toBe('deepseek');
+    expect(reinstalledAiStore.activeModelId).toBe('deepseek-reasoner');
+  });
 });

@@ -370,6 +370,7 @@ onUnmounted(() => {
       </button>
 
       <button
+        data-testid="navbar-settings-btn"
         @click="settingsStore.openSettingsModal()"
         class="relative p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
         :title="t('Open Settings')"

@@ -613,6 +613,7 @@ function handleClearMessages() {
 
         <!-- Target Model Pill -->
         <button
+          data-testid="ai-model-selector-pill"
           @click="isModelSelectorOpen = true"
           class="flex-1 flex items-center space-x-1.5 px-2 py-1 rounded bg-secondary/70 hover:bg-secondary text-foreground border border-border/60 transition truncate text-left"
           :title="t('Click to switch AI provider or model')"

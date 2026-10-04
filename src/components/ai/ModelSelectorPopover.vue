@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import { useSettingsStore } from '@/stores/settings';
 import { useI18n } from '@/i18n';
@@ -26,6 +26,14 @@ const { t } = useI18n();
 const searchQuery = ref('');
 const customModelInput = ref('');
 const selectedProviderId = ref<string>(aiStore.activeProviderId);
+
+watch(
+  () => aiStore.activeProviderId,
+  (newId) => {
+    selectedProviderId.value = newId;
+  },
+  { immediate: true },
+);
 
 const builtinProviders = computed(() => {
   return aiStore.providers.filter((p) => p.category === 'builtin');
@@ -119,6 +127,7 @@ function openSettings() {
 <template>
   <Teleport to="body">
     <div
+      data-testid="model-selector-popover"
       class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 select-none"
       @click.self="emit('close')"
       @keydown.esc.window="emit('close')"
@@ -188,6 +197,7 @@ function openSettings() {
                   </div>
                   <Check
                     v-if="aiStore.activeProviderId === provider.id"
+                    data-testid="provider-active-check"
                     class="w-3.5 h-3.5 text-primary shrink-0 ml-1.5 stroke-[2.5]"
                   />
                 </button>
@@ -218,6 +228,7 @@ function openSettings() {
                   </div>
                   <Check
                     v-if="aiStore.activeProviderId === provider.id"
+                    data-testid="provider-active-check"
                     class="w-3.5 h-3.5 text-primary shrink-0 ml-1.5 stroke-[2.5]"
                   />
                 </button>
@@ -322,6 +333,7 @@ function openSettings() {
                   <span class="text-xs font-semibold truncate">{{ model.name || model.id }}</span>
                   <span
                     v-if="aiStore.activeModelId === model.id && aiStore.activeProviderId === selectedProviderId"
+                    data-testid="model-active-badge"
                     class="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-bold"
                   >
                     {{ t('Active') }}

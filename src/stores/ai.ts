@@ -414,12 +414,37 @@ export const useAiStore = defineStore('ai', () => {
 
   // Providers & Models
   const providers = ref<AiProviderConfig[]>(loadProviders());
-  const activeProviderId = ref<string>(
-    localStorage.getItem(CONFIG_KEYS.aiSelectedProvider) || 'openai',
-  );
-  const activeModelId = ref<string>(
-    localStorage.getItem(CONFIG_KEYS.aiSelectedModel) || 'gpt-4o-mini',
-  );
+
+  const getInitialProvider = (): string => {
+    const saved = localStorage.getItem(CONFIG_KEYS.aiSelectedProvider);
+    if (saved) return saved;
+    const legacyRaw = localStorage.getItem(CONFIG_KEYS.ai);
+    if (legacyRaw) {
+      try {
+        const parsed = JSON.parse(legacyRaw);
+        if (parsed?.provider) return parsed.provider;
+      } catch {}
+    }
+    return 'openai';
+  };
+
+  const getInitialModel = (providerId: string): string => {
+    const saved = localStorage.getItem(CONFIG_KEYS.aiSelectedModel);
+    if (saved) return saved;
+    const legacyRaw = localStorage.getItem(CONFIG_KEYS.ai);
+    if (legacyRaw) {
+      try {
+        const parsed = JSON.parse(legacyRaw);
+        if (parsed?.model) return parsed.model;
+      } catch {}
+    }
+    const matched = providers.value.find((p) => p.id === providerId);
+    return matched?.default_model || 'gpt-4o-mini';
+  };
+
+  const initialProvider = getInitialProvider();
+  const activeProviderId = ref<string>(initialProvider);
+  const activeModelId = ref<string>(getInitialModel(initialProvider));
   const activeMode = ref<AiMode>('agent');
 
   // Dynamic model cache & fetching status
@@ -546,6 +571,7 @@ export const useAiStore = defineStore('ai', () => {
     activeModelId.value = modelId;
     llmConfig.model = modelId;
     localStorage.setItem(CONFIG_KEYS.aiSelectedModel, modelId);
+    void persistConfig().catch(() => undefined);
   };
 
   const setMode = (mode: AiMode) => {

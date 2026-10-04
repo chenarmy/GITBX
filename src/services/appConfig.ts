@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
-import type { LlmConfig } from '@/types/ai';
+import type { LlmConfig, AiProviderConfig } from '@/types/ai';
 
 export const CONFIG_KEYS = {
   repositories: 'gitbx_managed_repos',
@@ -64,6 +64,9 @@ export interface AppConfig {
     sshKey: string;
   };
   ai: Partial<PersistedAiConfig>;
+  aiProviders?: AiProviderConfig[];
+  aiSelectedProvider?: string;
+  aiSelectedModel?: string;
   updates: {
     skippedVersion: string | null;
     lastCheckAt: number | null;
@@ -72,7 +75,6 @@ export interface AppConfig {
 
 const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const localeCodes = new Set(SUPPORTED_LOCALES.map((item) => item.code));
-const aiProviders = new Set(['openai', 'claude', 'deepseek', 'ollama', 'custom']);
 
 function parseJson<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -87,8 +89,8 @@ function sanitizeAiConfig(value: unknown): Partial<PersistedAiConfig> {
   if (!value || typeof value !== 'object') return {};
   const input = value as Record<string, unknown>;
   const config: Partial<PersistedAiConfig> = {};
-  if (typeof input.provider === 'string' && aiProviders.has(input.provider)) {
-    config.provider = input.provider as PersistedAiConfig['provider'];
+  if (typeof input.provider === 'string' && input.provider.trim()) {
+    config.provider = input.provider.trim() as any;
   }
   if (typeof input.api_base === 'string') config.api_base = input.api_base;
   if (typeof input.model === 'string') config.model = input.model;
@@ -114,7 +116,7 @@ function sanitizeProxyConfig(value: unknown): ProxySettings {
   };
 }
 
-function readLocalConfig(): AppConfig {
+export function readLocalConfig(): AppConfig {
   const repositories = parseJson<PersistedRepository[]>(
     localStorage.getItem(CONFIG_KEYS.repositories),
     [],
@@ -122,6 +124,16 @@ function readLocalConfig(): AppConfig {
   const ai = sanitizeAiConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.ai), {}));
   const proxy = sanitizeProxyConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.proxy), {}));
   const savedLocale = localStorage.getItem(CONFIG_KEYS.locale) as Locale | null;
+
+  const rawAiProviders = parseJson<AiProviderConfig[] | null>(
+    localStorage.getItem(CONFIG_KEYS.aiProviders),
+    null,
+  );
+  const aiProviders = Array.isArray(rawAiProviders)
+    ? rawAiProviders.map((p) => ({ ...p, api_key: '' }))
+    : undefined;
+  const aiSelectedProvider = localStorage.getItem(CONFIG_KEYS.aiSelectedProvider) || (ai.provider as string) || undefined;
+  const aiSelectedModel = localStorage.getItem(CONFIG_KEYS.aiSelectedModel) || (ai.model as string) || undefined;
 
   return {
     version: 2,
@@ -138,6 +150,9 @@ function readLocalConfig(): AppConfig {
       sshKey: localStorage.getItem(CONFIG_KEYS.sshKey) || '',
     },
     ai,
+    aiProviders,
+    aiSelectedProvider,
+    aiSelectedModel,
     updates: {
       skippedVersion: localStorage.getItem(CONFIG_KEYS.skippedVersion) || null,
       lastCheckAt: Number.isFinite(Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt)))
@@ -160,6 +175,16 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
       )
     : fallback.repositories.items;
   const language = settingsInput?.language;
+
+  const aiProviders = Array.isArray(input.aiProviders)
+    ? input.aiProviders.map((p) => ({ ...p, api_key: '' }))
+    : fallback.aiProviders;
+  const aiSelectedProvider = typeof input.aiSelectedProvider === 'string'
+    ? input.aiSelectedProvider
+    : (typeof input.ai?.provider === 'string' ? input.ai.provider : fallback.aiSelectedProvider);
+  const aiSelectedModel = typeof input.aiSelectedModel === 'string'
+    ? input.aiSelectedModel
+    : (typeof input.ai?.model === 'string' ? input.ai.model : fallback.aiSelectedModel);
 
   return {
     version: 2,
@@ -186,6 +211,9 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
         : fallback.settings.sshKey,
     },
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAiConfig(input.ai) : fallback.ai,
+    aiProviders,
+    aiSelectedProvider,
+    aiSelectedModel,
     updates: {
       skippedVersion: typeof updatesInput?.skippedVersion === 'string'
         ? updatesInput.skippedVersion
@@ -198,7 +226,7 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
   };
 }
 
-function applyConfig(config: AppConfig) {
+export function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.repositories, JSON.stringify(config.repositories.items));
   localStorage.setItem(CONFIG_KEYS.activeRepository, config.repositories.active);
   localStorage.setItem(CONFIG_KEYS.theme, config.settings.theme);
@@ -208,6 +236,21 @@ function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.proxy, JSON.stringify(config.settings.proxy));
   localStorage.setItem(CONFIG_KEYS.sshKey, config.settings.sshKey);
   localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(config.ai));
+
+  if (config.aiProviders && config.aiProviders.length > 0) {
+    localStorage.setItem(CONFIG_KEYS.aiProviders, JSON.stringify(config.aiProviders));
+  }
+  if (config.aiSelectedProvider) {
+    localStorage.setItem(CONFIG_KEYS.aiSelectedProvider, config.aiSelectedProvider);
+  } else if (config.ai?.provider) {
+    localStorage.setItem(CONFIG_KEYS.aiSelectedProvider, config.ai.provider);
+  }
+  if (config.aiSelectedModel) {
+    localStorage.setItem(CONFIG_KEYS.aiSelectedModel, config.aiSelectedModel);
+  } else if (config.ai?.model) {
+    localStorage.setItem(CONFIG_KEYS.aiSelectedModel, config.ai.model);
+  }
+
   if (config.updates.skippedVersion) {
     localStorage.setItem(CONFIG_KEYS.skippedVersion, config.updates.skippedVersion);
   } else {

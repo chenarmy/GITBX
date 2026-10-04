@@ -34,8 +34,9 @@ const draftWebToken = ref(settingsStore.webToken);
 const draftSshPassphrase = ref('');
 const draftAuthorName = ref(settingsStore.authorName);
 const draftAuthorEmail = ref(settingsStore.authorEmail);
+const draftProviderId = ref<string>(aiStore.activeProviderId);
 const draftLlmConfig = ref<LlmConfig>({ ...aiStore.llmConfig, api_key: '' });
-const isCustomProvider = computed(() => draftLlmConfig.value.provider === 'custom');
+const isCustomProvider = computed(() => draftProviderId.value === 'custom');
 
 function resetDraft() {
   draftLanguage.value = settingsStore.language;
@@ -49,7 +50,15 @@ function resetDraft() {
   draftSshPassphrase.value = '';
   draftAuthorName.value = settingsStore.authorName;
   draftAuthorEmail.value = settingsStore.authorEmail;
-  draftLlmConfig.value = { ...aiStore.llmConfig, api_key: '' };
+  draftProviderId.value = aiStore.activeProviderId;
+  const currentP = aiStore.providers.find((p) => p.id === aiStore.activeProviderId) || aiStore.activeProvider;
+  draftLlmConfig.value = {
+    provider: (currentP.protocol as LlmProvider) || 'openai',
+    api_base: currentP.api_base,
+    model: aiStore.activeModelId || currentP.default_model,
+    api_key: '',
+    temperature: 0.3,
+  };
   proxyPassword.value = '';
 }
 
@@ -74,7 +83,10 @@ async function saveSettings() {
   let savedAiCredential = false;
   if (draftLlmConfig.value.api_key) {
     try {
-      await gitApi.saveCredential(draftLlmConfig.value.provider, draftLlmConfig.value.api_key);
+      await gitApi.saveCredential(draftProviderId.value, draftLlmConfig.value.api_key);
+      if (draftLlmConfig.value.provider && draftLlmConfig.value.provider !== draftProviderId.value) {
+        await gitApi.saveCredential(draftLlmConfig.value.provider, draftLlmConfig.value.api_key).catch(() => undefined);
+      }
       savedAiCredential = true;
       notification.success(t('Settings Saved'), t('The AI credential was stored in the system keyring.'));
     } catch (error: any) {
@@ -105,7 +117,26 @@ async function saveSettings() {
     settingsStore.authorName = draftAuthorName.value;
     settingsStore.authorEmail = draftAuthorEmail.value;
     settingsStore.changeLanguage(draftLanguage.value);
-    Object.assign(aiStore.llmConfig, draftLlmConfig.value, {
+
+    // Update target provider's api_base and default_model in aiStore
+    const targetProvider = aiStore.providers.find((item) => item.id === draftProviderId.value);
+    if (targetProvider) {
+      targetProvider.api_base = draftLlmConfig.value.api_base;
+      targetProvider.default_model = draftLlmConfig.value.model;
+      if (draftLlmConfig.value.api_key && !savedAiCredential) {
+        targetProvider.api_key = draftLlmConfig.value.api_key;
+      }
+      await aiStore.saveProvider(targetProvider);
+    }
+
+    // Synchronously update active provider and active model on aiStore
+    aiStore.setProvider(draftProviderId.value);
+    aiStore.setModel(draftLlmConfig.value.model);
+
+    Object.assign(aiStore.llmConfig, {
+      provider: draftLlmConfig.value.provider,
+      api_base: draftLlmConfig.value.api_base,
+      model: draftLlmConfig.value.model,
       api_key: savedAiCredential ? '' : draftLlmConfig.value.api_key,
     });
     await aiStore.persistConfig();
@@ -134,24 +165,34 @@ async function selectGlobalSshKey() {
 }
 
 function handleProviderChange(event: Event) {
-  const provider = (event.target as HTMLSelectElement).value as LlmProvider;
-  const previousProvider = draftLlmConfig.value.provider;
-  draftLlmConfig.value.provider = provider;
+  const providerId = (event.target as HTMLSelectElement).value;
+  draftProviderId.value = providerId;
   draftLlmConfig.value.api_key = '';
-  if (provider === 'custom' && previousProvider !== 'custom') {
+
+  const matched = aiStore.providers.find((item) => item.id === providerId);
+  if (matched) {
+    draftLlmConfig.value.provider = (matched.protocol as LlmProvider) || 'openai';
+    draftLlmConfig.value.api_base = matched.api_base;
+    draftLlmConfig.value.model = matched.default_model;
+  } else if (providerId === 'custom') {
+    draftLlmConfig.value.provider = 'custom';
     draftLlmConfig.value.api_base = '';
     draftLlmConfig.value.model = '';
-  } else if (provider !== 'custom') {
-    const preset = AI_PROVIDER_PRESETS[provider];
-    draftLlmConfig.value.api_base = preset.api_base;
-    draftLlmConfig.value.model = preset.model;
   }
 }
 
 function providerModels() {
-  if (draftLlmConfig.value.provider === 'custom') return [];
-  const preset = (AI_PROVIDER_PRESETS as any)[draftLlmConfig.value.provider];
-  return preset && Array.isArray(preset.models) ? preset.models : [];
+  if (draftProviderId.value === 'custom') return [];
+  const pId = draftProviderId.value;
+  if (aiStore.cachedModels[pId] && aiStore.cachedModels[pId].length > 0) {
+    return aiStore.cachedModels[pId].map((m) => m.id);
+  }
+  const preset = (AI_PROVIDER_PRESETS as any)[pId];
+  if (preset && Array.isArray(preset.models)) {
+    return preset.models;
+  }
+  const matched = aiStore.providers.find((p) => p.id === pId);
+  return matched?.default_model ? [matched.default_model] : [];
 }
 
 function closeSettings() {
@@ -383,11 +424,12 @@ function closeSettings() {
             <Cpu class="w-3.5 h-3.5 text-purple-400" />
             <span>{{ t('AI Copilot & LLM Provider') }}</span>
           </div>
-          <div :key="draftLlmConfig.provider" class="space-y-2">
+          <div :key="draftProviderId" class="space-y-2">
             <div>
               <label class="text-[11px] text-muted-foreground">{{ t('Provider') }}</label>
               <select
-                :value="draftLlmConfig.provider"
+                data-testid="settings-provider-select"
+                :value="draftProviderId"
                 @change="handleProviderChange"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
@@ -458,6 +500,7 @@ function closeSettings() {
       <!-- Footer -->
       <div class="h-11 bg-muted/30 px-4 flex items-center justify-end border-t border-border">
         <button
+          data-testid="settings-save-btn"
           @click="activeTab === 'settings' ? saveSettings() : closeSettings()"
           class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition"
         >
