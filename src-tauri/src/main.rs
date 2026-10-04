@@ -3,7 +3,7 @@
 
 mod commands;
 
-use commands::{ai, auth, config, diff, graph, repo, terminal, update};
+use commands::{ai, auth, config, diff, graph, mcp, repo, terminal, update};
 
 /// Appends panics to a local log file so hard crashes leave a trace for
 /// diagnosis (the file lives under %LOCALAPPDATA%\GITBX\panic.log).
@@ -50,6 +50,9 @@ fn main() {
             config::load_app_config,
             config::save_app_config,
             config::get_app_config_path,
+            mcp::load_mcp_policy,
+            mcp::save_mcp_policy,
+            mcp::get_mcp_server_info,
             update::open_release_url,
             repo::get_repo_info,
             repo::init_repo,

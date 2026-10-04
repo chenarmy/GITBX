@@ -172,4 +172,17 @@ describe('AI Store and Agent Service', () => {
     expect(reinstalledAiStore.activeProviderId).toBe('deepseek');
     expect(reinstalledAiStore.activeModelId).toBe('deepseek-reasoner');
   });
+
+  it('switches between ask and agent modes correctly and persists to localStorage', () => {
+    const aiStore = useAiStore();
+    expect(aiStore.activeMode).toBe('agent');
+
+    aiStore.setMode('ask');
+    expect(aiStore.activeMode).toBe('ask');
+    expect(store['gitbx_ai_mode']).toBe('ask');
+
+    aiStore.setMode('agent');
+    expect(aiStore.activeMode).toBe('agent');
+    expect(store['gitbx_ai_mode']).toBe('agent');
+  });
 });

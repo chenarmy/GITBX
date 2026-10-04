@@ -18,6 +18,7 @@ export const CONFIG_KEYS = {
   aiSelectedModel: 'gitbx_ai_selected_model',
   aiSelectedProvider: 'gitbx_ai_selected_provider',
   aiSidebarVisible: 'gitbx_ai_sidebar_visible',
+  aiMode: 'gitbx_ai_mode',
   proxy: 'gitbx_proxy_config',
   sshKey: 'gitbx_ssh_key',
   webToken: 'gitbx_web_token',

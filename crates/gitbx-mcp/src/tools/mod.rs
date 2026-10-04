@@ -5,6 +5,18 @@ use serde_json::Value;
 pub struct McpTools;
 
 impl McpTools {
+    pub fn list_repos() -> anyhow::Result<Value> {
+        let mut policy = crate::policy::global_policy()
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {e}"))?;
+        let repos = policy.get_allowed_repo_paths();
+        let allow_all = policy.get_policy().allow_all_repos;
+        Ok(serde_json::json!({
+            "repositories": repos,
+            "allow_all": allow_all
+        }))
+    }
+
     pub fn get_status(repo_path: &str) -> anyhow::Result<Value> {
         let repo = GitService::open(repo_path)?;
         let status = repo.get_status()?;

@@ -6,12 +6,13 @@ import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useUpdatesStore } from '@/stores/updates';
 import { useRepoStore } from '@/stores/repo';
-import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen, ShieldCheck } from 'lucide-vue-next';
+import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen, ShieldCheck, Server } from 'lucide-vue-next';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
 import { computed, ref, watch } from 'vue';
 import AboutUpdates from '@/components/settings/AboutUpdates.vue';
+import McpSettings from '@/components/settings/McpSettings.vue';
 import type { LlmConfig } from '@/types/ai';
 
 const settingsStore = useSettingsStore();
@@ -21,7 +22,7 @@ const notification = useNotificationStore();
 const updatesStore = useUpdatesStore();
 const repoStore = useRepoStore();
 const { t } = useI18n();
-const activeTab = ref<'settings' | 'about'>('settings');
+const activeTab = ref<'settings' | 'mcp' | 'about'>('settings');
 const proxyPassword = ref('');
 const draftLanguage = ref<Locale>(settingsStore.language);
 const draftProxyMode = ref(settingsStore.proxyMode);
@@ -239,6 +240,14 @@ function closeSettings() {
         >
           <Settings class="h-3.5 w-3.5" />
           {{ t('Settings') }}
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
+          :class="activeTab === 'mcp' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'mcp'"
+        >
+          <Server class="h-3.5 w-3.5" />
+          MCP 授权与接入
         </button>
         <button
           class="relative inline-flex items-center gap-1.5 border-b-2 px-3 py-2 transition"
@@ -491,6 +500,10 @@ function closeSettings() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-show="activeTab === 'mcp'" class="p-4 max-h-[70vh] overflow-y-auto">
+        <McpSettings />
       </div>
 
       <div v-if="activeTab === 'about'" class="max-h-[70vh] overflow-y-auto p-4">

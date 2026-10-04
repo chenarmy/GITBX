@@ -26,6 +26,7 @@ import {
   Loader2,
   AtSign,
   Terminal,
+  MessageSquare,
 } from 'lucide-vue-next';
 import ModelSelectorPopover from './ModelSelectorPopover.vue';
 import RepoBranchSelectorModal from './RepoBranchSelectorModal.vue';
@@ -627,18 +628,21 @@ function handleClearMessages() {
       <div class="flex items-center justify-between pt-0.5">
         <div class="flex p-0.5 rounded-lg bg-muted/50 border border-border text-xs w-full">
           <button
+            data-testid="ai-mode-ask-btn"
             @click="aiStore.setMode('ask')"
             :class="[
               'flex-1 py-1 rounded-md font-semibold text-center transition flex items-center justify-center space-x-1',
               aiStore.activeMode === 'ask'
-                ? 'bg-background text-foreground shadow-xs'
+                ? 'bg-background text-primary shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
             ]"
           >
+            <MessageSquare class="w-3 h-3" />
             <span>{{ t('Ask Mode') }}</span>
             <span class="text-[10px] text-muted-foreground/70 font-normal">({{ t('Q&A') }})</span>
           </button>
           <button
+            data-testid="ai-mode-agent-btn"
             @click="aiStore.setMode('agent')"
             :class="[
               'flex-1 py-1 rounded-md font-semibold text-center transition flex items-center justify-center space-x-1',

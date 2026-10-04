@@ -445,7 +445,8 @@ export const useAiStore = defineStore('ai', () => {
   const initialProvider = getInitialProvider();
   const activeProviderId = ref<string>(initialProvider);
   const activeModelId = ref<string>(getInitialModel(initialProvider));
-  const activeMode = ref<AiMode>('agent');
+  const savedMode = localStorage.getItem(CONFIG_KEYS.aiMode) as AiMode | null;
+  const activeMode = ref<AiMode>(savedMode === 'ask' || savedMode === 'agent' ? savedMode : 'agent');
 
   // Dynamic model cache & fetching status
   const cachedModels = ref<Record<string, AiModelItem[]>>({});
@@ -576,6 +577,7 @@ export const useAiStore = defineStore('ai', () => {
 
   const setMode = (mode: AiMode) => {
     activeMode.value = mode;
+    localStorage.setItem(CONFIG_KEYS.aiMode, mode);
   };
 
   const toggleSidebar = () => {

@@ -1720,9 +1720,12 @@ name = "gitbx-mcp"
 version = "0.1.25"
 dependencies = [
  "anyhow",
+ "dirs",
+ "gitbx-contracts",
  "gitbx-core",
  "gitbx-diff",
  "gitbx-graph",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

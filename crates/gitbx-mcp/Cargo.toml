@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 gitbx-core = { path = "../gitbx-core" }
+gitbx-contracts = { path = "../gitbx-contracts" }
 gitbx-diff = { path = "../gitbx-diff" }
 gitbx-graph = { path = "../gitbx-graph" }
 serde = { workspace = true }
@@ -20,3 +21,6 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+dirs = "6.0"
+regex = { workspace = true }
+
