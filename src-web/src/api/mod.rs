@@ -6,7 +6,7 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use gitbx_ai::{CommitGenerator, GenericOpenAiClient, LlmConfig};
+use gitbx_ai::{list_models, CommitGenerator, GenericOpenAiClient, LlmClient, LlmConfig};
 use gitbx_contracts::GitErrorResponse;
 use gitbx_core::{GitService, GitbxError};
 use gitbx_diff::{get_file_diff, load_conflict_file, resolve_conflict_file};
@@ -101,6 +101,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/health", get(health))
         .route("/api/ai/commit", post(ai_commit))
         .route("/api/ai/conflict", post(ai_conflict))
+        .route("/api/ai/models", post(ai_models))
+        .route("/api/ai/chat", post(ai_chat))
         .route("/api/repo/*path", any(repo_handler))
         .with_state(state)
 }
@@ -190,6 +192,73 @@ async fn ai_conflict(
     .await
     {
         Ok(value) => (StatusCode::OK, Json(json!(value))).into_response(),
+        Err(error) => error_response(
+            StatusCode::BAD_GATEWAY,
+            GitErrorResponse::new("AI_PROVIDER_ERROR", error.to_string()),
+        ),
+    }
+}
+
+async fn ai_models(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return error_response(
+            StatusCode::UNAUTHORIZED,
+            GitErrorResponse::new("UNAUTHORIZED", "Authentication required"),
+        );
+    }
+    let mut config = body
+        .get("config")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<LlmConfig>(value).ok())
+        .unwrap_or_default();
+    if config.api_key.as_deref().unwrap_or("").trim().is_empty() {
+        if let Ok(key) = gitbx_core::KeyringManager::get_token(&config.provider, "default") {
+            config.api_key = Some(key);
+        }
+    }
+    match list_models(&config).await {
+        Ok(models) => (StatusCode::OK, Json(json!(models))).into_response(),
+        Err(error) => error_response(
+            StatusCode::BAD_GATEWAY,
+            GitErrorResponse::new("AI_PROVIDER_ERROR", error.to_string()),
+        ),
+    }
+}
+
+async fn ai_chat(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return error_response(
+            StatusCode::UNAUTHORIZED,
+            GitErrorResponse::new("UNAUTHORIZED", "Authentication required"),
+        );
+    }
+    let mut config = body
+        .get("config")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<LlmConfig>(value).ok())
+        .unwrap_or_default();
+    if config.api_key.as_deref().unwrap_or("").trim().is_empty() {
+        if let Ok(key) = gitbx_core::KeyringManager::get_token(&config.provider, "default") {
+            config.api_key = Some(key);
+        }
+    }
+    let messages = body
+        .get("messages")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let tools = body.get("tools").and_then(Value::as_array).cloned();
+    let client = GenericOpenAiClient::new(config);
+    match client.chat_with_messages(&messages, tools.as_deref()).await {
+        Ok(value) => (StatusCode::OK, Json(value)).into_response(),
         Err(error) => error_response(
             StatusCode::BAD_GATEWAY,
             GitErrorResponse::new("AI_PROVIDER_ERROR", error.to_string()),

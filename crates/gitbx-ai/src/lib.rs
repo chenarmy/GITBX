@@ -18,5 +18,5 @@ pub(crate) fn language_name(language: Option<&str>) -> &'static str {
 
 pub use commit_gen::{CommitGenerator, GeneratedCommitMessage};
 pub use conflict_analyzer::{ConflictAnalyzer, ConflictResolutionSuggestion};
-pub use provider::{GenericOpenAiClient, LlmClient, LlmConfig};
+pub use provider::{list_models, GenericOpenAiClient, LlmClient, LlmConfig, ModelInfo};
 pub use secret_scanner::{SecretDetection, SecretScanner};

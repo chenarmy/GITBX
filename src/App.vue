@@ -11,6 +11,7 @@ import MergeConflictEditor from '@/components/merge/MergeConflictEditor.vue';
 import ConsolePanel from '@/components/layout/ConsolePanel.vue';
 import FooterBar from '@/components/layout/FooterBar.vue';
 import AiAssistantModal from '@/components/ai/AiAssistantModal.vue';
+import AiChatSidebar from '@/components/ai/AiChatSidebar.vue';
 import SettingsModal from '@/components/dialogs/SettingsModal.vue';
 import UpdateAvailableDialog from '@/components/dialogs/UpdateAvailableDialog.vue';
 import AddRepoModal from '@/components/dialogs/AddRepoModal.vue';
@@ -34,12 +35,14 @@ import { useRepoStore } from '@/stores/repo';
 import { useConsoleStore } from '@/stores/console';
 import { useUpdatesStore } from '@/stores/updates';
 import { useDiffStore } from '@/stores/diff';
+import { useAiStore } from '@/stores/ai';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
 const consoleStore = useConsoleStore();
 const updatesStore = useUpdatesStore();
 const diffStore = useDiffStore();
+const aiStore = useAiStore();
 const { t } = useI18n();
 let updateCheckTimer: number | undefined;
 let updateCheckInterval: number | undefined;
@@ -236,6 +239,9 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- 3. Right AI Chat Sidebar Panel (DBX Style) -->
+      <AiChatSidebar v-if="aiStore.isSidebarOpen" />
     </div>
 
     <!-- Output & Operation Console Drawer -->

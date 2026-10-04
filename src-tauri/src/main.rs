@@ -132,6 +132,8 @@ fn main() {
             ai::generate_commit_message,
             ai::scan_secrets,
             ai::analyze_conflict,
+            ai::fetch_ai_models,
+            ai::chat_with_ai,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GITBX desktop application");

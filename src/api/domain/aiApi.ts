@@ -107,3 +107,55 @@ export const saveCredential = async (provider: string, token: string): Promise<v
   if (!isTauri()) throw new Error('Credential storage is only available in the desktop keyring');
   await invoke('save_credential', { provider, username: 'default', token });
 };
+
+export const fetchAiModels = async (config: LlmConfig): Promise<Array<{ id: string; name: string }>> => {
+  let requestConfig: LlmConfig = { ...config };
+  if (isTauri() && !config.api_key) {
+    try {
+      const apiKey = await invoke<string>('get_credential', { provider: config.provider, username: 'default' });
+      requestConfig = { ...config, api_key: apiKey };
+    } catch {
+      // Keyless provider
+    }
+  }
+  if (isTauri()) {
+    return await invoke<Array<{ id: string; name: string }>>('fetch_ai_models', { config: requestConfig });
+  }
+  const res = await gitbxFetch('/api/ai/models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config: requestConfig }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || 'Failed to fetch AI models');
+  return await res.json();
+};
+
+export const chatWithAi = async (
+  config: LlmConfig,
+  messages: any[],
+  tools?: any[]
+): Promise<any> => {
+  let requestConfig: LlmConfig = { ...config };
+  if (isTauri() && !config.api_key) {
+    try {
+      const apiKey = await invoke<string>('get_credential', { provider: config.provider, username: 'default' });
+      requestConfig = { ...config, api_key: apiKey };
+    } catch {
+      // Keyless provider
+    }
+  }
+  if (isTauri()) {
+    return await invoke<any>('chat_with_ai', {
+      config: requestConfig,
+      messages,
+      tools: tools && tools.length > 0 ? tools : null,
+    });
+  }
+  const res = await gitbxFetch('/api/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config: requestConfig, messages, tools: tools && tools.length > 0 ? tools : null }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || 'AI chat request failed');
+  return await res.json();
+};

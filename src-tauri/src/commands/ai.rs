@@ -1,6 +1,7 @@
 use gitbx_ai::{
-    CommitGenerator, ConflictAnalyzer, ConflictResolutionSuggestion, GeneratedCommitMessage,
-    GenericOpenAiClient, LlmConfig, SecretDetection, SecretScanner,
+    list_models, CommitGenerator, ConflictAnalyzer, ConflictResolutionSuggestion,
+    GeneratedCommitMessage, GenericOpenAiClient, LlmClient, LlmConfig, ModelInfo, SecretDetection,
+    SecretScanner,
 };
 use gitbx_core::KeyringManager;
 
@@ -60,3 +61,24 @@ pub async fn analyze_conflict(
     .await
     .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn fetch_ai_models(config: LlmConfig) -> Result<Vec<ModelInfo>, String> {
+    let resolved = resolve_config(config);
+    list_models(&resolved).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn chat_with_ai(
+    config: LlmConfig,
+    messages: Vec<serde_json::Value>,
+    tools: Option<Vec<serde_json::Value>>,
+) -> Result<serde_json::Value, String> {
+    let resolved = resolve_config(config);
+    let client = GenericOpenAiClient::new(resolved);
+    client
+        .chat_with_messages(&messages, tools.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+

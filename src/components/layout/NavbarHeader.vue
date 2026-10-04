@@ -339,11 +339,16 @@ onUnmounted(() => {
     <!-- Right: AI Copilot Button, Refresh, Theme Toggle, Settings -->
     <div class="flex items-center space-x-1.5">
       <button
-        @click="aiStore.openAiModal()"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 active:scale-95 transition font-medium"
-        :title="t('Open AI Commit & Assistant Modal')"
+        @click="aiStore.toggleSidebar()"
+        :class="[
+          'flex items-center space-x-1.5 px-2.5 py-1 rounded-sm border active:scale-95 transition font-medium',
+          aiStore.isSidebarOpen
+            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+            : 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/30'
+        ]"
+        :title="t('Toggle AI Chat Sidebar')"
       >
-        <Sparkles class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+        <Sparkles class="w-3.5 h-3.5" :class="aiStore.isSidebarOpen ? 'text-primary-foreground' : 'text-indigo-600 dark:text-indigo-400'" />
         <span class="text-[11px] font-bold">{{ t('AI Copilot') }}</span>
       </button>
 

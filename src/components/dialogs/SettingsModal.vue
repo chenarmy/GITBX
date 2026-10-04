@@ -150,7 +150,8 @@ function handleProviderChange(event: Event) {
 
 function providerModels() {
   if (draftLlmConfig.value.provider === 'custom') return [];
-  return AI_PROVIDER_PRESETS[draftLlmConfig.value.provider].models;
+  const preset = (AI_PROVIDER_PRESETS as any)[draftLlmConfig.value.provider];
+  return preset && Array.isArray(preset.models) ? preset.models : [];
 }
 
 function closeSettings() {
@@ -390,11 +391,24 @@ function closeSettings() {
                 @change="handleProviderChange"
                 class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
-                <option value="claude">Anthropic Claude (3.5 Sonnet)</option>
-                <option value="deepseek">DeepSeek (V3 / R1)</option>
-                <option value="ollama">Ollama (Local / Offline)</option>
-                <option value="custom">Custom OpenAI-Compatible API</option>
+                <optgroup :label="t('Built-in Support')">
+                  <option
+                    v-for="p in aiStore.providers.filter((x) => x.category === 'builtin')"
+                    :key="p.id"
+                    :value="p.id"
+                  >
+                    {{ p.name }}
+                  </option>
+                </optgroup>
+                <optgroup :label="t('CLI Agents')">
+                  <option
+                    v-for="p in aiStore.providers.filter((x) => x.category === 'cli')"
+                    :key="p.id"
+                    :value="p.id"
+                  >
+                    {{ p.name }}
+                  </option>
+                </optgroup>
               </select>
             </div>
             <div>

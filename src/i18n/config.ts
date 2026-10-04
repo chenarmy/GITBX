@@ -2381,3 +2381,12 @@ Object.assign(messages['zh-CN'], {
   'Merge Failed': '合并失败',
   "Merged '{source}' into '{target}'.": "已将“{source}”合并到“{target}”。",
 });
+
+import { aiFeatureTranslations } from './aiTranslations';
+
+for (const loc of Object.keys(aiFeatureTranslations) as Locale[]) {
+  if (messages[loc]) {
+    Object.assign(messages[loc], aiFeatureTranslations[loc]);
+  }
+}
+
