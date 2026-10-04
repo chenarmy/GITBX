@@ -158,3 +158,69 @@ impl McpTools {
         Ok(serde_json::json!({ "success": true, "commit_id": oid }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn status_diff_stage_and_commit_complete_a_local_git_round_trip() {
+        let directory = tempdir().expect("create temporary repository directory");
+        let repo = gitbx_core::init_repo(directory.path(), false).expect("initialize repository");
+        repo.inner()
+            .set_head("refs/heads/main")
+            .expect("set initial branch");
+        fs::write(directory.path().join("README.md"), "before\n").expect("write initial fixture");
+        repo.stage_all().expect("stage initial fixture");
+        repo.create_commit("initial", "MCP Test", "mcp@example.com")
+            .expect("create initial commit");
+
+        let repo_path = directory.path().to_string_lossy().into_owned();
+        McpTools::create_branch(&repo_path, "feature/mcp-round-trip", true)
+            .expect("create feature branch");
+        fs::write(directory.path().join("README.md"), "after\n").expect("modify tracked fixture");
+
+        let status = McpTools::get_status(&repo_path).expect("read dirty status");
+        assert_eq!(status["total_changes"], 1);
+        assert_eq!(status["unstaged_files"].as_array().map(Vec::len), Some(1));
+
+        let unstaged_diff =
+            McpTools::get_diff(&repo_path, "README.md", false).expect("read unstaged diff");
+        assert!(!unstaged_diff["hunks"]
+            .as_array()
+            .expect("diff hunks")
+            .is_empty());
+
+        McpTools::stage_file(&repo_path, "README.md").expect("stage modified fixture");
+        let staged_status = McpTools::get_status(&repo_path).expect("read staged status");
+        assert_eq!(
+            staged_status["staged_files"].as_array().map(Vec::len),
+            Some(1)
+        );
+        let staged_diff =
+            McpTools::get_diff(&repo_path, "README.md", true).expect("read staged diff");
+        assert!(!staged_diff["hunks"]
+            .as_array()
+            .expect("staged diff hunks")
+            .is_empty());
+
+        let commit = McpTools::commit(
+            &repo_path,
+            "test(mcp): verify tool round trip",
+            "MCP Test",
+            "mcp@example.com",
+        )
+        .expect("commit staged fixture");
+        assert_eq!(commit["success"], true);
+        assert!(commit["commit_id"].as_str().is_some());
+
+        let clean_status = McpTools::get_status(&repo_path).expect("read clean status");
+        assert_eq!(clean_status["total_changes"], 0);
+        let log = McpTools::get_log(&repo_path, 10).expect("read commit history");
+        let commits = log.as_array().expect("commit array");
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0]["summary"], "test(mcp): verify tool round trip");
+    }
+}

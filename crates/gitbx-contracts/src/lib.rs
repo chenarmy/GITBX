@@ -65,29 +65,27 @@ pub struct CommitRequest {
     pub email: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum McpPermissionLevel {
     ReadOnly,
+    #[default]
     SafeWrite,
     FullAccess,
-}
-
-impl Default for McpPermissionLevel {
-    fn default() -> Self {
-        Self::SafeWrite
-    }
 }
 
 impl McpPermissionLevel {
     pub fn allows_tool(&self, tool: &str) -> bool {
         match tool {
-            "gitbx_list_repos" | "gitbx_status" | "gitbx_branches" | "gitbx_log"
-            | "gitbx_tags" | "gitbx_diff" => true,
-            "gitbx_stage_file" | "gitbx_stage_all" | "gitbx_commit" | "gitbx_create_branch"
+            "gitbx_list_repos" | "gitbx_status" | "gitbx_branches" | "gitbx_log" | "gitbx_tags"
+            | "gitbx_diff" => true,
+            "gitbx_stage_file"
+            | "gitbx_stage_all"
+            | "gitbx_commit"
+            | "gitbx_create_branch"
             | "gitbx_fetch" => matches!(self, Self::SafeWrite | Self::FullAccess),
-            "gitbx_merge" | "gitbx_rebase" | "gitbx_cherry_pick" | "gitbx_reset"
-            | "gitbx_pull" | "gitbx_push" => *self == Self::FullAccess,
+            "gitbx_merge" | "gitbx_rebase" | "gitbx_cherry_pick" | "gitbx_reset" | "gitbx_pull"
+            | "gitbx_push" => *self == Self::FullAccess,
             _ => false,
         }
     }
@@ -202,3 +200,261 @@ impl Default for McpPolicyConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Clone, Copy)]
+    struct ToolPermissionCase {
+        name: &'static str,
+        read_only: bool,
+        safe_write: bool,
+        full_access: bool,
+        mutating: bool,
+    }
+
+    const TOOL_PERMISSION_CASES: [ToolPermissionCase; 17] = [
+        ToolPermissionCase {
+            name: "gitbx_list_repos",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_status",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_branches",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_log",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_tags",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_diff",
+            read_only: true,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_stage_file",
+            read_only: false,
+            safe_write: true,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_stage_all",
+            read_only: false,
+            safe_write: true,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_commit",
+            read_only: false,
+            safe_write: true,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_create_branch",
+            read_only: false,
+            safe_write: true,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_fetch",
+            read_only: false,
+            safe_write: true,
+            full_access: true,
+            mutating: false,
+        },
+        ToolPermissionCase {
+            name: "gitbx_merge",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_rebase",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_cherry_pick",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_reset",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_pull",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+        ToolPermissionCase {
+            name: "gitbx_push",
+            read_only: false,
+            safe_write: false,
+            full_access: true,
+            mutating: true,
+        },
+    ];
+
+    #[test]
+    fn mcp_tool_permission_matrix_matches_contract() {
+        for case in TOOL_PERMISSION_CASES {
+            for (level, expected) in [
+                (McpPermissionLevel::ReadOnly, case.read_only),
+                (McpPermissionLevel::SafeWrite, case.safe_write),
+                (McpPermissionLevel::FullAccess, case.full_access),
+            ] {
+                assert_eq!(
+                    level.allows_tool(case.name),
+                    expected,
+                    "unexpected {level:?} permission for {}",
+                    case.name
+                );
+            }
+        }
+
+        assert!(!McpPermissionLevel::FullAccess.allows_tool("gitbx_unknown"));
+    }
+
+    #[test]
+    fn mcp_tool_mutation_classification_matches_contract() {
+        for case in TOOL_PERMISSION_CASES {
+            assert_eq!(
+                McpPermissionLevel::is_mutating_tool(case.name),
+                case.mutating,
+                "unexpected mutation classification for {}",
+                case.name
+            );
+        }
+
+        assert!(!McpPermissionLevel::is_mutating_tool("gitbx_unknown"));
+    }
+
+    #[test]
+    fn mcp_policy_config_json_round_trip_uses_snake_case() {
+        let policy = McpPolicyConfig {
+            version: 7,
+            global_level: McpPermissionLevel::SafeWrite,
+            allow_all_repos: false,
+            allowed_repos: vec![
+                McpRepoRule {
+                    repo_path: "C:/work/read-only".to_string(),
+                    group_name: Some("review".to_string()),
+                    override_level: Some(McpPermissionLevel::ReadOnly),
+                    protected_branches: vec!["main".to_string()],
+                    allow_remote_fetch: true,
+                    allow_remote_push: false,
+                    allow_force_push: false,
+                },
+                McpRepoRule {
+                    repo_path: "C:/work/full-access".to_string(),
+                    group_name: None,
+                    override_level: Some(McpPermissionLevel::FullAccess),
+                    protected_branches: Vec::new(),
+                    allow_remote_fetch: true,
+                    allow_remote_push: true,
+                    allow_force_push: true,
+                },
+            ],
+            enabled_tools: TOOL_PERMISSION_CASES
+                .iter()
+                .map(|case| case.name.to_string())
+                .collect(),
+            allow_active_repo_fallback: false,
+        };
+
+        let json = serde_json::to_string(&policy).expect("serialize MCP policy as JSON");
+        let json_value: serde_json::Value =
+            serde_json::from_str(&json).expect("parse serialized MCP policy JSON");
+
+        assert_eq!(json_value["global_level"], "safe_write");
+        assert_eq!(
+            json_value["allowed_repos"][0]["override_level"],
+            "read_only"
+        );
+        assert_eq!(
+            json_value["allowed_repos"][1]["override_level"],
+            "full_access"
+        );
+        assert!(json_value["allowed_repos"][1].get("group_name").is_none());
+
+        let round_tripped: McpPolicyConfig =
+            serde_json::from_str(&json).expect("deserialize MCP policy JSON");
+        assert_eq!(round_tripped, policy);
+    }
+
+    #[test]
+    fn mcp_policy_config_missing_json_fields_use_defaults() {
+        let all_missing: McpPolicyConfig =
+            serde_json::from_str("{}").expect("deserialize empty MCP policy JSON");
+        assert_eq!(all_missing, McpPolicyConfig::default());
+
+        let partially_configured: McpPolicyConfig = serde_json::from_str(
+            r#"{
+                "version": 9,
+                "global_level": "read_only",
+                "allow_all_repos": false,
+                "allowed_repos": [{ "repo_path": "C:/work/repo" }]
+            }"#,
+        )
+        .expect("deserialize partial MCP policy JSON");
+
+        assert_eq!(partially_configured.version, 9);
+        assert_eq!(
+            partially_configured.global_level,
+            McpPermissionLevel::ReadOnly
+        );
+        assert!(!partially_configured.allow_all_repos);
+        assert_eq!(partially_configured.enabled_tools, default_enabled_tools());
+        assert!(partially_configured.allow_active_repo_fallback);
+
+        assert_eq!(partially_configured.allowed_repos.len(), 1);
+        let repo = &partially_configured.allowed_repos[0];
+        assert_eq!(repo.repo_path, "C:/work/repo");
+        assert_eq!(repo.group_name, None);
+        assert_eq!(repo.override_level, None);
+        assert_eq!(repo.protected_branches, default_protected_branches());
+        assert!(repo.allow_remote_fetch);
+        assert!(!repo.allow_remote_push);
+        assert!(!repo.allow_force_push);
+    }
+}

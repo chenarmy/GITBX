@@ -3,10 +3,12 @@ use gitbx_core::path_for_display;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const CONFIG_DIR_NAME: &str = ".gitbx";
 const MCP_POLICY_FILE_NAME: &str = "mcp-policy.json";
+static POLICY_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn mcp_policy_path() -> Result<PathBuf, String> {
     let home =
@@ -32,11 +34,15 @@ pub struct McpServerInfo {
 #[tauri::command]
 pub async fn load_mcp_policy() -> Result<McpPolicyConfig, String> {
     let path = mcp_policy_path()?;
+    load_mcp_policy_from_path(&path)
+}
+
+fn load_mcp_policy_from_path(path: &Path) -> Result<McpPolicyConfig, String> {
     if !path.exists() {
         return Ok(McpPolicyConfig::default());
     }
 
-    let content = fs::read_to_string(&path)
+    let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read MCP policy at {}: {e}", path.display()))?;
     serde_json::from_str::<McpPolicyConfig>(&content)
         .map_err(|e| format!("Invalid MCP policy format at {}: {e}", path.display()))
@@ -45,24 +51,24 @@ pub async fn load_mcp_policy() -> Result<McpPolicyConfig, String> {
 #[tauri::command]
 pub async fn save_mcp_policy(policy: McpPolicyConfig) -> Result<String, String> {
     let path = mcp_policy_path()?;
+    save_mcp_policy_to_path(&path, &policy)
+}
+
+fn save_mcp_policy_to_path(path: &Path, policy: &McpPolicyConfig) -> Result<String, String> {
     let parent = path
         .parent()
         .ok_or_else(|| "MCP policy path has no parent directory".to_string())?;
-    fs::create_dir_all(parent).map_err(|e| {
-        format!(
-            "Failed to create directory {}: {e}",
-            parent.display()
-        )
-    })?;
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create directory {}: {e}", parent.display()))?;
 
     let content = serde_json::to_vec_pretty(&policy)
         .map_err(|e| format!("Failed to serialize MCP policy: {e}"))?;
 
-    let temp_path = path.with_extension(format!("tmp.{}", std::process::id()));
+    let temp_id = POLICY_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_path = path.with_extension(format!("tmp.{}.{temp_id}", std::process::id()));
     {
         let mut file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .write(true)
             .open(&temp_path)
             .map_err(|e| {
@@ -77,12 +83,49 @@ pub async fn save_mcp_policy(policy: McpPolicyConfig) -> Result<String, String> 
             .map_err(|e| format!("Failed to sync policy file: {e}"))?;
     }
 
-    fs::rename(&temp_path, &path).map_err(|e| {
+    replace_policy_file(&temp_path, path).map_err(|e| {
         let _ = fs::remove_file(&temp_path);
         format!("Failed to replace policy file {}: {e}", path.display())
     })?;
 
-    Ok(path_for_display(&path))
+    Ok(path_for_display(path))
+}
+
+#[cfg(not(windows))]
+fn replace_policy_file(temp_path: &Path, policy_path: &Path) -> std::io::Result<()> {
+    fs::rename(temp_path, policy_path)
+}
+
+#[cfg(windows)]
+fn replace_policy_file(temp_path: &Path, policy_path: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let temp_wide: Vec<u16> = temp_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let policy_wide: Vec<u16> = policy_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let result = unsafe {
+        MoveFileExW(
+            temp_wide.as_ptr(),
+            policy_wide.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -182,4 +225,59 @@ pub async fn get_mcp_server_info() -> Result<McpServerInfo, String> {
         available_tools,
         streamable_http_url: "http://127.0.0.1:5226/mcp".to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gitbx_contracts::McpPermissionLevel;
+    use tempfile::tempdir;
+
+    #[test]
+    fn policy_can_be_saved_loaded_and_atomically_replaced() {
+        let directory = tempdir().expect("create temporary policy directory");
+        let policy_path = directory.path().join(MCP_POLICY_FILE_NAME);
+        let initial = McpPolicyConfig {
+            global_level: McpPermissionLevel::ReadOnly,
+            allow_all_repos: false,
+            ..McpPolicyConfig::default()
+        };
+        save_mcp_policy_to_path(&policy_path, &initial).expect("save initial policy");
+        assert_eq!(
+            load_mcp_policy_from_path(&policy_path).expect("load initial policy"),
+            initial
+        );
+
+        let replacement = McpPolicyConfig {
+            global_level: McpPermissionLevel::FullAccess,
+            allow_all_repos: true,
+            enabled_tools: vec!["gitbx_status".to_string()],
+            ..McpPolicyConfig::default()
+        };
+        save_mcp_policy_to_path(&policy_path, &replacement).expect("replace existing policy");
+        assert_eq!(
+            load_mcp_policy_from_path(&policy_path).expect("load replacement policy"),
+            replacement
+        );
+
+        let leftover_temp_files = fs::read_dir(directory.path())
+            .expect("read policy directory")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path() != policy_path)
+            .count();
+        assert_eq!(leftover_temp_files, 0);
+    }
+
+    #[test]
+    fn missing_policy_uses_defaults_and_malformed_policy_is_rejected() {
+        let directory = tempdir().expect("create temporary policy directory");
+        let policy_path = directory.path().join(MCP_POLICY_FILE_NAME);
+        assert_eq!(
+            load_mcp_policy_from_path(&policy_path).expect("load missing policy"),
+            McpPolicyConfig::default()
+        );
+
+        fs::write(&policy_path, b"not-json").expect("write malformed policy");
+        assert!(load_mcp_policy_from_path(&policy_path).is_err());
+    }
 }

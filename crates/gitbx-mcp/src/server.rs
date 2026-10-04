@@ -1,7 +1,8 @@
-use crate::tools::McpTools;
+use crate::{policy::PolicyEngine, tools::McpTools};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
@@ -49,7 +50,7 @@ impl McpServer {
                             })),
                         }
                     } else {
-                        Self::handle_request(req).await
+                        Self::handle_request(req, crate::policy::global_policy()).await
                     }
                 }
                 Err(err) => JsonRpcResponse {
@@ -263,7 +264,10 @@ impl McpServer {
         ]
     }
 
-    async fn handle_request(req: JsonRpcRequest) -> JsonRpcResponse {
+    async fn handle_request(
+        req: JsonRpcRequest,
+        policy_engine: &Mutex<PolicyEngine>,
+    ) -> JsonRpcResponse {
         match req.method.as_str() {
             "initialize" => JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
@@ -272,7 +276,7 @@ impl McpServer {
                     "protocolVersion": "2024-11-05",
                     "serverInfo": {
                         "name": "gitbx-mcp",
-                        "version": "0.1.25"
+                        "version": env!("CARGO_PKG_VERSION")
                     },
                     "capabilities": {
                         "tools": {}
@@ -282,9 +286,7 @@ impl McpServer {
             },
             "tools/list" => {
                 let enabled_tools: Vec<String> = {
-                    let mut policy = crate::policy::global_policy()
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut policy = policy_engine.lock().unwrap_or_else(|e| e.into_inner());
                     policy.get_policy().enabled_tools.clone()
                 };
 
@@ -312,10 +314,19 @@ impl McpServer {
                 let repo_path_opt = args["repo_path"].as_str();
 
                 let auth_result = {
-                    let mut policy = crate::policy::global_policy()
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
-                    policy.authorize_tool_call(tool_name, repo_path_opt)
+                    let mut policy = policy_engine.lock().unwrap_or_else(|e| e.into_inner());
+                    policy
+                        .authorize_tool_call(tool_name, repo_path_opt)
+                        .and_then(|_| {
+                            if tool_name == "gitbx_create_branch" {
+                                policy.authorize_branch_creation(
+                                    repo_path_opt.unwrap_or_default(),
+                                    args["name"].as_str().unwrap_or_default(),
+                                )
+                            } else {
+                                Ok(())
+                            }
+                        })
                 };
 
                 if let Err(auth_err) = auth_result {
@@ -331,7 +342,15 @@ impl McpServer {
                 }
 
                 let res = match tool_name {
-                    "gitbx_list_repos" => McpTools::list_repos(),
+                    "gitbx_list_repos" => {
+                        let mut policy = policy_engine.lock().unwrap_or_else(|e| e.into_inner());
+                        let repositories = policy.get_allowed_repo_paths();
+                        let allow_all = policy.get_policy().allow_all_repos;
+                        Ok(serde_json::json!({
+                            "repositories": repositories,
+                            "allow_all": allow_all
+                        }))
+                    }
                     "gitbx_status" => {
                         let repo_path = args["repo_path"].as_str().unwrap_or(".");
                         McpTools::get_status(repo_path)
@@ -435,5 +454,286 @@ impl McpServer {
                 error: Some(serde_json::json!({ "code": -32601, "message": "Method not found" })),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gitbx_contracts::{McpPermissionLevel, McpPolicyConfig, McpRepoRule};
+    use std::fs;
+    use tempfile::{tempdir, TempDir};
+
+    fn request(method: &str, params: Option<Value>) -> JsonRpcRequest {
+        JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: method.to_string(),
+            params,
+        }
+    }
+
+    fn test_policy_engine(policy: &McpPolicyConfig) -> (TempDir, Mutex<PolicyEngine>) {
+        let directory = tempdir().expect("create policy temp directory");
+        let policy_path = directory.path().join("mcp-policy.json");
+        fs::write(
+            &policy_path,
+            serde_json::to_vec(policy).expect("serialize test policy"),
+        )
+        .expect("write test policy");
+        (
+            directory,
+            Mutex::new(PolicyEngine::with_custom_path(policy_path)),
+        )
+    }
+
+    fn error_code(response: &JsonRpcResponse) -> i64 {
+        response.error.as_ref().expect("expected error")["code"]
+            .as_i64()
+            .expect("numeric error code")
+    }
+
+    fn tool_text(response: &JsonRpcResponse) -> Value {
+        assert!(
+            response.error.is_none(),
+            "unexpected tool error: {:?}",
+            response.error
+        );
+        let text = response.result.as_ref().expect("tool result")["content"][0]["text"]
+            .as_str()
+            .expect("text tool result");
+        serde_json::from_str(text).expect("JSON tool result text")
+    }
+
+    async fn call_tool(
+        policy_engine: &Mutex<PolicyEngine>,
+        name: &str,
+        arguments: Value,
+    ) -> JsonRpcResponse {
+        McpServer::handle_request(
+            request(
+                "tools/call",
+                Some(serde_json::json!({
+                    "name": name,
+                    "arguments": arguments
+                })),
+            ),
+            policy_engine,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn initialize_reports_package_version() {
+        let (_policy_dir, policy_engine) = test_policy_engine(&McpPolicyConfig::default());
+
+        let response = McpServer::handle_request(request("initialize", None), &policy_engine).await;
+
+        assert!(response.error.is_none());
+        assert_eq!(
+            response.result.expect("initialize result")["serverInfo"]["version"],
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_list_strictly_filters_to_known_enabled_tools() {
+        let policy = McpPolicyConfig {
+            enabled_tools: vec![
+                "gitbx_status".to_string(),
+                "unknown_cached_tool".to_string(),
+                "gitbx_status".to_string(),
+            ],
+            ..McpPolicyConfig::default()
+        };
+        let (_policy_dir, policy_engine) = test_policy_engine(&policy);
+
+        let response = McpServer::handle_request(request("tools/list", None), &policy_engine).await;
+
+        assert!(response.error.is_none());
+        let names: Vec<String> = response.result.expect("tools/list result")["tools"]
+            .as_array()
+            .expect("tools array")
+            .iter()
+            .map(|tool| tool["name"].as_str().expect("tool name").to_string())
+            .collect();
+        assert_eq!(names, vec!["gitbx_status"]);
+    }
+
+    #[tokio::test]
+    async fn cached_call_to_disabled_tool_is_rejected() {
+        let policy = McpPolicyConfig {
+            enabled_tools: Vec::new(),
+            ..McpPolicyConfig::default()
+        };
+        let (_policy_dir, policy_engine) = test_policy_engine(&policy);
+
+        let response = call_tool(
+            &policy_engine,
+            "gitbx_status",
+            serde_json::json!({ "repo_path": "missing-repository" }),
+        )
+        .await;
+
+        assert_eq!(error_code(&response), -32001);
+        assert!(response.error.expect("policy error")["message"]
+            .as_str()
+            .expect("error message")
+            .contains("disabled"));
+    }
+
+    #[tokio::test]
+    async fn read_only_policy_rejects_write_tool_call() {
+        let repo_path = "missing-repository";
+        let policy = McpPolicyConfig {
+            global_level: McpPermissionLevel::ReadOnly,
+            allow_all_repos: true,
+            allowed_repos: vec![McpRepoRule::new(repo_path)],
+            enabled_tools: vec!["gitbx_stage_all".to_string()],
+            ..McpPolicyConfig::default()
+        };
+        let (_policy_dir, policy_engine) = test_policy_engine(&policy);
+
+        let response = call_tool(
+            &policy_engine,
+            "gitbx_stage_all",
+            serde_json::json!({ "repo_path": repo_path }),
+        )
+        .await;
+
+        assert_eq!(error_code(&response), -32001);
+        assert!(response.error.expect("policy error")["message"]
+            .as_str()
+            .expect("error message")
+            .contains("higher permission level"));
+    }
+
+    #[tokio::test]
+    async fn safe_write_rejects_non_feature_branch_creation() {
+        let repo_path = "managed-repository";
+        let policy = McpPolicyConfig {
+            global_level: McpPermissionLevel::SafeWrite,
+            allow_all_repos: false,
+            allowed_repos: vec![McpRepoRule::new(repo_path)],
+            enabled_tools: vec!["gitbx_create_branch".to_string()],
+            ..McpPolicyConfig::default()
+        };
+        let (_policy_dir, policy_engine) = test_policy_engine(&policy);
+
+        let response = call_tool(
+            &policy_engine,
+            "gitbx_create_branch",
+            serde_json::json!({
+                "repo_path": repo_path,
+                "name": "chore/not-allowed"
+            }),
+        )
+        .await;
+
+        assert_eq!(error_code(&response), -32001);
+        assert!(response.error.expect("policy error")["message"]
+            .as_str()
+            .expect("error message")
+            .contains("feature/* or fix/*"));
+    }
+
+    #[tokio::test]
+    async fn unknown_method_returns_method_not_found() {
+        let (_policy_dir, policy_engine) = test_policy_engine(&McpPolicyConfig::default());
+
+        let response =
+            McpServer::handle_request(request("gitbx/definitely-unknown", None), &policy_engine)
+                .await;
+
+        assert_eq!(error_code(&response), -32601);
+        assert_eq!(
+            response.error.expect("method error")["message"],
+            "Method not found"
+        );
+    }
+
+    #[tokio::test]
+    async fn tool_calls_complete_status_stage_and_commit_flow() {
+        let repository_dir = tempdir().expect("create repository temp directory");
+        let repository = gitbx_core::init_repo(repository_dir.path(), false)
+            .expect("initialize test repository");
+        fs::write(repository_dir.path().join("README.md"), "base\n")
+            .expect("write initial repository fixture");
+        repository
+            .stage_file("README.md")
+            .expect("stage initial repository fixture");
+        repository
+            .create_commit("initial commit", "MCP Test", "mcp-test@example.com")
+            .expect("create initial commit");
+        repository
+            .create_branch("feature/mcp-server-test", None)
+            .expect("create feature branch");
+        repository
+            .checkout_branch("feature/mcp-server-test")
+            .expect("select feature branch");
+        drop(repository);
+
+        fs::write(repository_dir.path().join("README.md"), "MCP test\n")
+            .expect("write repository fixture");
+        let repo_path = repository_dir.path().to_string_lossy().into_owned();
+        let policy = McpPolicyConfig {
+            global_level: McpPermissionLevel::SafeWrite,
+            allow_all_repos: false,
+            allowed_repos: vec![McpRepoRule::new(repo_path.clone())],
+            enabled_tools: vec![
+                "gitbx_status".to_string(),
+                "gitbx_stage_file".to_string(),
+                "gitbx_commit".to_string(),
+            ],
+            ..McpPolicyConfig::default()
+        };
+        let (_policy_dir, policy_engine) = test_policy_engine(&policy);
+
+        let status = call_tool(
+            &policy_engine,
+            "gitbx_status",
+            serde_json::json!({ "repo_path": repo_path }),
+        )
+        .await;
+        assert_eq!(tool_text(&status)["total_changes"], 1);
+
+        let stage = call_tool(
+            &policy_engine,
+            "gitbx_stage_file",
+            serde_json::json!({
+                "repo_path": repo_path,
+                "file_path": "README.md"
+            }),
+        )
+        .await;
+        assert_eq!(tool_text(&stage)["success"], true);
+
+        let commit = call_tool(
+            &policy_engine,
+            "gitbx_commit",
+            serde_json::json!({
+                "repo_path": repo_path,
+                "message": "test: exercise MCP tool flow",
+                "author": "MCP Test",
+                "email": "mcp-test@example.com"
+            }),
+        )
+        .await;
+        let commit_result = tool_text(&commit);
+        assert_eq!(commit_result["success"], true);
+        assert!(commit_result["commit_id"].as_str().is_some());
+
+        let repository = gitbx_core::open_repo(repository_dir.path()).expect("reopen repository");
+        assert_eq!(
+            repository.info().expect("repository info").head_branch,
+            Some("feature/mcp-server-test".to_string())
+        );
+        assert_eq!(
+            repository
+                .get_status()
+                .expect("repository status")
+                .total_changes,
+            0
+        );
     }
 }
