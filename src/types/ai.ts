@@ -92,6 +92,7 @@ export interface AiMessage {
   model_id?: string;
   provider_id?: string;
   tool_calls?: AiToolCall[];
+  tool_call_id?: string;
   context_snapshot?: {
     repo_path: string;
     branch: string;

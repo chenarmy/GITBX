@@ -299,7 +299,19 @@ impl LlmClient for GenericOpenAiClient {
                 body["system"] = serde_json::Value::String(system.trim().to_string());
             }
             if let Some(t) = tools {
-                body["tools"] = serde_json::json!(t);
+                let mut anthropic_tools = Vec::new();
+                for tool in t {
+                    if let Some(f) = tool.get("function") {
+                        anthropic_tools.push(serde_json::json!({
+                            "name": f.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+                            "description": f.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                            "input_schema": f.get("parameters").cloned().unwrap_or(serde_json::json!({"type": "object", "properties": {}}))
+                        }));
+                    } else {
+                        anthropic_tools.push(tool.clone());
+                    }
+                }
+                body["tools"] = serde_json::json!(anthropic_tools);
             }
 
             let json: serde_json::Value = req
@@ -330,9 +342,18 @@ impl LlmClient for GenericOpenAiClient {
                     }
                 }
             }
+            let tc_value = if tool_calls.is_empty() { serde_json::Value::Null } else { serde_json::json!(tool_calls) };
             return Ok(serde_json::json!({
                 "content": content_text,
-                "tool_calls": if tool_calls.is_empty() { serde_json::Value::Null } else { serde_json::json!(tool_calls) }
+                "tool_calls": tc_value,
+                "choices": [
+                    {
+                        "message": {
+                            "content": content_text,
+                            "tool_calls": tc_value
+                        }
+                    }
+                ]
             }));
         }
 
@@ -348,6 +369,7 @@ impl LlmClient for GenericOpenAiClient {
         });
         if let Some(t) = tools {
             body["tools"] = serde_json::json!(t);
+            body["tool_choice"] = serde_json::json!("auto");
         }
 
         let json: serde_json::Value = req
@@ -364,7 +386,15 @@ impl LlmClient for GenericOpenAiClient {
 
         Ok(serde_json::json!({
             "content": content,
-            "tool_calls": tool_calls
+            "tool_calls": tool_calls,
+            "choices": [
+                {
+                    "message": {
+                        "content": content,
+                        "tool_calls": tool_calls
+                    }
+                }
+            ]
         }))
     }
 }

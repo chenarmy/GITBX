@@ -171,21 +171,39 @@ export async function executeGitTool(
       }
 
       case 'git_diff': {
-        const diff = await getFileDiff(
-          repoPath,
-          args.file_path || '',
-          Boolean(args.staged),
-        );
+        const staged = Boolean(args.staged);
+        let targetFile = (args.file_path || '').trim();
+
+        if (!targetFile) {
+          const status = await getRepoStatus(repoPath);
+          const list = staged ? status.staged_files : status.unstaged_files;
+          if (list.length > 0) {
+            targetFile = list[0].path;
+          } else {
+            const fallbackList = status.staged_files.length > 0 ? status.staged_files : status.unstaged_files;
+            if (fallbackList.length > 0) {
+              targetFile = fallbackList[0].path;
+            }
+          }
+        }
+
+        if (!targetFile) {
+          return JSON.stringify({ message: 'No changed files found in the working tree to diff.' });
+        }
+
+        const diff = await getFileDiff(repoPath, targetFile, staged);
         return JSON.stringify(
           {
+            file_path: targetFile,
+            staged,
             old_path: diff.old_path,
             new_path: diff.new_path,
             additions: diff.additions,
             deletions: diff.deletions,
             hunks_count: diff.hunks.length,
-            hunks_preview: diff.hunks.slice(0, 3).map((h) => ({
+            hunks_preview: diff.hunks.slice(0, 5).map((h) => ({
               header: h.header,
-              lines: h.lines.slice(0, 15).map((l) => `${l.line_type}: ${l.content}`),
+              lines: h.lines.slice(0, 20).map((l) => `${l.line_type}: ${l.content}`),
             })),
           },
           null,

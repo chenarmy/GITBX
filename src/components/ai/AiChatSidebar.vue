@@ -236,48 +236,77 @@ async function handleSendMessage() {
 }
 
 // Turn loop handling Ask or Agent
-async function runChatTurn() {
+async function runChatTurn(depth = 0) {
+  if (depth > 6) {
+    return;
+  }
   const session = currentSession.value;
   if (!session) return;
 
   const mode = aiStore.activeMode;
   const isAgent = mode === 'agent';
 
+  // Extract detailed repo status context
+  const stagedPaths = repoStore.statusSummary.staged_files.map((f) => f.path);
+  const unstagedPaths = repoStore.statusSummary.unstaged_files.map((f) => f.path);
+  const conflictedPaths = repoStore.statusSummary.conflicted_files.map((f) => f.path);
+  const untrackedPaths = repoStore.statusSummary.untracked_files.slice(0, 10).map((f) => f.path);
+
   // System prompt
   const systemPrompt = isAgent
     ? `You are GITBX AI Agent, an autonomous pair programming assistant specialized in Git version control and developer workflows.
 Target Repository: "${targetRepoName.value}" (${targetRepoPath.value})
 Current Branch: "${targetBranch.value}"
-Workspace Status: ${repoStore.statusSummary.staged_files.length} staged, ${repoStore.statusSummary.unstaged_files.length} unstaged, ${repoStore.statusSummary.conflicted_files.length} conflicts.
+Workspace Status:
+- Staged files (${stagedPaths.length}): ${stagedPaths.join(', ') || 'none'}
+- Unstaged files (${unstagedPaths.length}): ${unstagedPaths.join(', ') || 'none'}
+- Untracked files (${repoStore.statusSummary.untracked_files.length}): ${untrackedPaths.join(', ') || 'none'}
+- Conflicted files (${conflictedPaths.length}): ${conflictedPaths.join(', ') || 'none'}
 
-Guidelines:
-1. Always analyze repository state first using available tools (git_status, git_diff, git_log, git_branch) before making recommendations.
-2. For read operations, execute them directly.
-3. For write or destructive operations (commit, checkout, push, merge), specify the command through run_git_command so the user can review and approve it.
-4. Keep explanations concise, professional, and clear.`
+CRITICAL AGENT RULES:
+1. In Agent Mode, you are an action-oriented autonomous agent. When the user asks to analyze changes, inspect repo status, or continue ("继续"), you MUST actively call tools (git_status, git_diff, git_log, git_branch) to obtain real git data.
+2. DO NOT output conversational promises like "先查看当前仓库状态" or "让我查看改动情况" without calling the tools. Call git_status or git_diff directly!
+3. For read operations, execute them directly via tool calls.
+4. For write operations (commit, checkout, push, merge), specify the command through run_git_command so the user can review and approve it.
+5. Provide clear, concise, and structured analysis.`
     : `You are GITBX AI Copilot in Ask Mode.
 Target Repository: "${targetRepoName.value}" (${targetRepoPath.value})
 Current Branch: "${targetBranch.value}"
+Workspace Status: ${stagedPaths.length} staged, ${unstagedPaths.length} unstaged.
 
 Guidelines:
 1. Provide clear explanations of Git concepts, branch workflows, and error diagnostics.
 2. When suggesting Git commands, place them in \`\`\`bash code blocks with explanations.
 3. Do not run any commands directly.`;
 
-  // Build messages array
+  // Build messages array conforming to standard OpenAI tool-call format
   const apiMessages = [
     { role: 'system', content: systemPrompt },
     ...session.messages.map((m) => {
       if (m.role === 'tool') {
         return {
           role: 'tool',
-          content: m.content,
-          tool_call_id: (m as any).tool_call_id,
+          tool_call_id: m.tool_call_id || '',
+          content: m.content || '',
+        };
+      }
+      if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+        return {
+          role: 'assistant',
+          content: m.content || '',
+          tool_calls: m.tool_calls.map((tc) => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: JSON.stringify(tc.arguments || {}),
+            },
+          })),
         };
       }
       return {
         role: m.role,
-        content: m.content,
+        content: m.content || '',
       };
     }),
   ];
@@ -286,16 +315,25 @@ Guidelines:
 
   const response = await chatWithAi(aiStore.llmConfig, apiMessages, tools);
 
-  // Check if response contains tool calls
-  const choice = response?.choices?.[0];
-  const message = choice?.message;
+  // Parse tool calls and text content across both root level and choices paths
+  const toolCallsRaw =
+    response?.tool_calls ||
+    response?.choices?.[0]?.message?.tool_calls ||
+    response?.choices?.[0]?.delta?.tool_calls;
+  const contentText =
+    response?.content ??
+    response?.choices?.[0]?.message?.content ??
+    '';
 
-  if (message?.tool_calls && message.tool_calls.length > 0) {
-    // Assistant returned tool calls
-    const toolCalls: AiToolCall[] = message.tool_calls.map((tc: any) => {
+  let toolCalls: AiToolCall[] = [];
+
+  if (Array.isArray(toolCallsRaw) && toolCallsRaw.length > 0) {
+    toolCalls = toolCallsRaw.map((tc: any) => {
       let args: Record<string, any> = {};
       try {
-        args = typeof tc.function?.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function?.arguments || {};
+        args = typeof tc.function?.arguments === 'string'
+          ? JSON.parse(tc.function.arguments)
+          : tc.function?.arguments || {};
       } catch {
         args = {};
       }
@@ -309,11 +347,53 @@ Guidelines:
         command: formatCommandPreview(tc.function?.name, args),
       };
     });
+  } else if (isAgent) {
+    // Fallback in Agent mode:
+    // If user asked to analyze code changes, check repository, or says "继续" (continue),
+    // but the LLM only returned conversational filler text without calling tools:
+    const lastUserMsg = [...session.messages].reverse().find((m) => m.role === 'user');
+    const userPrompt = lastUserMsg?.content || '';
+    const wantsAnalysis =
+      /(?:分析|审查|查看|对比|解释).*?(?:改动|代码|变更|status|diff)|代码改动|继续|continue/i.test(userPrompt) ||
+      /先查看|让我查看|正在查看|查看当前/i.test(contentText);
 
+    const hasRecentStatusTool = session.messages.slice(-4).some(
+      (m) => (m.role === 'tool' && m.content.includes('total_changes')) ||
+             (m.tool_calls && m.tool_calls.some((t) => t.name === 'git_status'))
+    );
+
+    if (wantsAnalysis && !hasRecentStatusTool) {
+      toolCalls = [
+        {
+          id: 'tc_auto_' + Date.now().toString(36),
+          name: 'git_status',
+          arguments: {},
+          risk_level: 'safe',
+          status: 'running',
+          command: 'git status',
+        },
+      ];
+    } else if (wantsAnalysis && hasRecentStatusTool && (unstagedPaths.length > 0 || stagedPaths.length > 0)) {
+      const targetFile = unstagedPaths[0] || stagedPaths[0] || '';
+      const isStaged = unstagedPaths.length === 0 && stagedPaths.length > 0;
+      toolCalls = [
+        {
+          id: 'tc_auto_diff_' + Date.now().toString(36),
+          name: 'git_diff',
+          arguments: { file_path: targetFile, staged: isStaged },
+          risk_level: 'safe',
+          status: 'running',
+          command: `git diff ${isStaged ? '--staged ' : ''}${targetFile}`,
+        },
+      ];
+    }
+  }
+
+  if (toolCalls.length > 0) {
     // Create assistant message with tool calls
     const assistantMsg = aiStore.addMessageToActiveSession({
       role: 'assistant',
-      content: message.content || '',
+      content: contentText || (toolCalls[0].name === 'git_status' ? t('Checking repository status...') : t('Inspecting file diff...')),
       mode: 'agent',
       tool_calls: toolCalls,
     });
@@ -330,15 +410,15 @@ Guidelines:
       }
     }
 
-    // If all tools were safe and executed, continue the loop!
+    // If all tools were safe and executed, continue the turn loop to synthesize the analysis!
     if (!hasPendingDestructive && toolCalls.every((t) => t.status === 'success')) {
-      await runChatTurn();
+      await runChatTurn(depth + 1);
     }
   } else {
     // Normal text reply
     aiStore.addMessageToActiveSession({
       role: 'assistant',
-      content: message?.content || response?.content || t('No response content'),
+      content: contentText || t('No response content'),
       mode,
     });
   }
@@ -352,11 +432,25 @@ async function executeToolCall(_messageId: string, tc: AiToolCall) {
     tc.status = 'success';
     tc.result = result;
 
+    // Record tool result message into active session so LLM can read the output!
+    aiStore.addMessageToActiveSession({
+      role: 'tool',
+      content: result,
+      tool_call_id: tc.id,
+      mode: 'agent',
+    });
+
     // Refresh repo info if git state might have changed
     await repoStore.loadRepo();
   } catch (err: any) {
     tc.status = 'failed';
     tc.error = err?.message || String(err);
+    aiStore.addMessageToActiveSession({
+      role: 'tool',
+      content: `Error executing ${tc.name}: ${err?.message || String(err)}`,
+      tool_call_id: tc.id,
+      mode: 'agent',
+    });
   }
 }
 
@@ -861,6 +955,7 @@ function handleClearMessages() {
             </button>
             <button
               v-else
+              data-testid="ai-chat-send-btn"
               @click="handleSendMessage"
               :disabled="!inputPrompt.trim()"
               class="p-1.5 px-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1 text-xs font-semibold shadow-xs"
