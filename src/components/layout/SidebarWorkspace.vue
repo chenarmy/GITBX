@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
+import RepositoryContextMenu from '@/components/menus/RepositoryContextMenu.vue';
 import { useI18n } from '@/i18n';
 import { useNotificationStore } from '@/stores/notification';
 import { formatGitError } from '@/composables/useGitApi';
@@ -56,6 +57,7 @@ const collapsedLocalBranchDirectories = ref(new Set<string>());
 const collapsedRemoteBranchDirectories = ref(new Set<string>());
 
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
+const repositoryContextMenu = ref<{ path: string; x: number; y: number } | null>(null);
 
 interface BranchTreeNode {
   name: string;
@@ -140,11 +142,18 @@ function handleLocateCommit(commitId: string) {
 
 function openContextMenu(e: MouseEvent, branch: BranchItem) {
   e.preventDefault();
+  repositoryContextMenu.value = null;
   contextMenu.value = {
     branch,
     x: e.clientX,
     y: e.clientY,
   };
+}
+
+function openRepositoryContextMenu(e: MouseEvent, path: string) {
+  e.preventDefault();
+  contextMenu.value = null;
+  repositoryContextMenu.value = { path, x: e.clientX, y: e.clientY };
 }
 </script>
 
@@ -186,6 +195,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
           v-for="repo in repoStore.repoList"
           :key="repo.path"
           @click.stop="handleSwitchRepo(repo.path)"
+          @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
           @keydown.enter.prevent="handleSwitchRepo(repo.path)"
           @keydown.space.prevent="handleSwitchRepo(repo.path)"
           role="button"
@@ -436,6 +446,13 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
       :x="contextMenu.x"
       :y="contextMenu.y"
       @close="contextMenu = null"
+    />
+    <RepositoryContextMenu
+      v-if="repositoryContextMenu"
+      :path="repositoryContextMenu.path"
+      :x="repositoryContextMenu.x"
+      :y="repositoryContextMenu.y"
+      @close="repositoryContextMenu = null"
     />
   </aside>
 </template>
