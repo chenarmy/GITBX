@@ -4,6 +4,7 @@
 mod commands;
 
 use commands::{ai, auth, config, diff, graph, mcp, repo, terminal, update};
+use tauri::Manager;
 
 /// Appends panics to a local log file so hard crashes leave a trace for
 /// diagnosis (the file lives under %LOCALAPPDATA%\GITBX\panic.log).
@@ -36,6 +37,13 @@ fn install_panic_logger() {
 fn main() {
     install_panic_logger();
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
