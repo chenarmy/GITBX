@@ -75,11 +75,12 @@ export const cloneRepo = async (url: string, destination: string): Promise<{ suc
     body: JSON.stringify({ url, destination }),
   });
   const data = await res.json();
-  if (data.success) {
-    getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
-  } else {
-    getConsole().logError(`Clone failed: ${data.error}`);
+  if (!res.ok || !data?.success) {
+    const error = data?.error ?? new Error(`Clone failed (HTTP ${res.status})`);
+    getConsole().logError(`Clone failed: ${formatGitError(error)}`);
+    throw error;
   }
+  getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
   return data;
 };
 

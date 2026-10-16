@@ -1058,6 +1058,11 @@ impl GitService {
 
     pub fn clone_repo(url: &str, destination: &str) -> Result<RepositoryInfo> {
         let dest_path = Path::new(destination);
+        if dest_path.is_dir() && std::fs::read_dir(dest_path)?.next().is_some() {
+            return Err(GitbxError::CloneDestinationNotEmpty(
+                destination.to_string(),
+            ));
+        }
         let mut fetch_options = git2::FetchOptions::new();
         fetch_options.remote_callbacks(crate::remote::authenticated_remote_callbacks(
             git2::Config::open_default().ok(),

@@ -13,6 +13,7 @@ import {
 } from 'lucide-vue-next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useI18n } from '@/i18n';
+import { formatGitError } from '@/api/common';
 
 const repoStore = useRepoStore();
 const gitApi = useGitApi();
@@ -87,7 +88,13 @@ async function handleClone() {
       repoStore.closeModal('addRepo');
     }
   } catch (err: any) {
-    errorMsg.value = err?.message || t('Failed to clone repository');
+    let cloneError = err;
+    if (typeof err === 'string') {
+      try { cloneError = JSON.parse(err); } catch { /* Plain text Git error. */ }
+    }
+    errorMsg.value = cloneError?.code === 'CLONE_DESTINATION_NOT_EMPTY'
+      ? t('Clone destination is not empty. Choose an empty folder or a new path. If the repository is already on this computer, add it as an existing local repository.')
+      : formatGitError(err, t('Failed to clone repository'));
   } finally {
     isSubmitting.value = false;
   }
@@ -145,24 +152,24 @@ async function handleInit() {
       <div class="h-10 bg-muted/20 border-b border-border flex items-center px-4 space-x-2 select-none">
         <button
           @click="activeTab = 'local'"
-          class="px-3 py-1.5 rounded-md font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'local' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
+          :class="activeTab === 'local' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderSearch class="w-3.5 h-3.5" />
           <span>{{ t('Add Existing Local Repo') }}</span>
         </button>
         <button
           @click="activeTab = 'clone'"
-          class="px-3 py-1.5 rounded-md font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'clone' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
+          :class="activeTab === 'clone' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <Download class="w-3.5 h-3.5" />
           <span>{{ t('Clone from Remote') }}</span>
         </button>
         <button
           @click="activeTab = 'init'"
-          class="px-3 py-1.5 rounded-md font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'init' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
+          :class="activeTab === 'init' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
         >
           <FolderPlus class="w-3.5 h-3.5" />
           <span>{{ t('Create New Repo') }}</span>
@@ -196,7 +203,7 @@ async function handleInit() {
                 v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
                 @click="selectDirectory('local')"
               >
                 <FolderOpen class="w-3.5 h-3.5" />
@@ -234,7 +241,7 @@ async function handleInit() {
                 v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
                 @click="selectDirectory('clone')"
               >
                 <FolderOpen class="w-3.5 h-3.5" />
@@ -260,7 +267,7 @@ async function handleInit() {
                 v-if="isDesktop"
                 type="button"
                 :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
                 @click="selectDirectory('init')"
               >
                 <FolderOpen class="w-3.5 h-3.5" />

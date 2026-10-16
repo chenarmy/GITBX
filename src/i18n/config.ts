@@ -271,6 +271,11 @@ for (const code of Object.keys(dialogMessages) as Locale[]) {
   Object.assign(messages[code], dialogMessages[code]);
 }
 
+const cloneDestinationNotEmpty = 'Clone destination is not empty. Choose an empty folder or a new path. If the repository is already on this computer, add it as an existing local repository.';
+messages.en[cloneDestinationNotEmpty] = cloneDestinationNotEmpty;
+messages['zh-CN'][cloneDestinationNotEmpty] = '目标文件夹已有内容。请选择空文件夹或新路径；如果仓库已在本机，请使用“添加现有本地仓库”。';
+messages['zh-TW'][cloneDestinationNotEmpty] = '目標資料夾已有內容。請選擇空資料夾或新路徑；如果儲存庫已在本機，請使用「新增現有本機儲存庫」。';
+
 const remoteMessages: Record<Locale, MessageCatalog> = {
   en: {
     'View and edit Git remotes': 'View and edit Git remotes', 'Git Remotes': 'Git Remotes', 'Remote branches are listed in the left sidebar. Edit the repository Fetch URL here; leave Push URL empty to use the Fetch URL for pushing.': 'Remote branches are listed in the left sidebar. Edit the repository Fetch URL here; leave Push URL empty to use the Fetch URL for pushing.', 'Fetch URL cannot be empty.': 'Fetch URL cannot be empty.', 'Failed to update remote URL': 'Failed to update remote URL', 'Name': 'Name', 'Fetch URL': 'Fetch URL', 'Push URL': 'Push URL', 'Same as Fetch URL': 'Same as Fetch URL', 'This repository has no configured remotes.': 'This repository has no configured remotes.', 'Saving...': 'Saving...', 'Save Changes': 'Save Changes', 'Remote URLs Updated': 'Remote URLs Updated', 'The remote configuration was saved.': 'The remote configuration was saved.',

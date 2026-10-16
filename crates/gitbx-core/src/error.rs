@@ -20,6 +20,9 @@ pub enum GitbxError {
     #[error("Branch '{0}' already exists")]
     BranchAlreadyExists(String),
 
+    #[error("Clone destination is not empty: {0}")]
+    CloneDestinationNotEmpty(String),
+
     #[error("Merge conflict encountered: {0}")]
     MergeConflict(String),
 
@@ -37,6 +40,7 @@ impl From<GitbxError> for gitbx_contracts::GitErrorResponse {
             GitbxError::AuthFailed(_) => "AUTH_FAILED",
             GitbxError::RepoNotFound(_) => "REPO_NOT_FOUND",
             GitbxError::BranchAlreadyExists(_) => "BRANCH_ALREADY_EXISTS",
+            GitbxError::CloneDestinationNotEmpty(_) => "CLONE_DESTINATION_NOT_EMPTY",
             _ => "GIT_ERROR",
         };
         let mut res = gitbx_contracts::GitErrorResponse::new(code, error.to_string());
@@ -54,6 +58,7 @@ impl From<&GitbxError> for gitbx_contracts::GitErrorResponse {
             GitbxError::AuthFailed(_) => "AUTH_FAILED",
             GitbxError::RepoNotFound(_) => "REPO_NOT_FOUND",
             GitbxError::BranchAlreadyExists(_) => "BRANCH_ALREADY_EXISTS",
+            GitbxError::CloneDestinationNotEmpty(_) => "CLONE_DESTINATION_NOT_EMPTY",
             _ => "GIT_ERROR",
         };
         let mut res = gitbx_contracts::GitErrorResponse::new(code, error.to_string());
