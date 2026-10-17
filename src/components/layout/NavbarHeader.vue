@@ -83,6 +83,9 @@ async function handleCloseWindow() {
 
 function handleHeaderDoubleClick(event: MouseEvent) {
   const target = event.target as HTMLElement;
+  // Tauri handles double-clicks on the drag region itself. Toggling here as well
+  // would immediately undo the native maximize/restore action.
+  if (target === event.currentTarget) return;
   if (!target.closest('button, input, select, textarea, a')) void handleToggleMaximize();
 }
 
