@@ -60,6 +60,43 @@ const translations = {
   ar: {skip:'الانتقال إلى المحتوى',navFeatures:'الميزات',navWorkflow:'سير العمل',navPlatforms:'المنصات',navDocs:'الوثائق',eyebrow:'عميل Git مصمم للعمل بتركيز',heroLead:'Git معقد،',heroAccent:'أصبح واضحًا وهادئًا.',heroCopy:'مخطط الالتزامات والتحضير الدقيق والدمج الثلاثي وتعاون الذكاء الاصطناعي في تطبيق خفيف بحجم يقارب 20 ميجابايت. سريع وقادر حقًا.',download:'تنزيل GITBX',downloadSub:'Windows · macOS · Linux',viewSource:'عرض المصدر',metricSize:'حزمة تثبيت خفيفة',metricGraph:'مخطط التزامات سلس',metricMerge:'دمج مرئي للتعارضات',metricLanguages:'لغات واجهة مدمجة',featureKicker:'القدرات الأساسية',featureTitle:'كل ما تحتاجه يوميًا،<br />دون أن يعيقك شيء.',featureCopy:'من قراءة السجل إلى حل التعارضات، يجمع GITBX مهام Git المتكررة في واجهة سريعة وموثوقة.',f1Title:'سجل تفهمه بنظرة واحدة',f1Copy:'يبقى مخطط Canvas سلسًا حتى في المستودعات الكبيرة، وتظهر علاقات الفروع والعلامات والالتزامات بوضوح.',f2Title:'حضّر ما تقصده بدقة',f2Copy:'التحضير حسب المقطع أو السطر يحافظ على كل التزام نظيفًا وسهل المراجعة.',f3Title:'حل التعارضات بثقة',f3Copy:'يعرض محرر الدمج الثلاثي المصدر والهدف والنتيجة جنبًا إلى جنب مع اقتراحات الذكاء الاصطناعي.',f4Title:'ذكاء اصطناعي يفهم تغييراتك',f4Copy:'أنشئ رسائل دقيقة وحلل التعارضات واكتشف الأسرار. يدمج خادم MCP الوكلاء البرمجيين في سير Git.',workflowKicker:'سير عمل متكامل',workflowTitle:'من أول تعديل إلى آخر دفع.',workflowCopy:'حافظ على السياق وأنهِ العمل دون التنقل بين النوافذ والأوامر.',w1Title:'شاهد السياق',w1Copy:'استكشف الالتزامات وعلاقات الفروع',w2Title:'نظّم التغيير',w2Copy:'حضّر حسب الملف أو المقطع أو السطر',w3Title:'التزم بثقة',w3Copy:'رسائل وفحص أسرار بالذكاء الاصطناعي',w4Title:'زامن بأمان',w4Copy:'تحكم في الجلب والسحب والدفع',platformKicker:'نواة واحدة، طريقتان للعمل',platformTitle:'سرعة أصلية على سطح المكتب.<br />ووصول من الويب في أي مكان.',platformCopy:'يتشارك تطبيق سطح المكتب وخدمة الويب ذاتية الاستضافة نواة Git نفسها المكتوبة بلغة Rust لتجربة موثوقة ومتسقة.',ctaTitle:'هل أنت مستعد لطريقة أخف لإتقان Git؟',ctaCopy:'مجاني، مفتوح المصدر، ومتعدد المنصات.',downloadNow:'تنزيل أحدث إصدار',githubVisit:'زيارة GitHub',footerTagline:'عميل Git خفيف وسريع ومدعوم بالذكاء الاصطناعي.',releases:'الإصدارات',changelog:'سجل التغييرات',issues:'الملاحظات'}
 };
 
+Object.assign(translations['zh-TW'], {
+  download:'下載 GITBX', viewSource:'檢視原始碼', metricSize:'輕量安裝套件', metricGraph:'流暢提交圖譜',
+  metricMerge:'視覺化衝突合併', metricLanguages:'內建介面語言',
+  f1Copy:'Canvas 虛擬拓樸圖在大型儲存庫中依然流暢。分支、標籤與提交關係清晰呈現，定位脈絡不再費力。',
+  f2Title:'改哪一行，就提交哪一行', f2Copy:'Hunk 與逐行暫存讓每次提交都保持乾淨、專注且易於審閱。',
+  f3Copy:'三方合併編輯器並排顯示來源、目標與結果，搭配 AI 建議更快做出正確選擇。',
+  f4Title:'AI 懂程式碼，也懂你的變更', f4Copy:'產生準確的提交訊息、分析衝突、偵測敏感憑證。透過原生 MCP Server，讓 Coding Agent 直接參與 Git 協作。',
+  workflowTitle:'從第一行修改，到最後一次推送。', workflowCopy:'不用在視窗與指令之間來回切換，保持脈絡，專注完成工作。',
+  w1Title:'看見脈絡', w1Copy:'瀏覽提交圖譜與分支關係', w2Title:'整理變更', w2Copy:'依檔案、Hunk 或行精細暫存',
+  w3Title:'放心提交', w3Copy:'AI 產生訊息並檢查敏感內容', w4Title:'安全同步', w4Copy:'Fetch、Pull 與 Push 盡在掌握',
+  platformTitle:'在桌面極速工作，<br />也能隨時從瀏覽器存取。',
+  platformCopy:'原生桌面應用程式與自行託管的 Web 服務共用同一套 Rust Git 核心。個人工作站或團隊伺服器，都能獲得一致、可靠的體驗。',
+  ctaCopy:'免費、開源、跨平台。現在就開始。', githubVisit:'造訪 GitHub', footerTagline:'輕量、極速、AI 原生的 Git 用戶端。',
+});
+
+const interfaceTranslations = {
+  'zh-CN': { mainNav:'主导航', home:'GITBX 首页', openMenu:'打开菜单', chooseLanguage:'选择语言', moreDownloads:'更多下载选项', windowsExe:'安装程序 · x64 · EXE', windowsMsi:'安装包 · x64 · MSI' },
+  'zh-TW': { mainNav:'主導覽', home:'GITBX 首頁', openMenu:'開啟選單', chooseLanguage:'選擇語言', moreDownloads:'更多下載選項', windowsExe:'安裝程式 · x64 · EXE', windowsMsi:'安裝套件 · x64 · MSI' },
+  en: { mainNav:'Main navigation', home:'GITBX home', openMenu:'Open menu', chooseLanguage:'Choose language', moreDownloads:'More download options', windowsExe:'Installer · x64 · EXE', windowsMsi:'Installation package · x64 · MSI' },
+  ja: { mainNav:'メインナビゲーション', home:'GITBX ホーム', openMenu:'メニューを開く', chooseLanguage:'言語を選択', moreDownloads:'その他のダウンロード', windowsExe:'インストーラー · x64 · EXE', windowsMsi:'インストールパッケージ · x64 · MSI' },
+  de: { mainNav:'Hauptnavigation', home:'GITBX Startseite', openMenu:'Menü öffnen', chooseLanguage:'Sprache wählen', moreDownloads:'Weitere Downloadoptionen', windowsExe:'Installationsprogramm · x64 · EXE', windowsMsi:'Installationspaket · x64 · MSI' },
+  es: { mainNav:'Navegación principal', home:'Inicio de GITBX', openMenu:'Abrir menú', chooseLanguage:'Elegir idioma', moreDownloads:'Más opciones de descarga', windowsExe:'Instalador · x64 · EXE', windowsMsi:'Paquete de instalación · x64 · MSI' },
+  fr: { mainNav:'Navigation principale', home:'Accueil GITBX', openMenu:'Ouvrir le menu', chooseLanguage:'Choisir la langue', moreDownloads:'Autres téléchargements', windowsExe:'Programme d’installation · x64 · EXE', windowsMsi:'Paquet d’installation · x64 · MSI' },
+  ar: { mainNav:'التنقل الرئيسي', home:'الصفحة الرئيسية لـ GITBX', openMenu:'فتح القائمة', chooseLanguage:'اختيار اللغة', moreDownloads:'خيارات تنزيل أخرى', windowsExe:'برنامج التثبيت · x64 · EXE', windowsMsi:'حزمة التثبيت · x64 · MSI' },
+};
+
+const pageTranslations = {
+  'zh-CN': { pageTitle:'GITBX — 轻量、极速、AI 原生的 Git 客户端', description:'GITBX — 轻量、极速、AI 原生的跨平台 Git 客户端。', productPreview:'GITBX 产品界面预览', keyMetrics:'GITBX 核心指标' },
+  'zh-TW': { pageTitle:'GITBX — 輕量、極速、AI 原生的 Git 用戶端', description:'GITBX — 輕量、極速、AI 原生的跨平台 Git 用戶端。', productPreview:'GITBX 產品介面預覽', keyMetrics:'GITBX 核心指標' },
+  en: { pageTitle:'GITBX — A lightweight, fast, AI-native Git client', description:'GITBX is a lightweight, fast, AI-native Git client for desktop and web.', productPreview:'GITBX app preview', keyMetrics:'GITBX key figures' },
+  ja: { pageTitle:'GITBX — 軽量・高速な AI ネイティブ Git クライアント', description:'GITBX は軽量で高速な、AI ネイティブのクロスプラットフォーム Git クライアントです。', productPreview:'GITBX アプリのプレビュー', keyMetrics:'GITBX の主な指標' },
+  de: { pageTitle:'GITBX — Leichter, schneller, KI-nativer Git-Client', description:'GITBX ist ein leichter, schneller, KI-nativer Git-Client für mehrere Plattformen.', productPreview:'Vorschau der GITBX-Oberfläche', keyMetrics:'GITBX in Zahlen' },
+  es: { pageTitle:'GITBX — Cliente Git ligero, rápido y con IA', description:'GITBX es un cliente Git multiplataforma ligero, rápido y con IA.', productPreview:'Vista previa de GITBX', keyMetrics:'Cifras clave de GITBX' },
+  fr: { pageTitle:'GITBX — Client Git léger, rapide et doté d’IA', description:'GITBX est un client Git multiplateforme léger, rapide et doté d’IA.', productPreview:'Aperçu de GITBX', keyMetrics:'GITBX en chiffres' },
+  ar: { pageTitle:'GITBX — عميل Git خفيف وسريع ومدعوم بالذكاء الاصطناعي', description:'GITBX عميل Git خفيف وسريع ومتعدد المنصات ومدعوم بالذكاء الاصطناعي.', productPreview:'معاينة واجهة GITBX', keyMetrics:'أبرز أرقام GITBX' },
+};
+
 const language = document.querySelector('.language');
 const languageButton = document.querySelector('.language-button');
 const languageMenu = document.querySelector('.language-menu');
@@ -75,12 +112,18 @@ function normalizeLocale(value) {
 
 function applyLocale(code) {
   const locale = normalizeLocale(code);
-  const dictionary = translations[locale];
+  const dictionary = { ...translations[locale], ...interfaceTranslations[locale], ...pageTranslations[locale] };
   document.documentElement.lang = locale;
   document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
   document.querySelectorAll('[data-i18n]').forEach((node) => {
     const value = dictionary[node.dataset.i18n] ?? zhCN[node.dataset.i18n];
     if (value) node.innerHTML = value;
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((node) => {
+    node.setAttribute('aria-label', dictionary[node.dataset.i18nAria]);
+  });
+  document.querySelectorAll('[data-i18n-content]').forEach((node) => {
+    node.setAttribute('content', dictionary[node.dataset.i18nContent]);
   });
   currentLanguage.textContent = localeOptions.find((item) => item.code === locale).label;
   document.querySelectorAll('.language-option').forEach((button) => {

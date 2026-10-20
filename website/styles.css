@@ -6,3 +6,9 @@
 .download-control{z-index:20}
 .hero-actions{position:relative;z-index:30}
 .product-stage{z-index:1}
+
+/* Keep the language list attached to the selector's outer edge in RTL. */
+[dir=rtl] .language-menu{right:0;left:auto}
+[dir=rtl] .download-control .primary-button{border-radius:0 15px 15px 0;padding-right:26px;padding-left:0}
+[dir=rtl] .download-more{border-left:0;border-right:1px solid #c9dae5;border-radius:15px 0 0 15px}
+.download-menu a{text-align:start}

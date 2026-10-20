@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="GITBX — 轻量、极速、AI 原生的跨平台 Git 客户端。" />
+  <meta name="description" content="GITBX — 轻量、极速、AI 原生的跨平台 Git 客户端。" data-i18n-content="description" />
   <meta name="theme-color" content="#07101d" />
-  <title>GITBX — 轻量、极速、AI 原生的 Git 客户端</title>
+  <title data-i18n="pageTitle">GITBX — 轻量、极速、AI 原生的 Git 客户端</title>
   <link rel="icon" href="./assets/icon.svg" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -14,11 +14,11 @@
   <div class="noise" aria-hidden="true"></div>
 
   <header class="site-header" id="top">
-    <nav class="nav shell" aria-label="主导航">
-      <a class="brand" href="#top" aria-label="GITBX 首页">
+    <nav class="nav shell" aria-label="主导航" data-i18n-aria="mainNav">
+      <a class="brand" href="#top" aria-label="GITBX 首页" data-i18n-aria="home">
         <img src="./assets/logo.svg" alt="GITBX" />
       </a>
-      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="打开菜单">
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="打开菜单" data-i18n-aria="openMenu">
         <span></span><span></span>
       </button>
       <div class="nav-links" id="nav-links">
@@ -35,7 +35,7 @@
             <span id="current-language">简体中文</span>
             <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9.5 5 5 5-5"/></svg>
           </button>
-          <div class="language-menu" role="listbox" aria-label="选择语言"></div>
+          <div class="language-menu" role="listbox" aria-label="选择语言" data-i18n-aria="chooseLanguage"></div>
         </div>
       </div>
     </nav>
@@ -54,12 +54,12 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
             <span><strong data-i18n="download">下载 GITBX</strong><small id="primary-download-platform">Windows 10/11 · x64</small></span>
           </a>
-          <button class="download-more" type="button" aria-label="更多下载选项" aria-expanded="false">
+          <button class="download-more" type="button" aria-label="更多下载选项" data-i18n-aria="moreDownloads" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9.5 5 5 5-5"/></svg>
           </button>
           <div class="download-menu">
-            <a data-download="windows-exe" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64-setup.exe" download><span>Windows</span><small>安装程序 · x64 · EXE</small></a>
-            <a data-download="windows-msi" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64_en-US.msi" download><span>Windows</span><small>安装包 · x64 · MSI</small></a>
+            <a data-download="windows-exe" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64-setup.exe" download><span>Windows</span><small data-i18n="windowsExe">安装程序 · x64 · EXE</small></a>
+            <a data-download="windows-msi" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_x64_en-US.msi" download><span>Windows</span><small data-i18n="windowsMsi">安装包 · x64 · MSI</small></a>
             <a data-download="macos-dmg" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_aarch64.dmg" download><span>macOS</span><small>Apple Silicon · DMG</small></a>
             <a data-download="linux-appimage" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_amd64.AppImage" download><span>Linux</span><small>x64 · AppImage</small></a>
             <a data-download="linux-deb" href="https://cnb.cool/chenarmy/GITBX/-/releases/download/v0.1.20/GITBX_0.1.20_amd64.deb" download><span>Linux</span><small>x64 · DEB</small></a>
@@ -71,7 +71,7 @@
         </a>
       </div>
 
-      <div class="product-stage reveal" aria-label="GITBX 产品界面预览">
+      <div class="product-stage reveal" aria-label="GITBX 产品界面预览" data-i18n-aria="productPreview">
         <div class="stage-glow"></div>
         <div class="app-window">
           <div class="window-bar">
@@ -111,7 +111,7 @@
       </div>
     </section>
 
-    <section class="metrics shell reveal" aria-label="GITBX 核心指标">
+    <section class="metrics shell reveal" aria-label="GITBX 核心指标" data-i18n-aria="keyMetrics">
       <div><strong>~20 MB</strong><span data-i18n="metricSize">轻量安装包</span></div>
       <div><strong>60 FPS</strong><span data-i18n="metricGraph">流畅提交图谱</span></div>
       <div><strong>3-Way</strong><span data-i18n="metricMerge">可视化冲突合并</span></div>
