@@ -247,7 +247,15 @@ onUnmounted(() => {
               :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'"
             >
               <div class="truncate pr-2">
-                <div class="truncate font-medium">{{ repo.name }}</div>
+                <div class="flex items-center gap-1.5 truncate font-medium">
+                  <span class="truncate">{{ repo.name }}</span>
+                  <span
+                    v-if="repo.group"
+                    class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-medium text-amber-600 dark:text-amber-400"
+                  >
+                    {{ repo.group }}
+                  </span>
+                </div>
                 <div class="text-[10px] text-muted-foreground truncate opacity-75">{{ repo.path }}</div>
               </div>
               <button

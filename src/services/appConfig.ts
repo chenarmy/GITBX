@@ -4,6 +4,7 @@ import type { LlmConfig, AiProviderConfig } from '@/types/ai';
 
 export const CONFIG_KEYS = {
   repositories: 'gitbx_managed_repos',
+  repositoryGroups: 'gitbx_repo_groups',
   activeRepository: 'gitbx_active_repo',
   theme: 'gitbx_theme',
   locale: 'gitbx_locale',
@@ -28,6 +29,7 @@ interface PersistedRepository {
   path: string;
   name: string;
   lastOpened: number;
+  group?: string;
 }
 
 type PersistedAiConfig = Omit<LlmConfig, 'api_key'>;
@@ -55,6 +57,7 @@ export interface AppConfig {
   repositories: {
     items: PersistedRepository[];
     active: string;
+    groups?: string[];
   };
   settings: {
     theme: 'dark' | 'light';
@@ -117,11 +120,37 @@ function sanitizeProxyConfig(value: unknown): ProxySettings {
   };
 }
 
+function sanitizeGroupList(groups: unknown, items: PersistedRepository[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  const addGroup = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    result.push(trimmed);
+  };
+  if (Array.isArray(groups)) {
+    groups.forEach(addGroup);
+  }
+  items.forEach((item) => addGroup(item.group));
+  return result;
+}
+
 export function readLocalConfig(): AppConfig {
   const repositories = parseJson<PersistedRepository[]>(
     localStorage.getItem(CONFIG_KEYS.repositories),
     [],
-  ).filter((item) => item && typeof item.path === 'string' && typeof item.name === 'string');
+  )
+    .filter((item) => item && typeof item.path === 'string' && typeof item.name === 'string')
+    .map((item) => ({
+      ...item,
+      group: typeof item.group === 'string' && item.group.trim() ? item.group.trim() : undefined,
+    }));
+  const repositoryGroups = sanitizeGroupList(
+    parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.repositoryGroups), []),
+    repositories,
+  );
   const ai = sanitizeAiConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.ai), {}));
   const proxy = sanitizeProxyConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.proxy), {}));
   const savedLocale = localStorage.getItem(CONFIG_KEYS.locale) as Locale | null;
@@ -141,6 +170,7 @@ export function readLocalConfig(): AppConfig {
     repositories: {
       items: repositories,
       active: localStorage.getItem(CONFIG_KEYS.activeRepository) || '',
+      groups: repositoryGroups,
     },
     settings: {
       theme: localStorage.getItem(CONFIG_KEYS.theme) === 'light' ? 'light' : 'dark',
@@ -171,10 +201,17 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
   const settingsInput = input.settings;
   const updatesInput = input.updates;
   const items = Array.isArray(repositoryInput?.items)
-    ? repositoryInput.items.filter(
-        (item) => item && typeof item.path === 'string' && typeof item.name === 'string',
-      )
+    ? repositoryInput.items
+        .filter((item) => item && typeof item.path === 'string' && typeof item.name === 'string')
+        .map((item) => ({
+          ...item,
+          group: typeof item.group === 'string' && item.group.trim() ? item.group.trim() : undefined,
+        }))
     : fallback.repositories.items;
+  const groups = sanitizeGroupList(
+    Array.isArray(repositoryInput?.groups) ? repositoryInput?.groups : fallback.repositories.groups,
+    items,
+  );
   const language = settingsInput?.language;
 
   const aiProviders = Array.isArray(input.aiProviders)
@@ -194,6 +231,7 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
       active: typeof repositoryInput?.active === 'string'
         ? repositoryInput.active
         : fallback.repositories.active,
+      groups,
     },
     settings: {
       theme: settingsInput?.theme === 'light' ? 'light' : settingsInput?.theme === 'dark'
@@ -229,6 +267,10 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
 
 export function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.repositories, JSON.stringify(config.repositories.items));
+  localStorage.setItem(
+    CONFIG_KEYS.repositoryGroups,
+    JSON.stringify(sanitizeGroupList(config.repositories.groups, config.repositories.items)),
+  );
   localStorage.setItem(CONFIG_KEYS.activeRepository, config.repositories.active);
   localStorage.setItem(CONFIG_KEYS.theme, config.settings.theme);
   localStorage.setItem(CONFIG_KEYS.locale, config.settings.language);

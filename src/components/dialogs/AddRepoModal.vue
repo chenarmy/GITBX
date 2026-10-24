@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useGitApi } from '@/composables/useGitApi';
 import {
@@ -26,6 +26,32 @@ const localPath = ref('');
 const cloneUrl = ref('');
 const cloneDestination = ref('');
 const initPath = ref('');
+const selectedGroup = ref('');
+
+const availableGroups = computed(() => {
+  const groups = [...repoStore.repoGroups];
+  const seen = new Set(groups);
+  for (const repo of repoStore.repoList) {
+    if (repo.group && !seen.has(repo.group)) {
+      seen.add(repo.group);
+      groups.push(repo.group);
+    }
+  }
+  if (repoStore.targetRepoGroupForAdd && !seen.has(repoStore.targetRepoGroupForAdd)) {
+    groups.push(repoStore.targetRepoGroupForAdd);
+  }
+  return groups;
+});
+
+watch(
+  () => [repoStore.isAddRepoModalOpen, repoStore.targetRepoGroupForAdd] as const,
+  ([isOpen, targetGroup]) => {
+    if (isOpen) {
+      selectedGroup.value = targetGroup || '';
+    }
+  },
+  { immediate: true },
+);
 
 const isSubmitting = ref(false);
 const errorMsg = ref<string | null>(null);
@@ -65,7 +91,7 @@ async function handleAddLocal() {
   isSubmitting.value = true;
   errorMsg.value = null;
   try {
-    await repoStore.addRepo(localPath.value.trim());
+    await repoStore.addRepo(localPath.value.trim(), selectedGroup.value.trim() || undefined);
     localPath.value = '';
     repoStore.closeModal('addRepo');
   } catch (err: any) {
@@ -82,7 +108,7 @@ async function handleClone() {
   try {
     const res = await gitApi.cloneRepo(cloneUrl.value.trim(), cloneDestination.value.trim());
     if (res.success) {
-      await repoStore.addRepo(res.path);
+      await repoStore.addRepo(res.path, selectedGroup.value.trim() || undefined);
       cloneUrl.value = '';
       cloneDestination.value = '';
       repoStore.closeModal('addRepo');
@@ -107,7 +133,7 @@ async function handleInit() {
   try {
     const res = await gitApi.initRepo(initPath.value.trim());
     if (res.success) {
-      await repoStore.addRepo(res.path);
+      await repoStore.addRepo(res.path, selectedGroup.value.trim() || undefined);
       initPath.value = '';
       repoStore.closeModal('addRepo');
     }
@@ -278,6 +304,21 @@ async function handleInit() {
               GITBX will create the folder if it doesn't exist and run `git init`.
             </p>
           </div>
+        </div>
+
+        <!-- Optional Repository Group -->
+        <div>
+          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Repository Group (Optional)') }}</label>
+          <input
+            v-model="selectedGroup"
+            type="text"
+            list="gitbx-repo-groups-list"
+            :placeholder="t('Select or enter a group name (leave empty for ungrouped)')"
+            class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <datalist id="gitbx-repo-groups-list">
+            <option v-for="group in availableGroups" :key="group" :value="group" />
+          </datalist>
         </div>
       </div>
 

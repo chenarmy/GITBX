@@ -6,10 +6,12 @@ import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
 import RepositoryContextMenu from '@/components/menus/RepositoryContextMenu.vue';
 import { useI18n } from '@/i18n';
 import { useNotificationStore } from '@/stores/notification';
+import { useConfirmationStore } from '@/stores/confirmation';
 import { formatGitError } from '@/composables/useGitApi';
 import { useBranchCheckout } from '@/composables/useBranchCheckout';
 import {
   FolderGit2,
+  FolderPlus,
   GitBranch,
   Globe,
   Tag,
@@ -19,6 +21,7 @@ import {
   Plus,
   Check,
   Trash2,
+  Edit3,
   MoreVertical,
   GitFork,
   FolderTree,
@@ -31,6 +34,7 @@ import {
 const repoStore = useRepoStore();
 const { t } = useI18n();
 const notification = useNotificationStore();
+const confirmation = useConfirmationStore();
 const { checkoutBranch } = useBranchCheckout();
 
 async function discoverRoots() {
@@ -56,8 +60,176 @@ const isStashesOpen = ref(true);
 const collapsedLocalBranchDirectories = ref(new Set<string>());
 const collapsedRemoteBranchDirectories = ref(new Set<string>());
 
+const COLLAPSED_REPO_GROUPS_KEY = 'gitbx_collapsed_repo_groups';
+function readInitialCollapsedRepoGroups(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_REPO_GROUPS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed.filter((item) => typeof item === 'string'));
+    }
+  } catch {}
+  return new Set<string>();
+}
+const collapsedRepoGroups = ref(readInitialCollapsedRepoGroups());
+const draggingRepoPath = ref<string | null>(null);
+const dragOverTarget = ref<string | null>(null);
+
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
 const repositoryContextMenu = ref<{ path: string; x: number; y: number } | null>(null);
+const groupContextMenu = ref<{ groupName: string; x: number; y: number } | null>(null);
+
+const allRepoGroups = computed(() => {
+  const groups = [...repoStore.repoGroups];
+  const seen = new Set(groups);
+  for (const repo of repoStore.repoList) {
+    if (repo.group && !seen.has(repo.group)) {
+      seen.add(repo.group);
+      groups.push(repo.group);
+    }
+  }
+  return groups;
+});
+
+const groupedRepositories = computed(() =>
+  allRepoGroups.value.map((groupName) => ({
+    name: groupName,
+    repos: repoStore.repoList.filter((repo) => repo.group === groupName),
+  }))
+);
+
+const ungroupedRepositories = computed(() =>
+  repoStore.repoList.filter((repo) => !repo.group)
+);
+
+function persistCollapsedRepoGroups() {
+  try {
+    localStorage.setItem(COLLAPSED_REPO_GROUPS_KEY, JSON.stringify([...collapsedRepoGroups.value]));
+  } catch {}
+}
+
+function toggleRepoGroup(groupName: string) {
+  const next = new Set(collapsedRepoGroups.value);
+  if (next.has(groupName)) next.delete(groupName);
+  else next.add(groupName);
+  collapsedRepoGroups.value = next;
+  persistCollapsedRepoGroups();
+}
+
+function openAddRepoModal(groupName?: string) {
+  groupContextMenu.value = null;
+  repoStore.targetRepoGroupForAdd = groupName || '';
+  repoStore.openModal('addRepo');
+}
+
+async function handleCreateGroup(assignRepoPath?: string) {
+  groupContextMenu.value = null;
+  const name = await confirmation.prompt({
+    title: t('New Group'),
+    message: t('Enter a name for the new repository group.'),
+    inputLabel: t('Group Name'),
+    confirmText: t('Create'),
+  });
+  const cleanName = name?.trim();
+  if (!cleanName) return;
+  const created = repoStore.createRepoGroup(cleanName);
+  if (created) {
+    if (assignRepoPath) {
+      repoStore.setRepoGroup(assignRepoPath, created);
+    }
+    isReposOpen.value = true;
+    const next = new Set(collapsedRepoGroups.value);
+    next.delete(created);
+    collapsedRepoGroups.value = next;
+    persistCollapsedRepoGroups();
+    notification.success(t('Group Created'), created);
+  }
+}
+
+async function handleRenameGroup(groupName: string) {
+  groupContextMenu.value = null;
+  const nextName = await confirmation.prompt({
+    title: t('Rename Group'),
+    message: t("Enter a new name for group '{group}'.", { group: groupName }),
+    inputLabel: t('Group Name'),
+    defaultValue: groupName,
+    confirmText: t('Rename'),
+  });
+  const cleanNext = nextName?.trim();
+  if (!cleanNext || cleanNext === groupName) return;
+  if (repoStore.renameRepoGroup(groupName, cleanNext)) {
+    if (collapsedRepoGroups.value.has(groupName)) {
+      const next = new Set(collapsedRepoGroups.value);
+      next.delete(groupName);
+      next.add(cleanNext);
+      collapsedRepoGroups.value = next;
+      persistCollapsedRepoGroups();
+    }
+    notification.success(t('Group Renamed'), cleanNext);
+  }
+}
+
+async function handleDeleteGroup(groupName: string) {
+  groupContextMenu.value = null;
+  const confirmed = await confirmation.confirm({
+    title: t('Delete Group'),
+    message: t("Delete group '{group}'? Repositories in this group will not be removed and will become ungrouped.", { group: groupName }),
+    danger: true,
+    confirmText: t('Delete'),
+  });
+  if (!confirmed) return;
+  repoStore.deleteRepoGroup(groupName);
+  if (collapsedRepoGroups.value.has(groupName)) {
+    const next = new Set(collapsedRepoGroups.value);
+    next.delete(groupName);
+    collapsedRepoGroups.value = next;
+    persistCollapsedRepoGroups();
+  }
+  notification.info(t('Group Deleted'), groupName);
+}
+
+function handleRepoDragStart(event: DragEvent, repoPath: string) {
+  draggingRepoPath.value = repoPath;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', repoPath);
+  }
+}
+
+function handleRepoDragEnd() {
+  draggingRepoPath.value = null;
+  dragOverTarget.value = null;
+}
+
+function handleGroupDragOver(event: DragEvent, target: string) {
+  if (!draggingRepoPath.value) return;
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+  dragOverTarget.value = target;
+}
+
+function handleGroupDragLeave(target: string) {
+  if (dragOverTarget.value === target) {
+    dragOverTarget.value = null;
+  }
+}
+
+function handleGroupDrop(event: DragEvent, groupName: string | null) {
+  event.preventDefault();
+  const repoPath = draggingRepoPath.value || event.dataTransfer?.getData('text/plain');
+  draggingRepoPath.value = null;
+  dragOverTarget.value = null;
+  if (!repoPath) return;
+  repoStore.setRepoGroup(repoPath, groupName);
+  if (groupName && collapsedRepoGroups.value.has(groupName)) {
+    const next = new Set(collapsedRepoGroups.value);
+    next.delete(groupName);
+    collapsedRepoGroups.value = next;
+    persistCollapsedRepoGroups();
+  }
+}
 
 interface BranchTreeNode {
   name: string;
@@ -143,6 +315,7 @@ function handleLocateCommit(commitId: string) {
 function openContextMenu(e: MouseEvent, branch: BranchItem) {
   e.preventDefault();
   repositoryContextMenu.value = null;
+  groupContextMenu.value = null;
   contextMenu.value = {
     branch,
     x: e.clientX,
@@ -153,7 +326,19 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
 function openRepositoryContextMenu(e: MouseEvent, path: string) {
   e.preventDefault();
   contextMenu.value = null;
+  groupContextMenu.value = null;
   repositoryContextMenu.value = { path, x: e.clientX, y: e.clientY };
+}
+
+function openGroupContextMenu(e: MouseEvent, groupName: string) {
+  e.preventDefault();
+  contextMenu.value = null;
+  repositoryContextMenu.value = null;
+  groupContextMenu.value = {
+    groupName,
+    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 200)),
+    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 140)),
+  };
 }
 </script>
 
@@ -173,6 +358,14 @@ function openRepositoryContextMenu(e: MouseEvent, path: string) {
         </div>
         <div class="flex items-center space-x-1">
           <button
+            @click.stop="handleCreateGroup()"
+            data-testid="sidebar-new-repo-group-btn"
+            class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+            :title="t('New Group')"
+          >
+            <FolderPlus class="w-3.5 h-3.5" />
+          </button>
+          <button
             @click.stop="repoStore.openModal('remote')"
             :disabled="!repoStore.activeRepoPath"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
@@ -181,7 +374,7 @@ function openRepositoryContextMenu(e: MouseEvent, path: string) {
             <GitFork class="w-3.5 h-3.5" />
           </button>
           <button
-            @click.stop="repoStore.openModal('addRepo')"
+            @click.stop="openAddRepoModal()"
             class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
             :title="t('Add Repository')"
           >
@@ -190,49 +383,170 @@ function openRepositoryContextMenu(e: MouseEvent, path: string) {
         </div>
       </div>
 
-      <div v-if="isReposOpen" class="space-y-0.5">
+      <div v-if="isReposOpen" class="space-y-0.5" @click="groupContextMenu = null">
+        <!-- Repository Groups -->
         <div
-          v-for="repo in repoStore.repoList"
-          :key="repo.path"
-          @click.stop="handleSwitchRepo(repo.path)"
-          @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
-          @keydown.enter.prevent="handleSwitchRepo(repo.path)"
-          @keydown.space.prevent="handleSwitchRepo(repo.path)"
-          role="button"
-          tabindex="0"
-          class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-          :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
+          v-for="group in groupedRepositories"
+          :key="`repo-group:${group.name}`"
+          class="space-y-0.5 rounded-md transition"
+          :class="dragOverTarget === `group:${group.name}` ? 'bg-primary/10 ring-1 ring-primary/40' : ''"
+          @dragover="handleGroupDragOver($event, `group:${group.name}`)"
+          @dragleave="handleGroupDragLeave(`group:${group.name}`)"
+          @drop="handleGroupDrop($event, group.name)"
         >
-          <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
-            <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
-            <span class="min-w-0 truncate">{{ repo.name }}</span>
+          <div
+            class="branch-directory-row group/repogroup justify-between pr-1"
+            @click.stop="toggleRepoGroup(group.name)"
+            @contextmenu.prevent.stop="openGroupContextMenu($event, group.name)"
+          >
+            <div class="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+              <component :is="collapsedRepoGroups.has(group.name) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
+              <component :is="collapsedRepoGroups.has(group.name) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+              <span class="truncate text-[11px] font-semibold text-foreground/90">{{ group.name }}</span>
+              <span class="shrink-0 text-[10px] text-muted-foreground">({{ group.repos.length }})</span>
+            </div>
+            <div class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover/repogroup:opacity-100 focus-within:opacity-100 transition">
+              <button
+                @click.stop="openAddRepoModal(group.name)"
+                class="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground"
+                :title="t('Add Repository to Group')"
+              >
+                <Plus class="w-3 h-3" />
+              </button>
+              <button
+                @click.stop="handleRenameGroup(group.name)"
+                class="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground"
+                :title="t('Rename Group')"
+              >
+                <Edit3 class="w-3 h-3" />
+              </button>
+              <button
+                @click.stop="handleDeleteGroup(group.name)"
+                class="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-rose-600"
+                :title="t('Delete Group')"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            </div>
           </div>
 
-          <div class="ml-1 flex shrink-0 items-center gap-1">
-            <span
-              v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
-              class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
-              :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
+          <div v-if="!collapsedRepoGroups.has(group.name)" class="ml-2.5 pl-1.5 border-l border-border/60 space-y-0.5">
+            <div
+              v-if="group.repos.length === 0"
+              class="px-2 py-1 text-[10px] text-muted-foreground/70 italic select-none"
             >
-              <ArrowDownCircle class="h-3.5 w-3.5" />
-              <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
-            </span>
-            <span
-              v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
-              class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
-              :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
+              {{ t('No repositories in group') }}
+            </div>
+            <div
+              v-for="repo in group.repos"
+              :key="repo.path"
+              draggable="true"
+              @dragstart="handleRepoDragStart($event, repo.path)"
+              @dragend="handleRepoDragEnd"
+              @click.stop="handleSwitchRepo(repo.path)"
+              @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
+              @keydown.enter.prevent="handleSwitchRepo(repo.path)"
+              @keydown.space.prevent="handleSwitchRepo(repo.path)"
+              role="button"
+              tabindex="0"
+              class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
+              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
             >
-              <ArrowUpCircle class="h-3.5 w-3.5" />
-              <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
-            </span>
-            <button
-              v-if="repoStore.repoList.length > 1"
-              @click.stop="repoStore.removeRepo(repo.path)"
-              class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
-              :title="t('Remove from Workspace')"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
+              <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
+                <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
+                <span class="min-w-0 truncate">{{ repo.name }}</span>
+              </div>
+
+              <div class="ml-1 flex shrink-0 items-center gap-1">
+                <span
+                  v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
+                  class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                  :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
+                >
+                  <ArrowDownCircle class="h-3.5 w-3.5" />
+                  <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
+                </span>
+                <span
+                  v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
+                  class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                  :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
+                >
+                  <ArrowUpCircle class="h-3.5 w-3.5" />
+                  <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
+                </span>
+                <button
+                  v-if="repoStore.repoList.length > 1"
+                  @click.stop="repoStore.removeRepo(repo.path)"
+                  class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                  :title="t('Remove from Workspace')"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ungrouped Repositories -->
+        <div
+          class="space-y-0.5 rounded-md transition"
+          :class="dragOverTarget === '__ungrouped__' ? 'bg-primary/10 ring-1 ring-primary/40 p-0.5' : ''"
+          @dragover="handleGroupDragOver($event, '__ungrouped__')"
+          @dragleave="handleGroupDragLeave('__ungrouped__')"
+          @drop="handleGroupDrop($event, null)"
+        >
+          <div
+            v-if="draggingRepoPath && ungroupedRepositories.length === 0"
+            class="px-2 py-1 text-[10px] text-muted-foreground italic text-center border border-dashed border-border rounded"
+          >
+            {{ t('Drop here to ungroup') }}
+          </div>
+          <div
+            v-for="repo in ungroupedRepositories"
+            :key="repo.path"
+            draggable="true"
+            @dragstart="handleRepoDragStart($event, repo.path)"
+            @dragend="handleRepoDragEnd"
+            @click.stop="handleSwitchRepo(repo.path)"
+            @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
+            @keydown.enter.prevent="handleSwitchRepo(repo.path)"
+            @keydown.space.prevent="handleSwitchRepo(repo.path)"
+            role="button"
+            tabindex="0"
+            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
+            :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
+          >
+            <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
+              <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
+              <span class="min-w-0 truncate">{{ repo.name }}</span>
+            </div>
+
+            <div class="ml-1 flex shrink-0 items-center gap-1">
+              <span
+                v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
+                class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
+              >
+                <ArrowDownCircle class="h-3.5 w-3.5" />
+                <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
+              </span>
+              <span
+                v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
+                class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
+              >
+                <ArrowUpCircle class="h-3.5 w-3.5" />
+                <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
+              </span>
+              <button
+                v-if="repoStore.repoList.length > 1"
+                @click.stop="repoStore.removeRepo(repo.path)"
+                class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                :title="t('Remove from Workspace')"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -454,6 +768,50 @@ function openRepositoryContextMenu(e: MouseEvent, path: string) {
       :y="repositoryContextMenu.y"
       @close="repositoryContextMenu = null"
     />
+    <Teleport to="body">
+      <div
+        v-if="groupContextMenu"
+        class="fixed inset-0 z-50"
+        @click="groupContextMenu = null"
+        @contextmenu.prevent="groupContextMenu = null"
+      >
+        <div
+          class="fixed w-48 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          :style="{ left: `${groupContextMenu.x}px`, top: `${groupContextMenu.y}px` }"
+          role="menu"
+          @click.stop
+        >
+          <div class="py-1">
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary"
+              @click="openAddRepoModal(groupContextMenu.groupName)"
+            >
+              <Plus class="h-3.5 w-3.5 text-primary" />
+              <span>{{ t('Add Repository to Group') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary"
+              @click="handleRenameGroup(groupContextMenu.groupName)"
+            >
+              <Edit3 class="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{{ t('Rename Group') }}</span>
+            </button>
+          </div>
+          <div class="py-1">
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-destructive/20"
+              @click="handleDeleteGroup(groupContextMenu.groupName)"
+            >
+              <Trash2 class="h-3.5 w-3.5" />
+              <span>{{ t('Delete Group') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </aside>
 </template>
 

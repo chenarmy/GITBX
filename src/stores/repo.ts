@@ -12,6 +12,7 @@ export interface ManagedRepo {
   path: string;
   name: string;
   lastOpened: number;
+  group?: string;
 }
 
 function normalizeStoredRepoPath(path: string): string {
@@ -36,11 +37,36 @@ function getInitialRepos(): ManagedRepo[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((repo) => ({ ...repo, path: normalizeStoredRepoPath(repo.path) }));
+        return parsed.map((repo) => ({
+          ...repo,
+          path: normalizeStoredRepoPath(repo.path),
+          group: typeof repo.group === 'string' && repo.group.trim() ? repo.group.trim() : undefined,
+        }));
       }
     }
   } catch {}
   return [];
+}
+
+function getInitialRepoGroups(repos: ManagedRepo[]): string[] {
+  const groups: string[] = [];
+  const seen = new Set<string>();
+  const addGroup = (name: unknown) => {
+    if (typeof name !== 'string') return;
+    const clean = name.trim();
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    groups.push(clean);
+  };
+  try {
+    const raw = localStorage.getItem(CONFIG_KEYS.repositoryGroups);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) parsed.forEach(addGroup);
+    }
+  } catch {}
+  repos.forEach((repo) => addGroup(repo.group));
+  return groups;
 }
 
 function getInitialActiveRepo(): string {
@@ -55,7 +81,9 @@ export const useRepoStore = defineStore('repo', () => {
   const gitApi = useGitApi();
   const consoleStore = useConsoleStore();
   const diffStore = useDiffStore();
-  const repoList = ref<ManagedRepo[]>(getInitialRepos());
+  const initialRepos = getInitialRepos();
+  const repoList = ref<ManagedRepo[]>(initialRepos);
+  const repoGroups = ref<string[]>(getInitialRepoGroups(initialRepos));
   const activeRepoPath = ref<string>(getInitialActiveRepo());
   const repoInfo = ref<RepositoryInfo | null>(null);
   const statusSummary = ref<RepoStatusSummary>(emptyStatusSummary());
@@ -85,6 +113,7 @@ export const useRepoStore = defineStore('repo', () => {
     isPullRequestOpen,
     targetBranchForAction,
     targetCommitForAction,
+    targetRepoGroupForAdd,
   } = toRefs(uiStore);
   const commitNodes = ref<GraphCommitNode[]>([]);
   const graphHasMore = ref(false);
@@ -104,11 +133,81 @@ export const useRepoStore = defineStore('repo', () => {
   const saveReposToStorage = () => {
     try {
       localStorage.setItem(CONFIG_KEYS.repositories, JSON.stringify(repoList.value));
+      localStorage.setItem(CONFIG_KEYS.repositoryGroups, JSON.stringify(repoGroups.value));
       localStorage.setItem(CONFIG_KEYS.activeRepository, activeRepoPath.value);
     } catch {}
     void persistAppConfig().catch((error) => {
       consoleStore.logWarning('Failed to save user configuration.', formatGitError(error));
     });
+  };
+
+  const ensureGroupExists = (groupName?: string): string | undefined => {
+    const clean = groupName?.trim();
+    if (!clean) return undefined;
+    if (!repoGroups.value.includes(clean)) {
+      repoGroups.value.push(clean);
+    }
+    return clean;
+  };
+
+  const createRepoGroup = (name: string): string => {
+    const clean = name.trim();
+    if (!clean) return '';
+    if (!repoGroups.value.includes(clean)) {
+      repoGroups.value.push(clean);
+      saveReposToStorage();
+    }
+    return clean;
+  };
+
+  const renameRepoGroup = (oldName: string, newName: string): boolean => {
+    const cleanOld = oldName.trim();
+    const cleanNew = newName.trim();
+    if (!cleanOld || !cleanNew || cleanOld === cleanNew) return false;
+
+    const existingIdx = repoGroups.value.indexOf(cleanOld);
+    if (existingIdx !== -1) {
+      if (repoGroups.value.includes(cleanNew)) {
+        repoGroups.value.splice(existingIdx, 1);
+      } else {
+        repoGroups.value.splice(existingIdx, 1, cleanNew);
+      }
+    } else if (!repoGroups.value.includes(cleanNew)) {
+      repoGroups.value.push(cleanNew);
+    }
+
+    for (const repo of repoList.value) {
+      if (repo.group === cleanOld) {
+        repo.group = cleanNew;
+      }
+    }
+    saveReposToStorage();
+    return true;
+  };
+
+  const deleteRepoGroup = (name: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    repoGroups.value = repoGroups.value.filter((g) => g !== clean);
+    for (const repo of repoList.value) {
+      if (repo.group === clean) {
+        delete repo.group;
+      }
+    }
+    saveReposToStorage();
+  };
+
+  const setRepoGroup = (repoPath: string, groupName?: string | null) => {
+    const cleanPath = normalizeStoredRepoPath(repoPath);
+    const repo = repoList.value.find((r) => r.path === cleanPath);
+    if (!repo) return;
+    const cleanGroup = ensureGroupExists(groupName || undefined);
+    if (cleanGroup) {
+      repo.group = cleanGroup;
+    } else {
+      delete repo.group;
+    }
+    saveReposToStorage();
   };
 
   const clearLoadedRepoData = () => {
@@ -238,19 +337,28 @@ export const useRepoStore = defineStore('repo', () => {
     }
   };
 
-  const addRepo = async (newPath: string) => {
+  const addRepo = async (newPath: string, groupName?: string) => {
     const validation = await gitApi.validateRepo(newPath);
     if (!validation.valid) {
       throw new Error(validation.message || 'Invalid Git repository');
     }
     const cleanPath = normalizeStoredRepoPath(validation.path || newPath);
     const name = validation.name || cleanPath.split(/[\\/]/).pop() || 'Repo';
+    const cleanGroup = ensureGroupExists(groupName);
 
     const idx = repoList.value.findIndex((r) => r.path === cleanPath);
     if (idx === -1) {
-      repoList.value.push({ path: cleanPath, name, lastOpened: Date.now() });
+      repoList.value.push({
+        path: cleanPath,
+        name,
+        lastOpened: Date.now(),
+        ...(cleanGroup ? { group: cleanGroup } : {}),
+      });
     } else {
       repoList.value[idx].lastOpened = Date.now();
+      if (cleanGroup !== undefined) {
+        repoList.value[idx].group = cleanGroup;
+      }
     }
     saveReposToStorage();
     const loaded = await loadRepo(cleanPath);
@@ -745,6 +853,7 @@ export const useRepoStore = defineStore('repo', () => {
 
   return {
     repoList,
+    repoGroups,
     activeRepoPath,
     repoInfo,
     statusSummary,
@@ -779,10 +888,15 @@ export const useRepoStore = defineStore('repo', () => {
     isRemoteModalOpen,
     targetBranchForAction,
     targetCommitForAction,
+    targetRepoGroupForAdd,
     loadRepo,
     addRepo,
     removeRepo,
     switchRepo,
+    createRepoGroup,
+    renameRepoGroup,
+    deleteRepoGroup,
+    setRepoGroup,
     stageFile,
     stageAll,
     stageFiles,
