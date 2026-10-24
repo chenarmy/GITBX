@@ -185,4 +185,54 @@ describe('AI Store and Agent Service', () => {
     expect(aiStore.activeMode).toBe('agent');
     expect(store['gitbx_ai_mode']).toBe('agent');
   });
+
+  it('creates, assigns, renames, deletes, and persists repository groups across config reloads', async () => {
+    const { useRepoStore } = await import('../../src/stores/repo');
+    const { readLocalConfig, applyConfig, CONFIG_KEYS } = await import('../../src/services/appConfig');
+
+    store[CONFIG_KEYS.repositories] = JSON.stringify([
+      { path: 'I:\\GITBX', name: 'GITBX', lastOpened: 1 },
+      { path: 'I:\\godot_demo', name: 'godot_demo', lastOpened: 2 },
+    ]);
+
+    setActivePinia(createPinia());
+    const repoStore = useRepoStore();
+
+    // 1. Create group
+    expect(repoStore.createRepoGroup('  前端项目  ')).toBe('前端项目');
+    expect(repoStore.repoGroups).toEqual(['前端项目']);
+
+    // 2. Assign repository to group
+    repoStore.setRepoGroup('I:\\GITBX', '前端项目');
+    expect(repoStore.repoList.find((r) => r.path === 'I:\\GITBX')?.group).toBe('前端项目');
+
+    // 3. Assign to a new group auto-registers group
+    repoStore.setRepoGroup('I:\\godot_demo', '游戏项目');
+    expect(repoStore.repoGroups).toEqual(['前端项目', '游戏项目']);
+    expect(repoStore.repoList.find((r) => r.path === 'I:\\godot_demo')?.group).toBe('游戏项目');
+
+    // 4. Rename group updates both group list and assigned repos
+    expect(repoStore.renameRepoGroup('前端项目', '核心工程')).toBe(true);
+    expect(repoStore.repoGroups).toEqual(['核心工程', '游戏项目']);
+    expect(repoStore.repoList.find((r) => r.path === 'I:\\GITBX')?.group).toBe('核心工程');
+
+    // 5. Persist and restore via AppConfig
+    const diskConfig = readLocalConfig();
+    expect(diskConfig.repositories.groups).toEqual(['核心工程', '游戏项目']);
+    expect(diskConfig.repositories.items.find((r) => r.path === 'I:\\GITBX')?.group).toBe('核心工程');
+
+    for (const key in store) delete store[key];
+    applyConfig(diskConfig);
+
+    setActivePinia(createPinia());
+    const restoredRepoStore = useRepoStore();
+    expect(restoredRepoStore.repoGroups).toEqual(['核心工程', '游戏项目']);
+    expect(restoredRepoStore.repoList.find((r) => r.path === 'I:\\GITBX')?.group).toBe('核心工程');
+
+    // 6. Delete group ungroups its repos without deleting the repos
+    restoredRepoStore.deleteRepoGroup('核心工程');
+    expect(restoredRepoStore.repoGroups).toEqual(['游戏项目']);
+    expect(restoredRepoStore.repoList.find((r) => r.path === 'I:\\GITBX')?.group).toBeUndefined();
+    expect(restoredRepoStore.repoList.length).toBe(2);
+  });
 });

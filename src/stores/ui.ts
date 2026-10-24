@@ -31,6 +31,7 @@ export const useUiStore = defineStore('ui', () => {
 
   const targetBranchForAction = ref<string>('');
   const targetCommitForAction = ref<string>('');
+  const targetRepoGroupForAdd = ref<string>('');
 
   function openModal(modal: ModalType) {
     switch (modal) {
@@ -51,7 +52,10 @@ export const useUiStore = defineStore('ui', () => {
 
   function closeModal(modal: ModalType) {
     switch (modal) {
-      case 'addRepo': isAddRepoModalOpen.value = false; break;
+      case 'addRepo':
+        isAddRepoModalOpen.value = false;
+        targetRepoGroupForAdd.value = '';
+        break;
       case 'branch': isBranchModalOpen.value = false; break;
       case 'tag': isTagModalOpen.value = false; break;
       case 'stash': isStashModalOpen.value = false; break;
@@ -96,6 +100,7 @@ export const useUiStore = defineStore('ui', () => {
     isPullRequestOpen,
     targetBranchForAction,
     targetCommitForAction,
+    targetRepoGroupForAdd,
     openModal,
     closeModal,
     closeAllModals,
