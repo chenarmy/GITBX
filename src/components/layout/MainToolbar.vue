@@ -112,9 +112,7 @@ function formatBulkResult(action: string, result: { succeeded: string[]; failed:
 
 async function handleFetchAll() {
   if (isFetching.value || isBulkOperating.value) return;
-  const kind = toolbarMenu.value?.kind;
   toolbarMenu.value = null;
-  void kind;
   isBulkOperating.value = true;
   isFetching.value = true;
   notification.info(t('Git Fetch'), t('Fetching all repositories ({count})...', { count: repoStore.repoList.length }));
@@ -629,7 +627,9 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
               {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
             </div>
             <button
+              v-if="toolbarMenu.kind === 'fetch'"
               role="menuitem"
+              data-testid="toolbar-fetch-all"
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
               :disabled="isFetching || isBulkOperating"
               @click="handleFetchAll"
@@ -638,7 +638,9 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
               <span>{{ t('Fetch All') }}</span>
             </button>
             <button
+              v-if="toolbarMenu.kind === 'pull'"
               role="menuitem"
+              data-testid="toolbar-pull-all"
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
               :disabled="isPulling || isBulkOperating"
               @click="handlePullAll"
@@ -647,7 +649,9 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
               <span>{{ t('Pull All') }}</span>
             </button>
             <button
+              v-if="toolbarMenu.kind === 'push'"
               role="menuitem"
+              data-testid="toolbar-push-all"
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
               :disabled="isPushing || isBulkOperating"
               @click="handlePushAll"
