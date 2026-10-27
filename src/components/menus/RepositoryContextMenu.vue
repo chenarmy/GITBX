@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
-import { Check, Code2, Folder, FolderMinus, FolderOpen, FolderPlus, Terminal, Trash2 } from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Check, Code2, Folder, FolderMinus, FolderOpen, FolderPlus, Terminal, Trash2, RefreshCw, ArrowDownCircle, ArrowUpCircle } from 'lucide-vue-next';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
+import { usePushRecovery } from '@/composables/usePushRecovery';
 import { useI18n } from '@/i18n';
 
 const props = defineProps<{ path: string; x: number; y: number }>();
@@ -14,6 +15,8 @@ const repoStore = useRepoStore();
 const notification = useNotificationStore();
 const confirmation = useConfirmationStore();
 const { t } = useI18n();
+const { pushWithRecovery } = usePushRecovery();
+const isSyncing = ref(false);
 
 const currentRepo = computed(() => repoStore.repoList.find((r) => r.path === props.path));
 const currentGroup = computed(() => currentRepo.value?.group || '');
@@ -31,7 +34,7 @@ const allGroups = computed(() => {
 });
 
 const menuStyle = computed(() => {
-  const estimatedHeight = 220 + allGroups.value.length * 28;
+  const estimatedHeight = 320 + allGroups.value.length * 28;
   return {
     left: `${Math.max(8, Math.min(props.x, window.innerWidth - 230))}px`,
     top: `${Math.max(8, Math.min(props.y, window.innerHeight - Math.min(estimatedHeight, 380)))}px`,
@@ -101,6 +104,61 @@ async function openFileManager() {
   }
 }
 
+function getPullStrategy(): 'merge' | 'rebase' | 'ff-only' {
+  const saved = localStorage.getItem('gitbx_pull_strategy');
+  return saved === 'rebase' || saved === 'ff-only' ? saved : 'merge';
+}
+
+async function handleFetchRepo() {
+  const path = props.path;
+  emit('close');
+  isSyncing.value = true;
+  notification.info(t('Git Fetch'), t('Fetching references from all remotes...'));
+  try {
+    await repoStore.fetchRemote(path);
+    notification.success(t('Fetch Completed'), t('Remote branches and tags are up to date.'));
+  } catch (error) {
+    notification.error(t('Fetch Failed'), formatGitError(error));
+  } finally {
+    isSyncing.value = false;
+  }
+}
+
+async function handlePullRepo() {
+  const path = props.path;
+  emit('close');
+  isSyncing.value = true;
+  notification.info(t('Git Pull'), t("Pulling latest changes for '{branch}'...", { branch: currentRepo.value?.name || path }));
+  try {
+    await repoStore.pullRemote(getPullStrategy(), path);
+    notification.success(t('Pull Completed'), t('Working branch updated with upstream commits.'));
+  } catch (error) {
+    notification.error(t('Pull Failed'), formatGitError(error, t('Failed to pull from remote')));
+  } finally {
+    isSyncing.value = false;
+  }
+}
+
+async function handlePushRepo() {
+  const path = props.path;
+  emit('close');
+  isSyncing.value = true;
+  notification.info(t('Git Push'), t("Pushing commits on '{branch}' to remote...", { branch: currentRepo.value?.name || path }));
+  try {
+    if (path === repoStore.activeRepoPath) {
+      const pushed = await pushWithRecovery({});
+      if (!pushed) return;
+    } else {
+      await repoStore.pushRemote(false, undefined, path);
+    }
+    notification.success(t('Push Completed'), t('Local commits pushed successfully.'));
+  } catch (error) {
+    notification.error(t('Push Failed'), formatGitError(error, t('Failed to push to remote')));
+  } finally {
+    isSyncing.value = false;
+  }
+}
+
 function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'Escape') emit('close');
 }
@@ -131,6 +189,21 @@ function closeMenu() {
       @click.stop
       @contextmenu.prevent
     >
+      <div class="py-1">
+        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handleFetchRepo">
+          <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <span>{{ t('Fetch') }}</span>
+        </button>
+        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handlePullRepo">
+          <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+          <span>{{ t('Pull') }}</span>
+        </button>
+        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handlePushRepo">
+          <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span>{{ t('Push') }}</span>
+        </button>
+      </div>
+
       <div class="py-1">
         <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary" @click="openEditor('vscode')">
           <Code2 class="h-3.5 w-3.5 text-sky-500" />

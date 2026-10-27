@@ -6,7 +6,7 @@ import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useUpdatesStore } from '@/stores/updates';
 import { useRepoStore } from '@/stores/repo';
-import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen, ShieldCheck, Server } from 'lucide-vue-next';
+import { Settings, X, User, Cpu, Info, Globe2, KeyRound, FolderOpen, ShieldCheck, Server, Type } from 'lucide-vue-next';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { useI18n } from '@/i18n';
@@ -14,6 +14,16 @@ import { computed, ref, watch } from 'vue';
 import AboutUpdates from '@/components/settings/AboutUpdates.vue';
 import McpSettings from '@/components/settings/McpSettings.vue';
 import type { LlmConfig } from '@/types/ai';
+import {
+  MONO_FONTS,
+  UI_FONTS,
+  clampFontSize,
+  defaultFontIdForLocale,
+  ensureFontLoaded,
+  getFontById,
+  DEFAULT_MONO_FONT_ID,
+  type FontGroup,
+} from '@/services/fonts';
 
 const settingsStore = useSettingsStore();
 const aiStore = useAiStore();
@@ -35,6 +45,11 @@ const draftWebToken = ref(settingsStore.webToken);
 const draftSshPassphrase = ref('');
 const draftAuthorName = ref(settingsStore.authorName);
 const draftAuthorEmail = ref(settingsStore.authorEmail);
+const draftFontId = ref(settingsStore.fontId);
+const draftFontSize = ref(settingsStore.fontSize);
+const draftMonoFontId = ref(settingsStore.monoFontId);
+const fontLoading = ref(false);
+const fontLoadError = ref(false);
 const draftProviderId = ref<string>(aiStore.activeProviderId);
 const draftLlmConfig = ref<LlmConfig>({ ...aiStore.llmConfig, api_key: '' });
 const isCustomProvider = computed(() => draftProviderId.value === 'custom');
@@ -51,6 +66,11 @@ function resetDraft() {
   draftSshPassphrase.value = '';
   draftAuthorName.value = settingsStore.authorName;
   draftAuthorEmail.value = settingsStore.authorEmail;
+  draftFontId.value = settingsStore.fontId;
+  draftFontSize.value = settingsStore.fontSize;
+  draftMonoFontId.value = settingsStore.monoFontId;
+  fontLoadError.value = false;
+  fontLoading.value = false;
   draftProviderId.value = aiStore.activeProviderId;
   const currentP = aiStore.providers.find((p) => p.id === aiStore.activeProviderId) || aiStore.activeProvider;
   draftLlmConfig.value = {
@@ -69,9 +89,64 @@ watch(
     if (isOpen) {
       resetDraft();
       activeTab.value = 'settings';
+      void preloadDraftFonts();
     }
   },
 );
+
+const FONT_GROUP_LABELS: Record<FontGroup, string> = {
+  latin: 'Latin & European',
+  chinese: 'Chinese',
+  japanese: 'Japanese',
+  arabic: 'Arabic',
+  mono: 'Monospace',
+};
+
+const FONT_GROUP_ORDER: FontGroup[] = ['latin', 'chinese', 'japanese', 'arabic'];
+
+const uiFontGroups = computed(() =>
+  FONT_GROUP_ORDER.map((group) => ({
+    key: group,
+    label: t(FONT_GROUP_LABELS[group]),
+    fonts: UI_FONTS.filter((item) => item.group === group),
+  })).filter((group) => group.fonts.length > 0),
+);
+
+const draftUiFamily = computed(() => getFontById(draftFontId.value)?.family || 'inherit');
+const draftMonoFamily = computed(() => getFontById(draftMonoFontId.value)?.family || 'inherit');
+const selectedUiFont = computed(() => getFontById(draftFontId.value));
+const selectedMonoFont = computed(() => getFontById(draftMonoFontId.value));
+
+/** Load draft fonts so the preview renders the real webfont before applying. */
+async function preloadDraftFonts() {
+  fontLoading.value = true;
+  fontLoadError.value = false;
+  try {
+    const [okUi, okMono] = await Promise.all([
+      ensureFontLoaded(draftFontId.value),
+      ensureFontLoaded(draftMonoFontId.value),
+    ]);
+    if (!okUi || !okMono) fontLoadError.value = true;
+  } catch {
+    fontLoadError.value = true;
+  } finally {
+    fontLoading.value = false;
+  }
+}
+
+watch([draftFontId, draftMonoFontId], () => {
+  if (settingsStore.isSettingsModalOpen) void preloadDraftFonts();
+});
+
+function restoreDefaultFont() {
+  draftFontId.value = defaultFontIdForLocale(draftLanguage.value);
+  draftFontSize.value = 12;
+  draftMonoFontId.value = DEFAULT_MONO_FONT_ID;
+}
+
+function stepFontSize(delta: number) {
+  draftFontSize.value = clampFontSize(draftFontSize.value + delta);
+}
 
 async function saveSettings() {
   if (draftProxyMode.value === 'custom') {
@@ -118,6 +193,10 @@ async function saveSettings() {
     settingsStore.authorName = draftAuthorName.value;
     settingsStore.authorEmail = draftAuthorEmail.value;
     settingsStore.changeLanguage(draftLanguage.value);
+    settingsStore.fontId = draftFontId.value;
+    settingsStore.fontSize = clampFontSize(draftFontSize.value);
+    settingsStore.monoFontId = draftMonoFontId.value;
+    await settingsStore.applyFont();
 
     // Update target provider's api_base and default_model in aiStore
     const targetProvider = aiStore.providers.find((item) => item.id === draftProviderId.value);
@@ -279,6 +358,112 @@ function closeSettings() {
               {{ item.nativeLabel }} · {{ item.label }}
             </option>
           </select>
+        </div>
+
+        <!-- Font -->
+        <div class="space-y-2 border-t border-border pt-3">
+          <div class="flex items-center space-x-1.5 font-semibold text-foreground">
+            <Type class="h-3.5 w-3.5 text-amber-400" />
+            <span>{{ t('Font') }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[11px] text-muted-foreground">{{ t('Interface Font') }}</label>
+              <select
+                v-model="draftFontId"
+                data-testid="settings-font-select"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <optgroup v-for="group in uiFontGroups" :key="group.key" :label="group.label">
+                  <option v-for="font in group.fonts" :key="font.id" :value="font.id">
+                    {{ font.label }}
+                  </option>
+                </optgroup>
+              </select>
+            </div>
+            <div>
+              <label class="text-[11px] text-muted-foreground">{{ t('Code Font') }}</label>
+              <select
+                v-model="draftMonoFontId"
+                data-testid="settings-mono-font-select"
+                class="w-full bg-background border border-border rounded px-2.5 py-1.5 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option v-for="font in MONO_FONTS" :key="font.id" :value="font.id">
+                  {{ font.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <p class="text-[10px] text-muted-foreground">
+            {{ selectedUiFont?.label }} · {{ selectedUiFont?.license }} / {{ selectedMonoFont?.label }} · {{ selectedMonoFont?.license }}
+          </p>
+
+          <div>
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] text-muted-foreground">{{ t('Font Size') }}</label>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="settings-font-decrease"
+                  @click="stepFontSize(-1)"
+                  class="w-6 h-6 rounded border border-border hover:bg-accent text-foreground"
+                >
+                  −
+                </button>
+                <span data-testid="settings-font-size-value" class="w-12 text-center font-mono">{{ draftFontSize }}px</span>
+                <button
+                  type="button"
+                  data-testid="settings-font-increase"
+                  @click="stepFontSize(1)"
+                  class="w-6 h-6 rounded border border-border hover:bg-accent text-foreground"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  @click="restoreDefaultFont"
+                  class="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  {{ t('Restore Default') }}
+                </button>
+              </div>
+            </div>
+            <input
+              v-model.number="draftFontSize"
+              type="range"
+              min="11"
+              max="20"
+              step="1"
+              data-testid="settings-font-size"
+              class="w-full mt-1 accent-[hsl(var(--primary))]"
+            />
+          </div>
+
+          <div>
+            <label class="text-[11px] text-muted-foreground">{{ t('Font Preview') }}</label>
+            <div
+              data-testid="settings-font-preview"
+              class="rounded border border-border bg-background p-2.5 mt-1 space-y-1 overflow-hidden"
+              :style="{ fontFamily: draftUiFamily, fontSize: draftFontSize + 'px' }"
+            >
+              <p class="font-semibold">Agile Git 0123456789 AaBbCcDdEe</p>
+              <p>简体中文：思源宋体 · 阿里巴巴普惠体 · 鸿蒙 HarmonyOS Sans</p>
+              <p>繁體中文測試 · 日本語テスト · العربية اختبار · Ää Öö Üü ß Éè</p>
+              <p class="opacity-80" :style="{ fontFamily: draftMonoFamily }">
+                const diff = await loadFont("Noto Serif SC"); // 0123456789
+              </p>
+              <p v-if="fontLoading" class="text-muted-foreground">{{ t('Loading font...') }}</p>
+              <p v-if="fontLoadError && !fontLoading" class="text-amber-500">
+                {{ t('Font failed to load, using system fallback.') }}
+              </p>
+            </div>
+            <p class="text-[10px] text-muted-foreground mt-1">
+              {{ t('Online fonts load on demand; offline falls back to system fonts.') }}
+            </p>
+            <p class="text-[10px] text-muted-foreground">
+              {{ t('Font applies to the whole app after saving.') }}
+            </p>
+          </div>
         </div>
 
         <!-- Web authentication -->

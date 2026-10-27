@@ -39,6 +39,8 @@ const { pushWithRecovery } = usePushRecovery();
 const isFetching = ref(false);
 const isPulling = ref(false);
 const isPushing = ref(false);
+const isBulkOperating = ref(false);
+const toolbarMenu = ref<{ kind: 'fetch' | 'pull' | 'push'; x: number; y: number } | null>(null);
 const pullStrategy = ref<'merge' | 'rebase' | 'ff-only'>((localStorage.getItem('gitbx_pull_strategy') as any) || 'merge');
 const forceWithLease = ref(false);
 // Keep remote-tracking data fresh by default. Users who explicitly disable
@@ -78,6 +80,91 @@ onUnmounted(() => {
   if (autoFetchTimer) window.clearInterval(autoFetchTimer);
   window.removeEventListener('click', handleWindowClick);
 });
+
+function openToolbarMenu(e: MouseEvent, kind: 'fetch' | 'pull' | 'push') {
+  e.preventDefault();
+  e.stopPropagation();
+  isMoreActionsOpen.value = false;
+  toolbarMenu.value = {
+    kind,
+    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
+    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 200)),
+  };
+}
+
+function closeToolbarMenu() {
+  toolbarMenu.value = null;
+}
+
+function formatBulkResult(action: string, result: { succeeded: string[]; failed: Array<{ path: string; error: string }> }) {
+  const total = result.succeeded.length + result.failed.length;
+  if (result.failed.length === 0) {
+    notification.success(t('{action} All Completed', { action }), t('{succeeded}/{total} repositories succeeded.', { succeeded: result.succeeded.length, total }));
+  } else if (result.succeeded.length === 0) {
+    notification.error(t('{action} All Failed', { action }), result.failed.slice(0, 3).map((f) => `${f.path}: ${f.error}`).join('\n') || t('All repositories failed.'));
+  } else {
+    notification.warning(
+      t('{action} All Partially Completed', { action }),
+      t('{succeeded}/{total} succeeded. Failed: {failed}', { succeeded: result.succeeded.length, total, failed: result.failed.map((f) => f.path.split(/[\\/]/).pop() || f.path).join(', ') })
+    );
+  }
+}
+
+async function handleFetchAll() {
+  if (isFetching.value || isBulkOperating.value) return;
+  const kind = toolbarMenu.value?.kind;
+  toolbarMenu.value = null;
+  void kind;
+  isBulkOperating.value = true;
+  isFetching.value = true;
+  notification.info(t('Git Fetch'), t('Fetching all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    const result = await repoStore.fetchAllRepos();
+    formatBulkResult(t('Fetch'), result);
+  } catch (err: any) {
+    notification.error(t('Fetch Failed'), formatGitError(err, t('Remote fetch error')));
+  } finally {
+    isFetching.value = false;
+    isBulkOperating.value = false;
+  }
+}
+
+async function handlePullAll() {
+  if (isPulling.value || isBulkOperating.value) return;
+  toolbarMenu.value = null;
+  isBulkOperating.value = true;
+  isPulling.value = true;
+  notification.info(t('Git Pull'), t('Pulling all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    localStorage.setItem('gitbx_pull_strategy', pullStrategy.value);
+    const result = await repoStore.pullAllRepos(pullStrategy.value);
+    const firstConflict = repoStore.statusSummary.conflicted_files[0]?.path;
+    if (firstConflict) diffStore.selectConflictFile(firstConflict);
+    formatBulkResult(t('Pull'), result);
+  } catch (err: any) {
+    notification.error(t('Pull Failed'), formatGitError(err, t('Failed to pull from remote')));
+  } finally {
+    isPulling.value = false;
+    isBulkOperating.value = false;
+  }
+}
+
+async function handlePushAll() {
+  if (isPushing.value || isBulkOperating.value) return;
+  toolbarMenu.value = null;
+  isBulkOperating.value = true;
+  isPushing.value = true;
+  notification.info(t('Git Push'), t('Pushing all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    const result = await repoStore.pushAllRepos(forceWithLease.value);
+    formatBulkResult(t('Push'), result);
+  } catch (err: any) {
+    notification.error(t('Push Failed'), err?.message || t('Failed to push to remote'));
+  } finally {
+    isPushing.value = false;
+    isBulkOperating.value = false;
+  }
+}
 
 async function handleFetch() {
   isFetching.value = true;
@@ -339,6 +426,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <!-- Fetch Button -->
         <button
           @click="handleFetch"
+          @contextmenu.prevent="openToolbarMenu($event, 'fetch')"
           :disabled="isFetching"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
           :title="t('Fetch from all remotes')"
@@ -350,6 +438,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <!-- Pull Button -->
         <button
           @click="handlePull"
+          @contextmenu.prevent="openToolbarMenu($event, 'pull')"
           :disabled="isPulling"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
           :title="t('Pull latest changes from upstream')"
@@ -360,6 +449,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <!-- Push Button -->
         <button
           @click="handlePush"
+          @contextmenu.prevent="openToolbarMenu($event, 'push')"
           :disabled="isPushing"
           class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
           :title="t('Push local commits to remote')"
@@ -484,6 +574,91 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         </div>
       </div>
     </div>
+
+    <!-- Right-click menu: bulk fetch / pull / push -->
+    <Teleport to="body">
+      <div
+        v-if="toolbarMenu"
+        class="fixed inset-0 z-50"
+        @click="closeToolbarMenu"
+        @contextmenu.prevent="closeToolbarMenu"
+      >
+        <div
+          class="fixed w-60 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          :style="{ left: `${toolbarMenu.x}px`, top: `${toolbarMenu.y}px` }"
+          role="menu"
+          @click.stop
+        >
+          <div class="py-1">
+            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {{ t('Current Repository') }}
+            </div>
+            <button
+              v-if="toolbarMenu.kind === 'fetch'"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isFetching"
+              @click="closeToolbarMenu(); handleFetch()"
+            >
+              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{{ t('Fetch') }}</span>
+            </button>
+            <button
+              v-if="toolbarMenu.kind === 'pull'"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isPulling"
+              @click="closeToolbarMenu(); handlePull()"
+            >
+              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              <span>{{ t('Pull') }}</span>
+            </button>
+            <button
+              v-if="toolbarMenu.kind === 'push'"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isPushing"
+              @click="closeToolbarMenu(); handlePush()"
+            >
+              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{{ t('Push') }}</span>
+            </button>
+          </div>
+          <div class="py-1">
+            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
+            </div>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isFetching || isBulkOperating"
+              @click="handleFetchAll"
+            >
+              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{{ t('Fetch All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isPulling || isBulkOperating"
+              @click="handlePullAll"
+            >
+              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              <span>{{ t('Pull All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isPushing || isBulkOperating"
+              @click="handlePushAll"
+            >
+              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{{ t('Push All') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

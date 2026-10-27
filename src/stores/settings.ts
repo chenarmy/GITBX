@@ -3,6 +3,43 @@ import { ref } from 'vue';
 import { locale, setLocale } from '@/i18n';
 import type { Locale } from '@/i18n/config';
 import { CONFIG_KEYS, persistAppConfig, type ProxyMode } from '@/services/appConfig';
+import {
+  applyAppFont,
+  clampFontSize,
+  defaultFontIdForLocale,
+  ensureFontLoaded,
+  getFontById,
+  isKnownFontId,
+  DEFAULT_MONO_FONT_ID,
+} from '@/services/fonts';
+
+function getInitialFontId(): string {
+  try {
+    const saved = localStorage.getItem(CONFIG_KEYS.fontId);
+    if (saved && isKnownFontId(saved)) return saved;
+  } catch {}
+  try {
+    return defaultFontIdForLocale(locale.value);
+  } catch {
+    return 'system-default';
+  }
+}
+
+function getInitialMonoFontId(): string {
+  try {
+    const saved = localStorage.getItem(CONFIG_KEYS.monoFontId);
+    if (saved && isKnownFontId(saved)) return saved;
+  } catch {}
+  return DEFAULT_MONO_FONT_ID;
+}
+
+function getInitialFontSize(): number {
+  try {
+    const saved = localStorage.getItem(CONFIG_KEYS.fontSize);
+    if (saved !== null) return clampFontSize(Number(saved));
+  } catch {}
+  return clampFontSize(12);
+}
 
 function getInitialTheme(): boolean {
   try {
@@ -38,6 +75,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const proxyUsername = ref<string>(savedProxy.username);
   const sshKey = ref<string>(localStorage.getItem(CONFIG_KEYS.sshKey) || '');
   const webToken = ref<string>(localStorage.getItem(CONFIG_KEYS.webToken) || '');
+  const fontId = ref<string>(getInitialFontId());
+  const fontSize = ref<number>(getInitialFontSize());
+  const monoFontId = ref<string>(getInitialMonoFontId());
   const isSettingsModalOpen = ref<boolean>(false);
   const skippedVersion = ref<string | null>(localStorage.getItem(CONFIG_KEYS.skippedVersion));
   const savedLastUpdateCheckAt = Number(localStorage.getItem(CONFIG_KEYS.lastUpdateCheckAt));
@@ -73,6 +113,30 @@ export const useSettingsStore = defineStore('settings', () => {
     void persistAppConfig().catch(() => undefined);
   };
 
+  /** Load the selected (and fallback) webfonts, then apply family + size globally. */
+  const applyFont = async () => {
+    const uiFont = getFontById(fontId.value);
+    const monoFont = getFontById(monoFontId.value);
+    try {
+      await Promise.all([ensureFontLoaded(fontId.value), ensureFontLoaded(monoFontId.value)]);
+    } catch {
+      // Offline or mirror unreachable: CSS stacks already include system fallbacks.
+    }
+    applyAppFont({
+      family: uiFont?.family || 'inherit',
+      size: clampFontSize(fontSize.value),
+      monoFamily: monoFont?.family || 'inherit',
+    });
+    void persistAppConfig().catch(() => undefined);
+  };
+
+  const setFont = (nextFontId: string, nextSize: number, nextMonoFontId: string) => {
+    if (isKnownFontId(nextFontId)) fontId.value = nextFontId;
+    fontSize.value = clampFontSize(nextSize);
+    if (isKnownFontId(nextMonoFontId)) monoFontId.value = nextMonoFontId;
+    return applyFont();
+  };
+
   const persistSettings = async () => {
     localStorage.setItem(CONFIG_KEYS.authorName, authorName.value.trim() || 'Developer');
     localStorage.setItem(CONFIG_KEYS.authorEmail, authorEmail.value.trim() || 'dev@gitbx.io');
@@ -87,6 +151,9 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.setItem(CONFIG_KEYS.webToken, webToken.value.trim());
     localStorage.setItem(CONFIG_KEYS.theme, isDark.value ? 'dark' : 'light');
     localStorage.setItem(CONFIG_KEYS.locale, language.value);
+    localStorage.setItem(CONFIG_KEYS.fontId, fontId.value);
+    localStorage.setItem(CONFIG_KEYS.fontSize, String(clampFontSize(fontSize.value)));
+    localStorage.setItem(CONFIG_KEYS.monoFontId, monoFontId.value);
     if (skippedVersion.value) {
       localStorage.setItem(CONFIG_KEYS.skippedVersion, skippedVersion.value);
     } else {
@@ -118,6 +185,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // Apply on startup
   applyTheme();
+  void applyFont().catch(() => undefined);
 
   return {
     isDark,
@@ -130,12 +198,17 @@ export const useSettingsStore = defineStore('settings', () => {
     proxyUsername,
     sshKey,
     webToken,
+    fontId,
+    fontSize,
+    monoFontId,
     isSettingsModalOpen,
     skippedVersion,
     lastUpdateCheckAt,
     language,
     toggleTheme,
     applyTheme,
+    applyFont,
+    setFont,
     changeLanguage,
     persistSettings,
     setSkippedVersion,
