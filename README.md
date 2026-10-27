@@ -82,7 +82,7 @@ $env:GITBX_ALLOWED_REPOS = 'C:\work\repo-a;C:\work\repo-b'   # 可选：脚本�
 node scripts/verify_all.cjs
 ```
 
-脚本默认访问 `127.0.0.1:8080`，可用 `GITBX_WEB_PORT` 覆盖端口。若服务端未配置 `GITBX_WEB_TOKEN`（本地开发模式），脚本也可不带 token 运行。
+脚本默认访问 `127.0.0.1:8080`，可用 `GITBX_WEB_PORT` 覆盖端口。若修改了端口（或 `GITBX_WEB_HOST`），Vite 开发服务器的 `/api`、`/ws` 代理会自动跟随相同的环境变量，无需额外配置。
 
 ## 桌面版本发布与更新
 

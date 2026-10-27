@@ -516,7 +516,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 .change-action:disabled { cursor: not-allowed; opacity: 0.4; }
 .change-row { align-items: center; border-radius: 0.375rem; cursor: pointer; display: flex; gap: 0.375rem; min-width: 0; padding: 0.3rem 0.5rem; }
 .change-row:hover button { opacity: 1; }
-.tree-directory-row { align-items: center; background: hsl(var(--muted) / 0.3); border-radius: 0.375rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: flex; font-size: 10px; font-weight: 600; gap: 0.3rem; min-width: 0; padding-bottom: 0.25rem; padding-right: 0.5rem; padding-top: 0.25rem; }
+.tree-directory-row { align-items: center; background: hsl(var(--muted) / 0.3); border-radius: 0.375rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: flex; font-size: calc(10px * var(--gitbx-font-scale, 1)); font-weight: 600; gap: 0.3rem; min-width: 0; padding-bottom: 0.25rem; padding-right: 0.5rem; padding-top: 0.25rem; }
 .tree-directory-row:hover { background: hsl(var(--muted) / 0.65); color: hsl(var(--foreground)); }
-.status-badge { background: hsl(var(--muted)); border-radius: 0.2rem; flex-shrink: 0; font-size: 9px; padding: 0 0.25rem; }
+.status-badge { background: hsl(var(--muted)); border-radius: 0.2rem; flex-shrink: 0; font-size: calc(9px * var(--gitbx-font-scale, 1)); padding: 0 0.25rem; }
 </style>

@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  /* App font settings (driven by Settings → Font, see services/fonts.ts). */
+  :root {
+    --gitbx-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --gitbx-font-size: 12px;
+    --gitbx-font-scale: 1;
+    --gitbx-mono-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+  }
   /* DBX family: dark desktop-workbench defaults with a quiet blue accent. */
   :root {
     --background: 220 13% 9%;
@@ -77,12 +84,33 @@ body,
   background: hsl(var(--background));
 }
 
+html {
+  /* Scales every rem-based Tailwind size (text-xs/sm/base/...) with the font setting. */
+  font-size: calc(16px * var(--gitbx-font-scale, 1));
+}
+
 body {
   color: hsl(var(--foreground));
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 12px;
+  font-family: var(--gitbx-font-family);
+  font-size: var(--gitbx-font-size, 12px);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Code / diff views follow the configured monospace font. */
+code,
+pre,
+.font-mono {
+  font-family: var(--gitbx-mono-family) !important;
+}
+
+/*
+ * So "Font Size" applies app-wide: the codebase sizes dense UI labels with
+ * fixed px utilities. Scale those overrides with the same factor as rem text.
+ */
+.text-\[9px\] { font-size: calc(9px * var(--gitbx-font-scale, 1)) !important; }
+.text-\[10px\] { font-size: calc(10px * var(--gitbx-font-scale, 1)) !important; }
+.text-\[11px\] { font-size: calc(11px * var(--gitbx-font-scale, 1)) !important; }
+.text-\[12px\] { font-size: calc(12px * var(--gitbx-font-scale, 1)) !important; }
 
 .dbx-shell {
   letter-spacing: -0.01em;
@@ -119,7 +147,7 @@ body {
 
 .dbx-shell .dbx-section-heading {
   color: hsl(var(--muted-foreground));
-  font-size: 10px;
+  font-size: calc(10px * var(--gitbx-font-scale, 1));
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -133,7 +161,7 @@ body {
 .dbx-shell .dbx-pane-header {
   background: hsl(var(--muted) / 0.72);
   color: hsl(var(--muted-foreground));
-  font-size: 11px;
+  font-size: calc(11px * var(--gitbx-font-scale, 1));
   letter-spacing: 0.01em;
 }
 
@@ -157,7 +185,7 @@ body {
 .dbx-shell .dbx-toolbar-button {
   border: 1px solid transparent;
   color: hsl(var(--foreground));
-  font-size: 11px;
+  font-size: calc(11px * var(--gitbx-font-scale, 1));
   height: 26px;
 }
 

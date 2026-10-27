@@ -28,11 +28,14 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8080",
+        // Follow the same env vars as the Axum backend (src-web/src/main.rs):
+        // a custom GITBX_WEB_PORT/HOST would otherwise cause ECONNREFUSED
+        // between the Vite dev server and the backend.
+        target: `http://${process.env.GITBX_WEB_HOST || "127.0.0.1"}:${process.env.GITBX_WEB_PORT || "8080"}`,
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://127.0.0.1:8080",
+        target: `ws://${process.env.GITBX_WEB_HOST || "127.0.0.1"}:${process.env.GITBX_WEB_PORT || "8080"}`,
         ws: true,
       },
     },

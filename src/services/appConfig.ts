@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import type { LlmConfig, AiProviderConfig } from '@/types/ai';
+import { clampFontSize, defaultFontIdForLocale, isKnownFontId } from '@/services/fonts';
 
 export const CONFIG_KEYS = {
   repositories: 'gitbx_managed_repos',
@@ -23,6 +24,9 @@ export const CONFIG_KEYS = {
   proxy: 'gitbx_proxy_config',
   sshKey: 'gitbx_ssh_key',
   webToken: 'gitbx_web_token',
+  fontId: 'gitbx_font_id',
+  fontSize: 'gitbx_font_size',
+  monoFontId: 'gitbx_mono_font_id',
 } as const;
 
 interface PersistedRepository {
@@ -66,6 +70,9 @@ export interface AppConfig {
     authorEmail: string;
     proxy: ProxySettings;
     sshKey: string;
+    fontId: string;
+    fontSize: number;
+    monoFontId: string;
   };
   ai: Partial<PersistedAiConfig>;
   aiProviders?: AiProviderConfig[];
@@ -120,6 +127,26 @@ function sanitizeProxyConfig(value: unknown): ProxySettings {
   };
 }
 
+function sanitizeFontSettings(
+  value: { fontId?: unknown; fontSize?: unknown; monoFontId?: unknown },
+  language: Locale,
+): { fontId: string; fontSize: number; monoFontId: string } {
+  const fallbackId = defaultFontIdForLocale(language);
+  const fontId = typeof value.fontId === 'string' && isKnownFontId(value.fontId)
+    ? value.fontId
+    : fallbackId;
+  const monoFontId = typeof value.monoFontId === 'string' && isKnownFontId(value.monoFontId)
+    ? value.monoFontId
+    : 'system-mono';
+  return {
+    fontId,
+    fontSize: clampFontSize(
+      typeof value.fontSize === 'string' ? Number(value.fontSize) : value.fontSize,
+    ),
+    monoFontId,
+  };
+}
+
 function sanitizeGroupList(groups: unknown, items: PersistedRepository[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
@@ -154,6 +181,15 @@ export function readLocalConfig(): AppConfig {
   const ai = sanitizeAiConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.ai), {}));
   const proxy = sanitizeProxyConfig(parseJson<unknown>(localStorage.getItem(CONFIG_KEYS.proxy), {}));
   const savedLocale = localStorage.getItem(CONFIG_KEYS.locale) as Locale | null;
+  const language: Locale = savedLocale && localeCodes.has(savedLocale) ? savedLocale : 'en';
+  const font = sanitizeFontSettings(
+    {
+      fontId: localStorage.getItem(CONFIG_KEYS.fontId),
+      fontSize: localStorage.getItem(CONFIG_KEYS.fontSize),
+      monoFontId: localStorage.getItem(CONFIG_KEYS.monoFontId),
+    },
+    language,
+  );
 
   const rawAiProviders = parseJson<AiProviderConfig[] | null>(
     localStorage.getItem(CONFIG_KEYS.aiProviders),
@@ -179,6 +215,9 @@ export function readLocalConfig(): AppConfig {
       authorEmail: localStorage.getItem(CONFIG_KEYS.authorEmail) || 'dev@gitbx.io',
       proxy,
       sshKey: localStorage.getItem(CONFIG_KEYS.sshKey) || '',
+      fontId: font.fontId,
+      fontSize: font.fontSize,
+      monoFontId: font.monoFontId,
     },
     ai,
     aiProviders,
@@ -248,6 +287,14 @@ function normalizeConfig(value: unknown, fallback: AppConfig): AppConfig {
       sshKey: typeof settingsInput?.sshKey === 'string'
         ? settingsInput.sshKey
         : fallback.settings.sshKey,
+      ...sanitizeFontSettings(
+        {
+          fontId: (settingsInput as Record<string, unknown> | undefined)?.fontId ?? fallback.settings.fontId,
+          fontSize: (settingsInput as Record<string, unknown> | undefined)?.fontSize ?? fallback.settings.fontSize,
+          monoFontId: (settingsInput as Record<string, unknown> | undefined)?.monoFontId ?? fallback.settings.monoFontId,
+        },
+        language && localeCodes.has(language) ? language : fallback.settings.language,
+      ),
     },
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAiConfig(input.ai) : fallback.ai,
     aiProviders,
@@ -278,6 +325,9 @@ export function applyConfig(config: AppConfig) {
   localStorage.setItem(CONFIG_KEYS.authorEmail, config.settings.authorEmail);
   localStorage.setItem(CONFIG_KEYS.proxy, JSON.stringify(config.settings.proxy));
   localStorage.setItem(CONFIG_KEYS.sshKey, config.settings.sshKey);
+  localStorage.setItem(CONFIG_KEYS.fontId, config.settings.fontId);
+  localStorage.setItem(CONFIG_KEYS.fontSize, String(config.settings.fontSize));
+  localStorage.setItem(CONFIG_KEYS.monoFontId, config.settings.monoFontId);
   localStorage.setItem(CONFIG_KEYS.ai, JSON.stringify(config.ai));
 
   if (config.aiProviders && config.aiProviders.length > 0) {

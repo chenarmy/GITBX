@@ -38,4 +38,14 @@ description: 发布 GITBX 桌面版本时，执行 main 合并、跨平台安装
 
 ## 发布后验证
 
-创建 Release 后，使用 GitHub CLI 检查 tag、Release 状态和资产清单，确认 12 个目标资产均为 `uploaded`。随后按“分支流程”切回原开发分支并合并 `main`。
+创建 Release 后，使用 GitHub CLI 检查 tag、Release 状态和资产清单，确认 12 个目标资产均为 `uploaded`。
+
+### CNB 镜像
+
+- 每次发布必须同时镜像到腾讯 CNB 仓库 `chenarmy/GITBX`，不能只发布 GitHub。
+- 正常流程使用 `.github/workflows/release.yml` 的 `Mirror release to CNB` job；GitHub 仓库 Actions secret 名为 `CNB`，工作流将其映射到 `CNB_TOKEN`。
+- 镜像必须包含同一 tag、全部 12 个签名资产和 `latest.json`。优先从已验证的 GitHub Release 下载资产，再通过 `scripts/publish-cnb-release.mjs` 发布。
+- 发布完成后检查 CNB 最新 `latest.json` 的 `version`、平台下载 URL 和签名，并核实 URL 指向本次 CNB Release。若自动镜像失败，可运行 `.github/workflows/mirror-cnb-manual.yml` 补发。
+- 只有 GitHub 与 CNB 均已发布并完成校验，才算本次发布完成；若 CNB 失败，修复或补发后再结束发布流程。
+
+随后按“分支流程”切回原开发分支并合并 `main`。

@@ -29,6 +29,7 @@ import {
   FolderOpen,
   ArrowDownCircle,
   ArrowUpCircle,
+  RefreshCw,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
@@ -78,6 +79,83 @@ const dragOverTarget = ref<string | null>(null);
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
 const repositoryContextMenu = ref<{ path: string; x: number; y: number } | null>(null);
 const groupContextMenu = ref<{ groupName: string; x: number; y: number } | null>(null);
+const workspaceContextMenu = ref<{ x: number; y: number } | null>(null);
+const isBulkOperating = ref(false);
+
+function openWorkspaceContextMenu(e: MouseEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+  contextMenu.value = null;
+  repositoryContextMenu.value = null;
+  groupContextMenu.value = null;
+  workspaceContextMenu.value = {
+    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
+    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 200)),
+  };
+}
+
+function formatBulkResult(action: string, result: { succeeded: string[]; failed: Array<{ path: string; error: string }> }) {
+  const total = result.succeeded.length + result.failed.length;
+  if (result.failed.length === 0) {
+    notification.success(t('{action} All Completed', { action }), t('{succeeded}/{total} repositories succeeded.', { succeeded: result.succeeded.length, total }));
+  } else if (result.succeeded.length === 0) {
+    notification.error(t('{action} All Failed', { action }), result.failed.slice(0, 3).map((f) => `${f.path}: ${f.error}`).join('\n') || t('All repositories failed.'));
+  } else {
+    notification.warning(
+      t('{action} All Partially Completed', { action }),
+      t('{succeeded}/{total} succeeded. Failed: {failed}', { succeeded: result.succeeded.length, total, failed: result.failed.map((f) => f.path.split(/[\\/]/).pop() || f.path).join(', ') })
+    );
+  }
+}
+
+async function handleFetchAllRepos() {
+  if (isBulkOperating.value) return;
+  workspaceContextMenu.value = null;
+  groupContextMenu.value = null;
+  isBulkOperating.value = true;
+  notification.info(t('Git Fetch'), t('Fetching all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    const result = await repoStore.fetchAllRepos();
+    formatBulkResult(t('Fetch'), result);
+  } catch (error) {
+    notification.error(t('Fetch Failed'), formatGitError(error));
+  } finally {
+    isBulkOperating.value = false;
+  }
+}
+
+async function handlePullAllRepos() {
+  if (isBulkOperating.value) return;
+  workspaceContextMenu.value = null;
+  groupContextMenu.value = null;
+  isBulkOperating.value = true;
+  const strategy = (localStorage.getItem('gitbx_pull_strategy') as 'merge' | 'rebase' | 'ff-only') || 'merge';
+  notification.info(t('Git Pull'), t('Pulling all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    const result = await repoStore.pullAllRepos(strategy);
+    formatBulkResult(t('Pull'), result);
+  } catch (error) {
+    notification.error(t('Pull Failed'), formatGitError(error));
+  } finally {
+    isBulkOperating.value = false;
+  }
+}
+
+async function handlePushAllRepos() {
+  if (isBulkOperating.value) return;
+  workspaceContextMenu.value = null;
+  groupContextMenu.value = null;
+  isBulkOperating.value = true;
+  notification.info(t('Git Push'), t('Pushing all repositories ({count})...', { count: repoStore.repoList.length }));
+  try {
+    const result = await repoStore.pushAllRepos(false);
+    formatBulkResult(t('Push'), result);
+  } catch (error) {
+    notification.error(t('Push Failed'), formatGitError(error));
+  } finally {
+    isBulkOperating.value = false;
+  }
+}
 
 const allRepoGroups = computed(() => {
   const groups = [...repoStore.repoGroups];
@@ -349,6 +427,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     <div class="p-2 border-b border-border">
       <div
         @click="isReposOpen = !isReposOpen"
+        @contextmenu.prevent.stop="openWorkspaceContextMenu($event)"
         class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 mb-1 text-[10px] tracking-wider uppercase cursor-pointer hover:text-foreground"
       >
         <div class="flex items-center space-x-1">
@@ -772,8 +851,8 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
       <div
         v-if="groupContextMenu"
         class="fixed inset-0 z-50"
-        @click="groupContextMenu = null"
-        @contextmenu.prevent="groupContextMenu = null"
+        @click="groupContextMenu = null; workspaceContextMenu = null"
+        @contextmenu.prevent="groupContextMenu = null; workspaceContextMenu = null"
       >
         <div
           class="fixed w-48 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
@@ -802,11 +881,86 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
           <div class="py-1">
             <button
               role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handleFetchAllRepos"
+            >
+              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{{ t('Fetch All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handlePullAllRepos"
+            >
+              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              <span>{{ t('Pull All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handlePushAllRepos"
+            >
+              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{{ t('Push All') }}</span>
+            </button>
+          </div>
+          <div class="py-1">
+            <button
+              role="menuitem"
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-destructive/20"
               @click="handleDeleteGroup(groupContextMenu.groupName)"
             >
               <Trash2 class="h-3.5 w-3.5" />
               <span>{{ t('Delete Group') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        v-if="workspaceContextMenu && !groupContextMenu"
+        class="fixed inset-0 z-50"
+        @click="workspaceContextMenu = null"
+        @contextmenu.prevent="workspaceContextMenu = null"
+      >
+        <div
+          class="fixed w-60 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          :style="{ left: `${workspaceContextMenu.x}px`, top: `${workspaceContextMenu.y}px` }"
+          role="menu"
+          @click.stop
+        >
+          <div class="py-1">
+            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
+            </div>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handleFetchAllRepos"
+            >
+              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{{ t('Fetch All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handlePullAllRepos"
+            >
+              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              <span>{{ t('Pull All') }}</span>
+            </button>
+            <button
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
+              :disabled="isBulkOperating"
+              @click="handlePushAllRepos"
+            >
+              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{{ t('Push All') }}</span>
             </button>
           </div>
         </div>
@@ -822,7 +976,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   display: flex;
-  font-size: 10px;
+  font-size: calc(10px * var(--gitbx-font-scale, 1));
   font-weight: 600;
   gap: 0.25rem;
   min-width: 0;
