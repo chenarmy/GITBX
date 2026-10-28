@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import './assets/main.css';
+import './assets/fonts.css';
 import { initializeAppConfig, CONFIG_KEYS } from '@/services/appConfig';
 import { applyStoredFontEarly, clampFontSize, getFontById } from '@/services/fonts';
 

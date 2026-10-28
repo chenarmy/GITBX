@@ -118,7 +118,9 @@ const selectedUiFont = computed(() => getFontById(draftFontId.value));
 const selectedMonoFont = computed(() => getFontById(draftMonoFontId.value));
 
 /** Load draft fonts so the preview renders the real webfont before applying. */
+let preloadToken = 0;
 async function preloadDraftFonts() {
+  const token = ++preloadToken;
   fontLoading.value = true;
   fontLoadError.value = false;
   try {
@@ -126,11 +128,12 @@ async function preloadDraftFonts() {
       ensureFontLoaded(draftFontId.value),
       ensureFontLoaded(draftMonoFontId.value),
     ]);
+    if (token !== preloadToken) return; // A newer selection is already loading.
     if (!okUi || !okMono) fontLoadError.value = true;
   } catch {
-    fontLoadError.value = true;
+    if (token === preloadToken) fontLoadError.value = true;
   } finally {
-    fontLoading.value = false;
+    if (token === preloadToken) fontLoading.value = false;
   }
 }
 
