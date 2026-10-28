@@ -6,12 +6,15 @@ export interface FontOption {
   id: string;
   /** Display name shown in the settings dropdown. */
   label: string;
-  /** Full CSS font-family stack (webfont first, system fallbacks last). */
+  /** Full CSS font-family stack (bundled webfont first, system fallbacks last). */
   family: string;
   /** Family name used for document.fonts checks; defaults to the first stack entry. */
   checkFamily?: string;
-  /** Remote stylesheet URL. Lazy-loaded on demand; absent means system font. */
-  cssUrl?: string;
+  /**
+   * True when the family ships with the app (declared in assets/fonts.css).
+   * Bundled fonts work offline and need no network or CSP exemptions.
+   */
+  bundled?: boolean;
   group: FontGroup;
   /** Locales this font is recommended for. */
   locales: Locale[];
@@ -19,29 +22,18 @@ export interface FontOption {
   license: string;
 }
 
-function googleCss(familyParam: string): string {
-  return `https://fonts.googleapis.com/css2?family=${familyParam}:wght@400;500;600;700&display=swap`;
-}
-
 const ALL_LOCALES: Locale[] = ['en', 'ja', 'de', 'es', 'zh-CN', 'zh-TW', 'fr', 'ar'];
 
 /**
- * Open-source / free-for-commercial-use font catalog.
+ * Font catalog. Every family is bundled locally under `public/fonts` and
+ * declared in `src/assets/fonts.css`, so selection works offline and needs no
+ * remote CDN (also avoids Google Fonts being unreachable in some regions).
  *
- * - Latin/European: Inter, Noto Sans (SIL OFL 1.1, Google Fonts)
- * - Chinese (all required by product spec):
- *   思源宋体 Noto Serif SC (SIL OFL 1.1, Google Fonts),
- *   阿里巴巴普惠体 Alibaba PuHuiTi 3.0 (Alibaba free license, commercial use allowed),
- *   HarmonyOS Sans SC 鸿蒙 (HarmonyOS Sans license, free commercial use),
- *   plus 思源黑体 Noto Sans SC (SIL OFL 1.1, Google Fonts)
- * - Japanese: Noto Sans/Serif JP (SIL OFL 1.1, Google Fonts)
- * - Arabic: Noto Sans Arabic, Noto Naskh Arabic, Cairo (SIL OFL 1.1, Google Fonts)
- * - Monospace: JetBrains Mono, Source Code Pro, Noto Sans Mono (SIL OFL 1.1)
- *
- * Alibaba PuHuiTi and HarmonyOS Sans are not hosted on Google Fonts, so they
- * resolve through the cdnfonts mirror with a system-installed fallback stack.
- * If the remote stylesheet fails (e.g. offline), the system fallback in
- * `family` still applies and loading resolves gracefully.
+ * Licenses (all free for commercial use):
+ * - Inter, Noto Sans/Serif SC, Noto Sans JP, Noto Sans/Naskh Arabic, Cairo,
+ *   JetBrains Mono, Source Code Pro, Noto Sans Mono: SIL OFL 1.1
+ * - 阿里巴巴普惠体 Alibaba PuHuiTi 3.0: Alibaba PuHuiTi Free License
+ * - HarmonyOS Sans SC（鸿蒙）: HarmonyOS Sans License
  */
 export const FONT_CATALOG: FontOption[] = [
   {
@@ -57,7 +49,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Inter',
     family: 'Inter, ui-sans-serif, -apple-system, "Segoe UI", sans-serif',
     checkFamily: 'Inter',
-    cssUrl: googleCss('Inter'),
+    bundled: true,
     group: 'latin',
     locales: ['en', 'de', 'es', 'fr'],
     license: 'SIL OFL 1.1',
@@ -67,7 +59,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Noto Sans',
     family: '"Noto Sans", ui-sans-serif, -apple-system, "Segoe UI", sans-serif',
     checkFamily: 'Noto Sans',
-    cssUrl: googleCss('Noto+Sans'),
+    bundled: true,
     group: 'latin',
     locales: ['en', 'de', 'es', 'fr'],
     license: 'SIL OFL 1.1',
@@ -75,9 +67,9 @@ export const FONT_CATALOG: FontOption[] = [
   {
     id: 'harmonyos-sans-sc',
     label: 'HarmonyOS Sans SC（鸿蒙）',
-    family: '"HarmonyOS Sans SC", "HarmonyOS Sans", "HarmonyOS Sans SC Regular", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    family: '"HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     checkFamily: 'HarmonyOS Sans SC',
-    cssUrl: 'https://fonts.cdnfonts.com/css/harmonyos-sans-sc',
+    bundled: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'HarmonyOS Sans License（免费商用）',
@@ -85,9 +77,9 @@ export const FONT_CATALOG: FontOption[] = [
   {
     id: 'alibaba-puhuiti',
     label: '阿里巴巴普惠体 3.0',
-    family: '"Alibaba PuHuiTi 3.0", "AlibabaPuHuiTi-3-55-Regular", "Alibaba PuHuiTi", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    family: '"Alibaba PuHuiTi 3.0", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     checkFamily: 'Alibaba PuHuiTi 3.0',
-    cssUrl: 'https://fonts.cdnfonts.com/css/alibaba-puhui-ti-3-0',
+    bundled: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'Alibaba PuHuiTi Free License（允许商用）',
@@ -97,7 +89,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: '思源黑体 (Noto Sans SC)',
     family: '"Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     checkFamily: 'Noto Sans SC',
-    cssUrl: googleCss('Noto+Sans+SC'),
+    bundled: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'SIL OFL 1.1',
@@ -105,9 +97,9 @@ export const FONT_CATALOG: FontOption[] = [
   {
     id: 'noto-serif-sc',
     label: '思源宋体 (Noto Serif SC)',
-    family: '"Noto Serif SC", "Songti SC", "SimSun", "Noto Sans SC", serif',
+    family: '"Noto Serif SC", "Songti SC", SimSun, "Noto Sans SC", serif',
     checkFamily: 'Noto Serif SC',
-    cssUrl: googleCss('Noto+Serif+SC'),
+    bundled: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'SIL OFL 1.1',
@@ -115,19 +107,9 @@ export const FONT_CATALOG: FontOption[] = [
   {
     id: 'noto-sans-jp',
     label: 'Noto Sans JP（日本語）',
-    family: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif',
+    family: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "HarmonyOS Sans SC", sans-serif',
     checkFamily: 'Noto Sans JP',
-    cssUrl: googleCss('Noto+Sans+JP'),
-    group: 'japanese',
-    locales: ['ja'],
-    license: 'SIL OFL 1.1',
-  },
-  {
-    id: 'noto-serif-jp',
-    label: 'Noto Serif JP（日本語明朝）',
-    family: '"Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif',
-    checkFamily: 'Noto Serif JP',
-    cssUrl: googleCss('Noto+Serif+JP'),
+    bundled: true,
     group: 'japanese',
     locales: ['ja'],
     license: 'SIL OFL 1.1',
@@ -137,7 +119,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Noto Sans Arabic（العربية）',
     family: '"Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif',
     checkFamily: 'Noto Sans Arabic',
-    cssUrl: googleCss('Noto+Sans+Arabic'),
+    bundled: true,
     group: 'arabic',
     locales: ['ar'],
     license: 'SIL OFL 1.1',
@@ -147,7 +129,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Noto Naskh Arabic（نسخ）',
     family: '"Noto Naskh Arabic", "Traditional Arabic", serif',
     checkFamily: 'Noto Naskh Arabic',
-    cssUrl: googleCss('Noto+Naskh+Arabic'),
+    bundled: true,
     group: 'arabic',
     locales: ['ar'],
     license: 'SIL OFL 1.1',
@@ -157,7 +139,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Cairo（القاهرة）',
     family: 'Cairo, "Noto Sans Arabic", "Segoe UI", sans-serif',
     checkFamily: 'Cairo',
-    cssUrl: googleCss('Cairo'),
+    bundled: true,
     group: 'arabic',
     locales: ['ar'],
     license: 'SIL OFL 1.1',
@@ -175,7 +157,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'JetBrains Mono',
     family: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     checkFamily: 'JetBrains Mono',
-    cssUrl: googleCss('JetBrains+Mono'),
+    bundled: true,
     group: 'mono',
     locales: ALL_LOCALES,
     license: 'SIL OFL 1.1',
@@ -185,7 +167,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Source Code Pro',
     family: '"Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     checkFamily: 'Source Code Pro',
-    cssUrl: googleCss('Source+Code+Pro'),
+    bundled: true,
     group: 'mono',
     locales: ALL_LOCALES,
     license: 'SIL OFL 1.1',
@@ -195,7 +177,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Noto Sans Mono',
     family: '"Noto Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     checkFamily: 'Noto Sans Mono',
-    cssUrl: googleCss('Noto+Sans+Mono'),
+    bundled: true,
     group: 'mono',
     locales: ['zh-CN', 'zh-TW', 'ja'],
     license: 'SIL OFL 1.1',
@@ -242,85 +224,99 @@ export function clampFontSize(value: unknown, fallback = BASE_FONT_SIZE): number
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(numeric)));
 }
 
-const loadedStylesheets = new Set<string>();
-const pendingLoads = new Map<string, Promise<boolean>>();
-
 function firstFamilyName(option: FontOption): string {
   if (option.checkFamily) return option.checkFamily;
   const first = option.family.split(',')[0]?.trim().replace(/^["']|["']$/g, '');
   return first || 'sans-serif';
 }
 
-/**
- * Lazy-load a font's remote stylesheet (once per session). Different
- * languages load different fonts: only the actually selected font's CSS is
- * ever fetched. Resolves false (instead of rejecting) when offline or when
- * the mirror is unreachable, so callers can fall back to system fonts.
- */
-export function ensureFontLoaded(id: string): Promise<boolean> {
-  const option = getFontById(id);
-  if (!option || !option.cssUrl) return Promise.resolve(true);
-  if (typeof document === 'undefined') return Promise.resolve(true);
-  if (loadedStylesheets.has(id)) return Promise.resolve(true);
-  const pending = pendingLoads.get(id);
-  if (pending) return pending;
+/** Sample text that touches Latin, CJK and Arabic subsets. */
+const FONT_PROBE_TEXT = 'Agile Git 中文简体 繁體中文 日本語 العربية 0123456789';
 
-  const task = new Promise<boolean>((resolve) => {
-    const cssUrl = option.cssUrl as string;
-    let settled = false;
-    const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      if (ok) loadedStylesheets.add(id);
-      pendingLoads.delete(id);
-      resolve(ok);
-    };
+function normalizeFamily(value: string): string {
+  return value.replace(/["']/g, '').trim().toLowerCase();
+}
+
+/** Decorative weights are optional: only regular/bold are used by the UI. */
+const PROBE_WEIGHTS = ['400', '700'];
+
+function matchingFaces(fonts: FontFaceSet, family: string): FontFace[] {
+  const target = normalizeFamily(family);
+  return Array.from(fonts).filter((face) => normalizeFamily(face.family) === target);
+}
+
+/** Collect the @font-face rules declared for a family (needed to retry a fetch). */
+function declaredFontUrls(family: string): string[] {
+  const urls: string[] = [];
+  const target = normalizeFamily(family);
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
     try {
-      const existing = document.querySelector(`link[data-gitbx-font="${id}"]`);
-      if (existing) {
-        loadedStylesheets.add(id);
-        finish(true);
-        return;
-      }
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = cssUrl;
-      link.dataset.gitbxFont = id;
-      link.onload = () => {
-        try {
-          const fonts = (document as Document).fonts;
-          const name = firstFamilyName(option);
-          if (fonts?.load) {
-            Promise.race([
-              Promise.all([
-                fonts.load(`400 16px "${name}"`),
-                fonts.load(`700 16px "${name}"`),
-              ]),
-              new Promise((timerResolve) => setTimeout(timerResolve, 2500)),
-            ])
-              .then(() => finish(true))
-              .catch(() => finish(true));
-          } else {
-            finish(true);
-          }
-        } catch {
-          finish(true);
-        }
-      };
-      link.onerror = () => {
-        link.remove();
-        finish(false);
-      };
-      document.head.appendChild(link);
-      // Never leave callers hanging on a stalled network.
-      setTimeout(() => finish(false), 12000);
+      rules = sheet.cssRules;
     } catch {
-      finish(false);
+      continue;
     }
-  });
+    for (const rule of Array.from(rules)) {
+      if (rule.constructor.name !== 'CSSFontFaceRule' && (rule as CSSRule).type !== 5) continue;
+      const text = rule.cssText || '';
+      const familyMatch = /font-family:\s*([^;]+);/.exec(text);
+      if (!familyMatch || normalizeFamily(familyMatch[1]) !== target) continue;
+      for (const match of text.matchAll(/url\((['"]?)([^'")]+)\1\)/g)) {
+        if (match[2]) urls.push(match[2]);
+      }
+    }
+  }
+  return urls;
+}
 
-  pendingLoads.set(id, task);
-  return task;
+/**
+ * Ensure the selected font is ready for painting. Bundled fonts are local
+ * files, so this only warms the browser font cache (no network).
+ *
+ * A single abort (the browser cancels a font request when the user switches
+ * fonts quickly or a background tab is throttled) must not be reported as a
+ * broken font, so individual weight failures are tolerated and the final
+ * verdict falls back to checking that the file itself is reachable.
+ */
+export async function ensureFontLoaded(id: string): Promise<boolean> {
+  const option = getFontById(id);
+  if (!option) return false;
+  if (!option.bundled) return true;
+  if (typeof document === 'undefined') return true;
+  const fonts = document.fonts;
+  if (!fonts?.load) return true;
+
+  const name = firstFamilyName(option);
+
+  const warm = async (): Promise<boolean> => {
+    await Promise.allSettled(
+      PROBE_WEIGHTS.map((weight) => fonts.load(`${weight} 16px "${name}"`, FONT_PROBE_TEXT)),
+    );
+    return matchingFaces(fonts, name).some((face) => face.status === 'loaded');
+  };
+
+  if (await warm()) return true;
+
+  // Font requests can be aborted while the UI is switching fonts; retry once.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  if (await warm()) return true;
+
+  // Last resort: verify the stylesheet actually ships a file we can reach.
+  // This separates "font is missing from the build" from a transient abort.
+  const urls = declaredFontUrls(name);
+  if (urls.length === 0) return false;
+  try {
+    const response = await fetch(urls[0], { cache: 'reload' });
+    if (!response.ok) return false;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // Guard against SPA/static fallbacks that answer 200 with index.html.
+    const isWoff2 = bytes.length > 4
+      && bytes[0] === 0x77 && bytes[1] === 0x4f && bytes[2] === 0x46 && bytes[3] === 0x32;
+    if (isWoff2) return true;
+    return (response.headers.get('content-type') || '').startsWith('font/');
+  } catch {
+    return false;
+  }
 }
 
 export interface AppFontSettings {
