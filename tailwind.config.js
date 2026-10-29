@@ -7,6 +7,12 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        // Keep every `font-sans` surface in sync with Settings → Font.
+        // Without this mapping Tailwind's utility resets those surfaces to
+        // ui-sans-serif, overriding the dynamic family applied by the app.
+        sans: ["var(--gitbx-font-family)"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

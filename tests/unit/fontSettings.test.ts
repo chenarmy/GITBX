@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   FONT_CATALOG,
   UI_FONTS,
@@ -52,6 +54,35 @@ describe('font catalog (open-source only)', () => {
   it('splits UI and mono fonts', () => {
     expect(UI_FONTS.length).toBeGreaterThan(8);
     expect(MONO_FONTS.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('maps Tailwind sans surfaces to the selected UI font', () => {
+    const config = readFileSync(resolve(process.cwd(), 'tailwind.config.js'), 'utf8');
+    expect(config).toMatch(/sans:\s*\[\s*["']var\(--gitbx-font-family\)["']\s*\]/);
+  });
+
+  it('keeps component font declarations connected to app font settings', () => {
+    const sourceRoot = resolve(process.cwd(), 'src');
+    const sourceFiles: string[] = [];
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) visit(path);
+        else if (/\.(?:css|vue)$/.test(entry.name) && entry.name !== 'fonts.css') sourceFiles.push(path);
+      }
+    };
+    visit(sourceRoot);
+
+    const disconnectedDeclarations = sourceFiles.flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .filter((line) => /font-family\s*[:=]/i.test(line))
+        .filter((line) => !/--gitbx-(?:font|mono)-family\s*:/.test(line))
+        .filter((line) => !/var\(--gitbx-(?:font|mono)-family\)/.test(line))
+        .map((line) => `${file}: ${line.trim()}`),
+    );
+
+    expect(disconnectedDeclarations).toEqual([]);
   });
 });
 
