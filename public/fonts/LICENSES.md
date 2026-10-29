@@ -1,7 +1,7 @@
 # Font licenses
 
-All bundled fonts are free for commercial use. Full license texts are included
-where required.
+All bundled and on-demand fonts are free for commercial use. Full license texts
+are included where required.
 
 ## SIL Open Font License 1.1
 
@@ -28,7 +28,7 @@ License text: <https://scripts.sil.org/OFL> (also in [OFL-1.1.txt](./OFL-1.1.txt
 Applies to: 阿里巴巴普惠体 3.0 (Alibaba PuHuiTi 3.0).
 
 Copyright 2019-2022 Alibaba Group. Licensed for free use, including commercial
-use, per the Alibaba PuHuiTi 3.0 license terms. The font file is bundled
+use, per the Alibaba PuHuiTi 3.0 license terms. The on-demand font file is
 unmodified in character coverage (subset) but otherwise unaltered.
 
 License reference: <https://fonts.alibabagroup.com/>
