@@ -227,7 +227,7 @@ onMounted(async () => {
   border-radius: 3px;
   background: hsl(var(--muted));
   padding: 0.05rem 0.25rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--gitbx-mono-family);
 }
 
 .release-markdown :deep(a) {

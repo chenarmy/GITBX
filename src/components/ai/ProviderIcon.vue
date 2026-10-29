@@ -83,7 +83,7 @@ const iconSize = computed(() => (typeof props.size === 'number' ? `${props.size}
       class="w-full h-full"
     >
       <rect width="24" height="24" rx="12" fill="#18181B" />
-      <text x="12" y="16.5" font-size="14" font-weight="900" font-family="sans-serif" text-anchor="middle" fill="#FFFFFF">K</text>
+      <text x="12" y="16.5" font-size="14" font-weight="900" style="font-family: var(--gitbx-font-family)" text-anchor="middle" fill="#FFFFFF">K</text>
     </svg>
 
     <!-- 6. Qwen (通义千问) -->
@@ -205,7 +205,7 @@ const iconSize = computed(() => (typeof props.size === 'number' ? `${props.size}
       class="w-full h-full"
     >
       <circle cx="12" cy="12" r="9" stroke="#0EA5E9" stroke-width="2" />
-      <text x="12" y="16" font-size="12" font-weight="bold" font-family="sans-serif" text-anchor="middle" fill="#0EA5E9">Q</text>
+      <text x="12" y="16" font-size="12" font-weight="bold" style="font-family: var(--gitbx-font-family)" text-anchor="middle" fill="#0EA5E9">Q</text>
     </svg>
 
     <!-- 16. Grok CLI -->
