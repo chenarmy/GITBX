@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   FONT_CATALOG,
@@ -9,6 +9,7 @@ import {
   defaultFontIdForLocale,
   getFontById,
 } from '../../src/services/fonts';
+import { OPTIONAL_FONT_PACKS } from '../../src/services/optionalFontManifest.generated';
 
 describe('font catalog (open-source only)', () => {
   it('contains all required Chinese fonts', () => {
@@ -54,6 +55,27 @@ describe('font catalog (open-source only)', () => {
   it('splits UI and mono fonts', () => {
     expect(UI_FONTS.length).toBeGreaterThan(8);
     expect(MONO_FONTS.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps large optional families out of the installer font directory', () => {
+    const downloadableIds = FONT_CATALOG.filter((font) => font.downloadable).map((font) => font.id).sort();
+    expect(downloadableIds).toEqual(Object.keys(OPTIONAL_FONT_PACKS).sort());
+    expect(downloadableIds).toEqual([
+      'alibaba-puhuiti',
+      'noto-sans-jp',
+      'noto-sans-sc',
+      'noto-serif-sc',
+    ]);
+
+    for (const pack of Object.values(OPTIONAL_FONT_PACKS)) {
+      expect(pack.totalBytes).toBeGreaterThan(0);
+      expect(pack.faces.length).toBeGreaterThan(0);
+      for (const face of pack.faces) {
+        expect(existsSync(resolve(process.cwd(), 'font-packs', face.file))).toBe(true);
+        expect(existsSync(resolve(process.cwd(), 'public', 'fonts', face.file))).toBe(false);
+        expect(face.sha256).toMatch(/^[a-f0-9]{64}$/);
+      }
+    }
   });
 
   it('maps Tailwind sans surfaces to the selected UI font', () => {

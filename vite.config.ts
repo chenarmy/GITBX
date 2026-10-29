@@ -10,10 +10,39 @@ const updaterPublicKey = tauriConfig.plugins?.updater?.pubkey as string | undefi
 const updaterConfigured = Boolean(
   updaterPublicKey && !updaterPublicKey.startsWith("__TAURI_UPDATER_"),
 );
+const fontPackRoot = path.resolve(__dirname, "./font-packs");
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: "gitbx-font-packs-dev",
+      apply: "serve",
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          const pathname = request.url?.split("?", 1)[0] || "";
+          if (!pathname.startsWith("/font-packs/")) return next();
+          const relative = decodeURIComponent(pathname.slice("/font-packs/".length));
+          const filePath = path.resolve(fontPackRoot, ...relative.split("/"));
+          if (!filePath.startsWith(`${fontPackRoot}${path.sep}`) || path.extname(filePath) !== ".woff2") {
+            response.statusCode = 404;
+            return response.end();
+          }
+          fs.stat(filePath, (error, stats) => {
+            if (error || !stats.isFile()) {
+              response.statusCode = 404;
+              response.end();
+              return;
+            }
+            response.setHeader("Content-Type", "font/woff2");
+            response.setHeader("Content-Length", String(stats.size));
+            fs.createReadStream(filePath).pipe(response);
+          });
+        });
+      },
+    },
+  ],
   define: {
     __GITBX_UPDATER_CONFIGURED__: JSON.stringify(updaterConfigured),
   },

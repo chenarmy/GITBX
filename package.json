@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:check": "vue-tsc && vite build",
+    "fonts:generate": "node scripts/generate-font-manifest.mjs",
+    "fonts:check": "node scripts/generate-font-manifest.mjs --check",
+    "build": "pnpm fonts:check && vite build",
+    "build:check": "pnpm fonts:check && vue-tsc && vite build",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:frontend": "vitest run",

@@ -1,4 +1,5 @@
 import type { Locale } from '@/i18n/config';
+import { ensureOptionalFontLoaded } from '@/services/optionalFonts';
 
 export type FontGroup = 'latin' | 'chinese' | 'japanese' | 'arabic' | 'mono';
 
@@ -15,6 +16,8 @@ export interface FontOption {
    * Bundled fonts work offline and need no network or CSP exemptions.
    */
   bundled?: boolean;
+  /** True when the family is downloaded once and cached in persistent app storage. */
+  downloadable?: boolean;
   group: FontGroup;
   /** Locales this font is recommended for. */
   locales: Locale[];
@@ -25,9 +28,9 @@ export interface FontOption {
 const ALL_LOCALES: Locale[] = ['en', 'ja', 'de', 'es', 'zh-CN', 'zh-TW', 'fr', 'ar'];
 
 /**
- * Font catalog. Every family is bundled locally under `public/fonts` and
- * declared in `src/assets/fonts.css`, so selection works offline and needs no
- * remote CDN (also avoids Google Fonts being unreachable in some regions).
+ * Core families are bundled under `public/fonts`. Larger optional families are
+ * downloaded on first selection, checksum-verified and cached for later offline
+ * use. Every family retains system fallbacks when download is unavailable.
  *
  * Licenses (all free for commercial use):
  * - Inter, Noto Sans/Serif SC, Noto Sans JP, Noto Sans/Naskh Arabic, Cairo,
@@ -79,7 +82,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: '阿里巴巴普惠体 3.0',
     family: '"Alibaba PuHuiTi 3.0", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     checkFamily: 'Alibaba PuHuiTi 3.0',
-    bundled: true,
+    downloadable: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'Alibaba PuHuiTi Free License（允许商用）',
@@ -89,7 +92,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: '思源黑体 (Noto Sans SC)',
     family: '"Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     checkFamily: 'Noto Sans SC',
-    bundled: true,
+    downloadable: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'SIL OFL 1.1',
@@ -99,7 +102,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: '思源宋体 (Noto Serif SC)',
     family: '"Noto Serif SC", "Songti SC", SimSun, "Noto Sans SC", serif',
     checkFamily: 'Noto Serif SC',
-    bundled: true,
+    downloadable: true,
     group: 'chinese',
     locales: ['zh-CN', 'zh-TW'],
     license: 'SIL OFL 1.1',
@@ -109,7 +112,7 @@ export const FONT_CATALOG: FontOption[] = [
     label: 'Noto Sans JP（日本語）',
     family: '"Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "HarmonyOS Sans SC", sans-serif',
     checkFamily: 'Noto Sans JP',
-    bundled: true,
+    downloadable: true,
     group: 'japanese',
     locales: ['ja'],
     license: 'SIL OFL 1.1',
@@ -281,6 +284,7 @@ function declaredFontUrls(family: string): string[] {
 export async function ensureFontLoaded(id: string): Promise<boolean> {
   const option = getFontById(id);
   if (!option) return false;
+  if (option.downloadable) return ensureOptionalFontLoaded(id);
   if (!option.bundled) return true;
   if (typeof document === 'undefined') return true;
   const fonts = document.fonts;
