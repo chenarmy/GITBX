@@ -94,7 +94,10 @@ function generate() {
 
 function writeOrCheck(filePath, content, check) {
   if (check) {
-    if (!fs.existsSync(filePath) || fs.readFileSync(filePath, 'utf8') !== content) {
+    const existing = fs.existsSync(filePath)
+      ? fs.readFileSync(filePath, 'utf8').replaceAll('\r\n', '\n')
+      : null;
+    if (existing !== content.replaceAll('\r\n', '\n')) {
       throw new Error(`${path.relative(repositoryRoot, filePath)} is stale; run pnpm fonts:generate`);
     }
     return;
