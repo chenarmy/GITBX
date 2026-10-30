@@ -38,7 +38,7 @@ function hashFile(filePath) {
 }
 
 function generate() {
-  const fullCss = fs.readFileSync(sourceCssPath, 'utf8');
+  const fullCss = fs.readFileSync(sourceCssPath, 'utf8').replaceAll('\r\n', '\n');
   const faceBlocks = [...fullCss.matchAll(/@font-face\s*\{[\s\S]*?\n\}/g)].map((match) => match[0]);
   const packs = new Map();
   let coreCss = fullCss.replace(/^\/\*[\s\S]*?\*\/\s*/, '');
