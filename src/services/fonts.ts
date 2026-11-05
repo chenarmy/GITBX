@@ -203,6 +203,7 @@ export function isKnownFontId(id: string): boolean {
 }
 
 export const BASE_FONT_SIZE = 12;
+export const DEFAULT_FONT_SIZE = 14;
 export const MIN_FONT_SIZE = 11;
 export const MAX_FONT_SIZE = 20;
 export const DEFAULT_MONO_FONT_ID = 'system-mono';
@@ -221,7 +222,7 @@ export function defaultFontIdForLocale(locale: Locale): string {
   }
 }
 
-export function clampFontSize(value: unknown, fallback = BASE_FONT_SIZE): number {
+export function clampFontSize(value: unknown, fallback = DEFAULT_FONT_SIZE): number {
   const numeric = typeof value === 'string' ? Number(value) : (value as number);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(numeric)));

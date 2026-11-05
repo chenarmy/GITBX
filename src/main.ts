@@ -3,14 +3,19 @@ import { createPinia } from 'pinia';
 import './assets/main.css';
 import './assets/fonts.css';
 import { initializeAppConfig, CONFIG_KEYS } from '@/services/appConfig';
-import { applyStoredFontEarly, clampFontSize, getFontById } from '@/services/fonts';
+import {
+  applyStoredFontEarly,
+  clampFontSize,
+  DEFAULT_FONT_SIZE,
+  getFontById,
+} from '@/services/fonts';
 
 /** Apply the stored font before Vue mounts to avoid a flash of unstyled text. */
 function applyStoredFontBeforeMount() {
   try {
     const fontId = localStorage.getItem(CONFIG_KEYS.fontId) || 'system-default';
     const monoId = localStorage.getItem(CONFIG_KEYS.monoFontId) || 'system-mono';
-    const size = clampFontSize(Number(localStorage.getItem(CONFIG_KEYS.fontSize) ?? 12));
+    const size = clampFontSize(Number(localStorage.getItem(CONFIG_KEYS.fontSize) ?? DEFAULT_FONT_SIZE));
     applyStoredFontEarly(
       getFontById(fontId)?.family || 'inherit',
       size,

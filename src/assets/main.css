@@ -6,8 +6,8 @@
   /* App font settings (driven by Settings → Font, see services/fonts.ts). */
   :root {
     --gitbx-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    --gitbx-font-size: 12px;
-    --gitbx-font-scale: 1;
+    --gitbx-font-size: 14px;
+    --gitbx-font-scale: 1.1666666667;
     --gitbx-mono-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
   }
   /* DBX family: dark desktop-workbench defaults with a quiet blue accent. */
@@ -92,7 +92,7 @@ html {
 body {
   color: hsl(var(--foreground));
   font-family: var(--gitbx-font-family);
-  font-size: var(--gitbx-font-size, 12px);
+  font-size: var(--gitbx-font-size, 14px);
   -webkit-font-smoothing: antialiased;
 }
 

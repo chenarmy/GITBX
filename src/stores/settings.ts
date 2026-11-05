@@ -10,6 +10,7 @@ import {
   ensureFontLoaded,
   getFontById,
   isKnownFontId,
+  DEFAULT_FONT_SIZE,
   DEFAULT_MONO_FONT_ID,
 } from '@/services/fonts';
 
@@ -38,7 +39,7 @@ function getInitialFontSize(): number {
     const saved = localStorage.getItem(CONFIG_KEYS.fontSize);
     if (saved !== null) return clampFontSize(Number(saved));
   } catch {}
-  return clampFontSize(12);
+  return DEFAULT_FONT_SIZE;
 }
 
 function getInitialTheme(): boolean {
