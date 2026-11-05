@@ -5,6 +5,7 @@ import {
   FONT_CATALOG,
   UI_FONTS,
   MONO_FONTS,
+  DEFAULT_FONT_SIZE,
   clampFontSize,
   defaultFontIdForLocale,
   getFontById,
@@ -49,7 +50,8 @@ describe('font catalog (open-source only)', () => {
     expect(clampFontSize(5)).toBe(11);
     expect(clampFontSize(99)).toBe(20);
     expect(clampFontSize(14)).toBe(14);
-    expect(clampFontSize('abc')).toBe(12);
+    expect(DEFAULT_FONT_SIZE).toBe(14);
+    expect(clampFontSize('abc')).toBe(14);
   });
 
   it('splits UI and mono fonts', () => {
@@ -130,6 +132,12 @@ describe('font settings persistence', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it('uses 14px when no font size has been saved', async () => {
+    const { readLocalConfig } = await import('../../src/services/appConfig');
+    expect(readLocalConfig().settings.fontSize).toBe(14);
+  });
+
   it('round-trips font settings through local config', async () => {
     const { readLocalConfig, applyConfig, CONFIG_KEYS } = await import(
       '../../src/services/appConfig'
