@@ -70,62 +70,68 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <section class="rounded-lg border border-border bg-background/60 p-4">
-      <div class="flex items-start gap-3">
-        <img src="/favicon.png" alt="GITBX" class="h-12 w-12 rounded-lg" />
+    <section class="arco-card p-4">
+      <div class="flex items-start gap-3.5">
+        <img src="/favicon.png" alt="GITBX" class="h-12 w-12 rounded-[8px] border border-border/60 shadow-sm" />
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-bold text-foreground">GITBX</h2>
-            <span class="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+            <h2 class="text-base font-semibold tracking-tight text-foreground">GITBX</h2>
+            <span class="arco-tag arco-tag-neutral font-mono text-[10px]">
               v{{ updates.currentVersion }}
             </span>
           </div>
-          <p class="mt-1 text-[11px] text-muted-foreground">
+          <p class="mt-1 text-[12px] text-muted-foreground">
             {{ t('Next-generation lightweight Git desktop client') }}
           </p>
         </div>
-        <CheckCircle2 v-if="updates.latestVersion === updates.currentVersion" class="h-5 w-5 text-emerald-500" />
+        <CheckCircle2
+          v-if="updates.latestVersion === updates.currentVersion"
+          class="h-5 w-5 text-[hsl(var(--arco-success))]"
+        />
       </div>
 
-      <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <div class="rounded border border-border bg-card px-3 py-2">
-          <div class="text-[10px] text-muted-foreground">{{ t('Runtime') }}</div>
-          <div class="mt-0.5 flex items-center gap-1.5 font-medium">
-            <Laptop class="h-3.5 w-3.5" />
+      <div class="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div class="rounded-[6px] border border-border/80 bg-[hsl(var(--arco-fill-1))] px-3 py-2">
+          <div class="text-[10px] font-medium text-muted-foreground">{{ t('Runtime') }}</div>
+          <div class="mt-0.5 flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+            <Laptop class="h-3.5 w-3.5 text-primary" />
             {{ runtimeLabel }}
           </div>
         </div>
-        <div class="rounded border border-border bg-card px-3 py-2">
-          <div class="text-[10px] text-muted-foreground">{{ t('Platform') }}</div>
-          <div class="mt-0.5 truncate font-mono text-[11px]" :title="platformLabel">{{ platformLabel }}</div>
+        <div class="rounded-[6px] border border-border/80 bg-[hsl(var(--arco-fill-1))] px-3 py-2">
+          <div class="text-[10px] font-medium text-muted-foreground">{{ t('Platform') }}</div>
+          <div class="mt-0.5 truncate font-mono text-[11px] text-foreground" :title="platformLabel">{{ platformLabel }}</div>
         </div>
       </div>
     </section>
 
-    <section class="overflow-hidden rounded-lg border border-border bg-background/60">
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+    <section class="arco-card overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 bg-[hsl(var(--arco-fill-1))] px-4 py-3">
         <div>
-          <h3 class="font-semibold text-foreground">{{ t('Release notes') }}</h3>
-          <p class="mt-0.5 text-[10px] text-muted-foreground">{{ t('Review changes from recent GITBX releases.') }}</p>
+          <h3 class="text-[13px] font-semibold text-foreground">{{ t('Release notes') }}</h3>
+          <p class="mt-0.5 text-[11px] text-muted-foreground">{{ t('Review changes from recent GITBX releases.') }}</p>
         </div>
         <div class="flex items-center gap-1.5">
           <button
-            class="inline-flex items-center gap-1 rounded border border-border bg-card px-2.5 py-1.5 hover:bg-accent disabled:opacity-50"
+            type="button"
+            class="arco-btn arco-btn-outline arco-btn-sm"
             :disabled="updates.isBusy"
             @click="updates.checkForUpdates(true)"
           >
-            <DownloadCloud class="h-3.5 w-3.5" />
+            <DownloadCloud class="h-3.5 w-3.5 text-primary" />
             {{ updates.status === 'checking' ? t('Checking...') : t('Check for updates') }}
           </button>
           <button
-            class="inline-flex items-center gap-1 rounded border border-border bg-card px-2.5 py-1.5 hover:bg-accent"
+            type="button"
+            class="arco-btn arco-btn-outline arco-btn-sm"
             @click="updates.openReleasePage()"
           >
             <ExternalLink class="h-3.5 w-3.5" />
             {{ t('View online') }}
           </button>
           <button
-            class="rounded border border-border bg-card p-1.5 hover:bg-accent disabled:opacity-50"
+            type="button"
+            class="arco-icon-btn h-7 w-7 border border-border bg-card"
             :title="t('Refresh release notes')"
             :disabled="updates.releaseHistoryLoading"
             @click="refreshReleases"
@@ -135,21 +141,22 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-if="updates.releaseHistory.length" class="divide-y divide-border">
+      <div v-if="updates.releaseHistory.length" class="divide-y divide-border/80">
         <article v-for="(release, index) in visibleReleases" :key="release.version">
           <button
-            class="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-accent/60"
+            type="button"
+            class="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-accent/55"
             @click="toggleRelease(release.version)"
           >
-            <span class="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+            <span class="arco-tag arco-tag-neutral font-mono text-[10px]">
               v{{ release.version }}
             </span>
-            <span v-if="index === 0" class="rounded bg-foreground px-1.5 py-0.5 text-[9px] font-bold text-background">NEW</span>
-            <span class="flex-1 text-[10px] text-muted-foreground">
+            <span v-if="index === 0" class="arco-tag arco-tag-primary text-[10px] font-semibold">NEW</span>
+            <span class="flex-1 text-[11px] text-muted-foreground">
               {{ t('Released on {date}', { date: formatDate(release.publishedAt) }) }}
             </span>
             <span
-              class="rounded p-1 hover:bg-muted"
+              class="arco-icon-btn-sm"
               role="button"
               tabindex="0"
               :title="t('View online')"
@@ -159,39 +166,42 @@ onMounted(async () => {
               <ExternalLink class="h-3 w-3" />
             </span>
             <ChevronDown
-              class="h-3.5 w-3.5 transition-transform"
+              class="h-3.5 w-3.5 text-muted-foreground transition-transform duration-150"
               :class="{ 'rotate-180': expandedVersion === release.version }"
             />
           </button>
-          <div v-if="expandedVersion === release.version" class="border-t border-border bg-card/60 px-5 py-3">
+          <div v-if="expandedVersion === release.version" class="border-t border-border/80 bg-[hsl(var(--arco-fill-1))] px-5 py-3.5">
             <div
-              class="release-markdown max-h-64 overflow-y-auto text-[11px] leading-5 text-foreground"
+              class="release-markdown max-h-64 overflow-y-auto text-[12px] leading-5 text-foreground"
               v-html="renderReleaseMarkdown(release.body || t('No release notes provided.'))"
             />
           </div>
         </article>
       </div>
 
-      <div v-else-if="updates.releaseHistoryLoading" class="px-4 py-8 text-center text-muted-foreground">
-        <RefreshCw class="mx-auto mb-2 h-4 w-4 animate-spin" />
+      <div v-else-if="updates.releaseHistoryLoading" class="px-4 py-8 text-center text-[12px] text-muted-foreground">
+        <RefreshCw class="mx-auto mb-2 h-4 w-4 animate-spin text-primary" />
         {{ t('Loading release notes...') }}
       </div>
-      <div v-else class="px-4 py-8 text-center text-muted-foreground">
+      <div v-else class="px-4 py-8 text-center text-[12px] text-muted-foreground">
         {{ t('Release notes are temporarily unavailable.') }}
       </div>
 
-      <div v-if="updates.releaseHistoryError" class="border-t border-border px-4 py-2 text-[10px] text-amber-500">
-        <template v-if="updates.releaseHistoryUsingFallback">
-          {{ t('GitHub is temporarily unavailable. Showing bundled release notes.') }}
-        </template>
-        <template v-else>
-          {{ t('Release notes are temporarily unavailable.') }} {{ updates.releaseHistoryError }}
-        </template>
+      <div v-if="updates.releaseHistoryError" class="border-t border-border/80 p-3">
+        <div class="arco-alert arco-alert-warning text-[11px]">
+          <template v-if="updates.releaseHistoryUsingFallback">
+            {{ t('GitHub is temporarily unavailable. Showing bundled release notes.') }}
+          </template>
+          <template v-else>
+            {{ t('Release notes are temporarily unavailable.') }} {{ updates.releaseHistoryError }}
+          </template>
+        </div>
       </div>
 
       <button
         v-if="updates.releaseHistory.length && canLoadMore"
-        class="w-full border-t border-border py-2 text-center hover:bg-accent disabled:opacity-50"
+        type="button"
+        class="arco-btn arco-btn-text w-full rounded-none border-t border-border/80 py-2"
         :disabled="updates.releaseHistoryLoading"
         @click="loadMoreReleases"
       >

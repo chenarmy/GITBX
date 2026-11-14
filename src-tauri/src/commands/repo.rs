@@ -26,8 +26,14 @@ pub async fn init_repo(repo_path: String) -> CommandResult<RepositoryInfo> {
 }
 
 #[tauri::command]
-pub async fn clone_repo(url: String, destination: String) -> CommandResult<RepositoryInfo> {
-    GitService::clone_repo(&url, &destination).map_err(format_gitbx_err)
+pub async fn clone_repo(
+    url: String,
+    destination: String,
+    username: Option<String>,
+    password: Option<String>,
+) -> CommandResult<RepositoryInfo> {
+    GitService::clone_repo_with_auth(&url, &destination, username.as_deref(), password.as_deref())
+        .map_err(format_gitbx_err)
 }
 
 #[tauri::command]
@@ -224,6 +230,30 @@ pub async fn create_tag(
 }
 
 #[tauri::command]
+pub async fn sync_tags(repo_path: String, remote: Option<String>) -> CommandResult<()> {
+    GitService::sync_tags(&repo_path, remote.as_deref()).map_err(format_gitbx_err)
+}
+
+#[tauri::command]
+pub async fn push_tag(repo_path: String, remote: String, name: String) -> CommandResult<()> {
+    GitService::push_tag(&repo_path, &remote, &name).map_err(format_gitbx_err)
+}
+
+#[tauri::command]
+pub async fn push_all_tags(repo_path: String, remote: String) -> CommandResult<()> {
+    GitService::push_all_tags(&repo_path, &remote).map_err(format_gitbx_err)
+}
+
+#[tauri::command]
+pub async fn delete_tag(
+    repo_path: String,
+    name: String,
+    remote: Option<String>,
+) -> CommandResult<()> {
+    GitService::delete_tag(&repo_path, &name, remote.as_deref()).map_err(format_gitbx_err)
+}
+
+#[tauri::command]
 pub async fn list_stashes(repo_path: String) -> CommandResult<Vec<StashItem>> {
     let mut repo = GitService::open(&repo_path).map_err(format_gitbx_err)?;
     repo.list_stashes().map_err(format_gitbx_err)
@@ -249,10 +279,16 @@ pub async fn merge(
     repo_path: String,
     target: String,
     strategy: Option<String>,
+    message: Option<String>,
 ) -> CommandResult<()> {
-    GitService::merge(&repo_path, &target, strategy.as_deref() == Some("no-ff"))
-        .map(|_| ())
-        .map_err(format_gitbx_err)
+    GitService::merge_with_options(
+        &repo_path,
+        &target,
+        strategy.as_deref().unwrap_or("default"),
+        message.as_deref(),
+    )
+    .map(|_| ())
+    .map_err(format_gitbx_err)
 }
 
 #[tauri::command]

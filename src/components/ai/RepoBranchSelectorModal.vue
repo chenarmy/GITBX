@@ -47,62 +47,67 @@ function handleSave() {
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 select-none"
+      class="fixed arco-modal-backdrop z-[100] select-none"
       @click.self="emit('close')"
       @keydown.esc.window="emit('close')"
     >
       <div
-        class="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 select-text"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('Context Repository & Branch')"
+        class="arco-modal max-w-md select-text"
         @click.stop
       >
       <!-- Modal Header -->
-      <div class="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
-        <div class="flex items-center space-x-2">
-          <div class="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+      <div class="arco-modal-header">
+        <div class="arco-modal-title-group">
+          <div class="arco-modal-icon">
             <Compass class="w-4 h-4" />
           </div>
-          <div>
-            <h3 class="text-sm font-semibold text-foreground">{{ t('Context Repository & Branch') }}</h3>
-            <p class="text-[11px] text-muted-foreground">{{ t('Specify target context for AI chat queries and operations') }}</p>
+          <div class="min-w-0">
+            <h3 class="arco-modal-title">{{ t('Context Repository & Branch') }}</h3>
+            <p class="text-[11px] text-muted-foreground truncate">{{ t('Specify target context for AI chat queries and operations') }}</p>
           </div>
         </div>
         <button
+          type="button"
+          aria-label="Close dialog"
           @click="emit('close')"
-          class="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition"
+          class="arco-modal-close"
         >
-          <X class="w-4 h-4" />
+          <X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
       <!-- Content -->
-      <div class="p-4 space-y-4">
+      <div class="arco-modal-body space-y-3">
         <!-- Follow workspace mode toggle card -->
         <div
           @click="followWorkspace = true"
           :class="[
-            'p-3 rounded-lg border cursor-pointer transition flex items-start space-x-3',
+            'p-3.5 rounded-[6px] border cursor-pointer transition-colors flex items-start gap-3',
             followWorkspace
-              ? 'border-primary bg-primary/5 text-foreground'
-              : 'border-border hover:bg-secondary/50 text-foreground/80',
+              ? 'border-primary bg-primary/[0.06] text-foreground'
+              : 'border-border hover:bg-accent/50 text-foreground/85',
           ]"
         >
           <div
             :class="[
-              'w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0',
-              followWorkspace ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground',
+              'w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 transition-colors',
+              followWorkspace ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
             ]"
           >
-            <Check v-if="followWorkspace" class="w-2.5 h-2.5 stroke-[3]" />
+            <Check v-if="followWorkspace" class="w-2.5 h-2.5" />
           </div>
-          <div class="flex-1">
-            <div class="flex items-center space-x-1.5 font-semibold text-xs">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 font-semibold text-xs">
               <Compass class="w-3.5 h-3.5 text-primary" />
               <span>{{ t('Follow Active Workspace (Recommended)') }}</span>
             </div>
-            <p class="text-[11px] text-muted-foreground mt-0.5">
+            <p class="text-[11px] text-muted-foreground mt-1 leading-relaxed">
               {{ t('Automatically switches target repository and branch when you navigate in GITBX.') }}
             </p>
-            <div v-if="followWorkspace" class="mt-2 text-[11px] font-mono bg-muted/50 p-1.5 rounded border border-border">
+            <div v-if="followWorkspace" class="mt-2 text-[11px] font-mono bg-muted/60 px-2.5 py-1.5 rounded-[4px] border border-border truncate">
               {{ t('Active: {repo} @ {branch}', {
                 repo: activeRepoName || t('No repository opened'),
                 branch: repoStore.repoInfo?.head_branch || '-',
@@ -115,38 +120,38 @@ function handleSave() {
         <div
           @click="followWorkspace = false"
           :class="[
-            'p-3 rounded-lg border cursor-pointer transition flex items-start space-x-3',
+            'p-3.5 rounded-[6px] border cursor-pointer transition-colors flex items-start gap-3',
             !followWorkspace
-              ? 'border-primary bg-primary/5 text-foreground'
-              : 'border-border hover:bg-secondary/50 text-foreground/80',
+              ? 'border-primary bg-primary/[0.06] text-foreground'
+              : 'border-border hover:bg-accent/50 text-foreground/85',
           ]"
         >
           <div
             :class="[
-              'w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0',
-              !followWorkspace ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground',
+              'w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 transition-colors',
+              !followWorkspace ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
             ]"
           >
-            <Check v-if="!followWorkspace" class="w-2.5 h-2.5 stroke-[3]" />
+            <Check v-if="!followWorkspace" class="w-2.5 h-2.5" />
           </div>
-          <div class="flex-1">
-            <div class="flex items-center space-x-1.5 font-semibold text-xs">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 font-semibold text-xs">
               <Pin class="w-3.5 h-3.5 text-amber-500" />
               <span>{{ t('Pin to Specific Repository & Branch') }}</span>
             </div>
-            <p class="text-[11px] text-muted-foreground mt-0.5">
+            <p class="text-[11px] text-muted-foreground mt-1 leading-relaxed">
               {{ t('Keep this chat session bound to a specific repository even if you switch projects.') }}
             </p>
 
             <!-- Manual select fields -->
-            <div v-if="!followWorkspace" class="mt-3 space-y-2" @click.stop>
+            <div v-if="!followWorkspace" class="mt-3 space-y-2.5" @click.stop>
               <div>
                 <label class="text-[11px] font-medium text-muted-foreground block mb-1">
                   {{ t('Repository') }}
                 </label>
                 <select
                   v-model="selectedRepo"
-                  class="w-full text-xs bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="arco-select"
                 >
                   <option v-for="repo in repoStore.repoList" :key="repo.path" :value="repo.path">
                     {{ repo.name }} ({{ repo.path }})
@@ -160,7 +165,7 @@ function handleSave() {
                 </label>
                 <select
                   v-model="selectedBranch"
-                  class="w-full text-xs bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="arco-select"
                 >
                   <option v-for="branch in currentRepoBranches" :key="branch.name" :value="branch.name">
                     {{ branch.is_head ? '★ ' : '' }}{{ branch.name }}
@@ -173,16 +178,16 @@ function handleSave() {
       </div>
 
       <!-- Footer -->
-      <div class="px-4 py-2.5 border-t border-border bg-muted/30 flex items-center justify-end space-x-2">
+      <div class="arco-modal-footer">
         <button
           @click="emit('close')"
-          class="px-3 py-1.5 text-xs rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          class="arco-btn arco-btn-secondary"
         >
           {{ t('Cancel') }}
         </button>
         <button
           @click="handleSave"
-          class="px-4 py-1.5 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition shadow-xs"
+          class="arco-btn arco-btn-primary"
         >
           {{ t('Apply Context') }}
         </button>

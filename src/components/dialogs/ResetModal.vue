@@ -2,7 +2,8 @@
 import { ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
-import { RotateCcw, X, AlertTriangle } from 'lucide-vue-next';
+import { RotateCcw, AlertTriangle } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -27,88 +28,81 @@ async function handleReset() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isResetModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('reset')"
+    :title="t('Reset Branch to Commit')"
+    icon-bg-class="bg-[hsl(var(--arco-danger)/0.12)] text-[hsl(var(--arco-danger))]"
+    body-class="space-y-4"
+    @close="repoStore.closeModal('reset')"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Reset Branch to Commit')"
-      class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
-        <div class="flex items-center space-x-2">
-          <RotateCcw class="w-4 h-4 text-rose-400" />
-          <span class="font-bold text-sm text-foreground">{{ t('Reset Branch to Commit') }}</span>
-        </div>
-        <button
-          @click="repoStore.closeModal('reset')"
-          aria-label="Close"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
+    <template #icon>
+      <RotateCcw class="w-4 h-4" aria-hidden="true" />
+    </template>
 
-      <div class="p-4 space-y-4">
-        <div class="p-2.5 rounded bg-muted/40 border border-border space-y-1">
-          <div class="text-muted-foreground">{{ t('Target Commit:') }}</div>
-          <div class="font-mono text-foreground">
-            {{ repoStore.selectedCommit?.short_id }} - {{ repoStore.selectedCommit?.summary }}
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Reset Type') }}</label>
-
-          <label class="flex items-start space-x-2.5 p-2 rounded border border-border/60 hover:bg-accent/40 cursor-pointer">
-            <input type="radio" v-model="resetMode" value="--soft" class="mt-0.5 text-primary" />
-            <div>
-              <div class="font-semibold text-foreground">{{ t('Soft (--soft)') }}</div>
-              <div class="text-[11px] text-muted-foreground">{{ t('Keep all changes staged in the index. No file changes are lost.') }}</div>
-            </div>
-          </label>
-
-          <label class="flex items-start space-x-2.5 p-2 rounded border border-border/60 hover:bg-accent/40 cursor-pointer">
-            <input type="radio" v-model="resetMode" value="--mixed" class="mt-0.5 text-primary" />
-            <div>
-              <div class="font-semibold text-foreground">{{ t('Mixed (--mixed, Default)') }}</div>
-              <div class="text-[11px] text-muted-foreground">{{ t('Keep all working tree changes unstaged. Index is reset.') }}</div>
-            </div>
-          </label>
-
-          <label class="flex items-start space-x-2.5 p-2 rounded border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 cursor-pointer">
-            <input type="radio" v-model="resetMode" value="--hard" class="mt-0.5 text-rose-400" />
-            <div>
-              <div class="font-semibold text-rose-300 flex items-center space-x-1">
-                <span>{{ t('Hard (--hard)') }}</span>
-                <AlertTriangle class="w-3 h-3 text-rose-400" />
-              </div>
-              <div class="text-[11px] text-rose-400/80">{{ t('Discard all working tree and staged changes. Irreversible!') }}</div>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
-        <button
-          @click="repoStore.closeModal('reset')"
-          class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
-        >
-          {{ t('Cancel') }}
-        </button>
-        <button
-          @click="handleReset"
-          :disabled="isSubmitting"
-          class="px-4 py-1.5 rounded font-semibold transition"
-          :class="resetMode === '--hard' ? 'bg-destructive hover:bg-destructive/90 text-white' : 'bg-primary hover:bg-primary/90 text-primary-foreground'"
-        >
-          {{ isSubmitting ? t('Resetting...') : t('Reset') }}
-        </button>
+    <div class="rounded-[6px] border border-border/80 bg-[hsl(var(--arco-fill-1))] p-3 space-y-1">
+      <div class="text-[11px] text-muted-foreground">{{ t('Target Commit:') }}</div>
+      <div class="font-mono text-foreground text-[12px]">
+        {{ repoStore.selectedCommit?.short_id }} - {{ repoStore.selectedCommit?.summary }}
       </div>
     </div>
-  </div>
+
+    <div class="space-y-2">
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Reset Type') }}</label>
+
+      <label
+        class="flex items-start space-x-2.5 p-2.5 rounded-[6px] border cursor-pointer transition-colors"
+        :class="resetMode === '--soft' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
+      >
+        <input type="radio" v-model="resetMode" value="--soft" class="mt-0.5 accent-[hsl(var(--primary))]" />
+        <div>
+          <div class="font-semibold text-foreground">{{ t('Soft (--soft)') }}</div>
+          <div class="text-[11px] text-muted-foreground mt-0.5">{{ t('Keep all changes staged in the index. No file changes are lost.') }}</div>
+        </div>
+      </label>
+
+      <label
+        class="flex items-start space-x-2.5 p-2.5 rounded-[6px] border cursor-pointer transition-colors"
+        :class="resetMode === '--mixed' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
+      >
+        <input type="radio" v-model="resetMode" value="--mixed" class="mt-0.5 accent-[hsl(var(--primary))]" />
+        <div>
+          <div class="font-semibold text-foreground">{{ t('Mixed (--mixed, Default)') }}</div>
+          <div class="text-[11px] text-muted-foreground mt-0.5">{{ t('Keep all working tree changes unstaged. Index is reset.') }}</div>
+        </div>
+      </label>
+
+      <label
+        class="flex items-start space-x-2.5 p-2.5 rounded-[6px] border cursor-pointer transition-colors"
+        :class="resetMode === '--hard' ? 'border-[hsl(var(--arco-danger)/0.6)] bg-[hsl(var(--arco-danger)/0.1)]' : 'border-[hsl(var(--arco-danger)/0.3)] bg-[hsl(var(--arco-danger)/0.05)] hover:bg-[hsl(var(--arco-danger)/0.08)]'"
+      >
+        <input type="radio" v-model="resetMode" value="--hard" class="mt-0.5 accent-[hsl(var(--arco-danger))]" />
+        <div>
+          <div class="font-semibold text-[hsl(var(--arco-danger))] flex items-center space-x-1">
+            <span>{{ t('Hard (--hard)') }}</span>
+            <AlertTriangle class="w-3.5 h-3.5" />
+          </div>
+          <div class="text-[11px] text-[hsl(var(--arco-danger)/0.85)] mt-0.5">{{ t('Discard all working tree and staged changes. Irreversible!') }}</div>
+        </div>
+      </label>
+    </div>
+
+    <template #footer>
+      <button
+        type="button"
+        @click="repoStore.closeModal('reset')"
+        class="arco-btn arco-btn-secondary"
+      >
+        {{ t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        @click="handleReset"
+        :disabled="isSubmitting"
+        class="arco-btn"
+        :class="resetMode === '--hard' ? 'arco-btn-danger' : 'arco-btn-primary'"
+      >
+        {{ isSubmitting ? t('Resetting...') : t('Reset') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

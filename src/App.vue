@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { Loader2 } from 'lucide-vue-next';
 import NavbarHeader from '@/components/layout/NavbarHeader.vue';
 import MainToolbar from '@/components/layout/MainToolbar.vue';
 import SidebarWorkspace from '@/components/layout/SidebarWorkspace.vue';
@@ -195,7 +196,18 @@ onUnmounted(() => {
     <MainToolbar />
 
     <!-- Main Workspace Container -->
-    <div class="flex-1 flex overflow-hidden min-h-0">
+    <div class="relative flex-1 flex overflow-hidden min-h-0">
+      <!-- Non-clearing refresh overlay loading mask -->
+      <div
+        v-if="repoStore.isLoading && repoStore.repoInfo"
+        data-testid="repo-refresh-overlay"
+        class="absolute inset-0 z-30 flex items-center justify-center bg-background/55 backdrop-blur-[1.5px] transition-opacity"
+      >
+        <div class="arco-card px-4 py-2.5 shadow-lg border border-border/80 flex items-center gap-2.5 text-xs font-medium text-foreground">
+          <Loader2 class="w-4 h-4 animate-spin text-primary shrink-0" />
+          <span>{{ t('Refreshing repository...') }}</span>
+        </div>
+      </div>
       <!-- 1. Left Sidebar Navigation -->
       <div class="relative h-full shrink-0" :style="{ width: `${sidebarWidth}px` }">
         <SidebarWorkspace />

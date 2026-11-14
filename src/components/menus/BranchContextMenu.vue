@@ -8,6 +8,21 @@ import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { usePushRecovery } from '@/composables/usePushRecovery';
 import { useBranchCheckout } from '@/composables/useBranchCheckout';
+import {
+  CheckCircle2,
+  GitBranch,
+  GitCompareArrows,
+  FileDiff,
+  FolderGit2,
+  FolderTree,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Edit3,
+  Trash2,
+  GitMerge,
+  GitPullRequest,
+  Globe,
+} from 'lucide-vue-next';
 
 const props = withDefaults(
   defineProps<{
@@ -136,7 +151,12 @@ async function handleNewWorktree() {
       return;
     }
     const sanitizedBranch = props.branch.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-    const defaultDest = `${repoStore.activeRepoPath}\\worktrees\\${sanitizedBranch}`;
+    const cleanRepoPath = repoStore.activeRepoPath.replace(/[\\/]+$/, '');
+    const sep = cleanRepoPath.includes('\\') ? '\\' : '/';
+    const lastSep = Math.max(cleanRepoPath.lastIndexOf('\\'), cleanRepoPath.lastIndexOf('/'));
+    const parentDir = lastSep > 0 ? cleanRepoPath.slice(0, lastSep) : cleanRepoPath;
+    const repoName = lastSep >= 0 ? cleanRepoPath.slice(lastSep + 1) : 'repo';
+    const defaultDest = `${parentDir}${sep}${repoName}-worktrees${sep}${sanitizedBranch}`;
     const destPath = await confirmation.prompt({
       title: t('Create Worktree'),
       message: t("Choose a destination directory for '{branch}'.", { branch: props.branch.name }),
@@ -253,261 +273,324 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="fixed z-50 w-72 bg-popover border border-border rounded-lg shadow-2xl py-1 text-xs select-none text-foreground divide-y divide-border/60"
-    :style="menuStyle"
-    @click.stop
-  >
-    <!-- CASE 1: Current Active Branch -->
-    <template v-if="isCurrentBranch">
-      <div class="py-1">
+  <Teleport to="body">
+    <div
+      class="fixed z-50 arco-menu w-72 text-xs select-none"
+      :style="menuStyle"
+      role="menu"
+      @click.stop
+    >
+      <!-- CASE 1: Current Active Branch -->
+      <template v-if="isCurrentBranch">
         <button
           @click="handleNewBranchFrom"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
+          <GitBranch class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="truncate">{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleShowDiffWithWorkingTree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Show Diff with Working Tree') }}
+          <FileDiff class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Show Diff with Working Tree') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleNewWorktree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
+          <FolderTree class="w-3.5 h-3.5 text-teal-500 shrink-0" />
+          <span class="truncate">{{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
         <button
           @click="handleManageWorktrees"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Manage Worktrees') }}
+          <FolderGit2 class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Manage Worktrees') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleUpdate"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Update') }}
+          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-500 shrink-0" />
+          <span>{{ t('Update') }}</span>
         </button>
 
         <button
           @click="handlePush"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Push...') }}
+          <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <span>{{ t('Push...') }}</span>
         </button>
 
-        <div class="w-full px-3 py-1.5 flex items-center text-muted-foreground font-medium">
-          <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
+        <div class="mx-1 px-2.5 py-1.5 flex items-center gap-2 text-muted-foreground text-[11px]">
+          <Globe class="w-3.5 h-3.5 shrink-0 opacity-70" />
+          <span class="truncate">{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
         </div>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleRename"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item justify-between font-medium"
         >
-          <span>{{ t('Rename...') }}</span>
+          <span class="flex items-center gap-2 min-w-0">
+            <Edit3 class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span>{{ t('Rename...') }}</span>
+          </span>
           <span class="text-[10px] text-muted-foreground font-mono">Alt+Shift+R</span>
         </button>
-      </div>
-    </template>
+      </template>
 
-    <!-- CASE 2: Remote Branch (IDEA Style) -->
-    <template v-else-if="isRemoteBranch">
-      <div class="py-1">
+      <!-- CASE 2: Remote Branch -->
+      <template v-else-if="isRemoteBranch">
         <button
           @click="handleCheckout"
-          class="w-full px-3 py-1.5 text-left hover:bg-primary/10 hover:text-primary flex items-center justify-between font-semibold transition"
+          role="menuitem"
+          class="arco-menu-item text-primary font-semibold"
         >
+          <CheckCircle2 class="w-3.5 h-3.5 shrink-0" />
           <span>{{ t('Checkout') }}</span>
         </button>
 
         <button
           @click="handleNewBranchFrom"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
+          <GitBranch class="w-3.5 h-3.5 text-violet-500 shrink-0" />
+          <span class="truncate">{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleMergeInto"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
+          <GitMerge class="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <span class="truncate">{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
 
         <button
           @click="handleRebaseOnto"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
+          <GitPullRequest class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+          <span class="truncate">{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleCompare"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
+          <GitCompareArrows class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="truncate">{{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
         <button
           @click="handleShowDiffWithWorkingTree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Show Diff with Working Tree') }}
+          <FileDiff class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Show Diff with Working Tree') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleNewWorktree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
+          <FolderTree class="w-3.5 h-3.5 text-teal-500 shrink-0" />
+          <span class="truncate">{{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
         <button
           @click="handleManageWorktrees"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Manage Worktrees') }}
+          <FolderGit2 class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Manage Worktrees') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleDelete"
-          class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 flex items-center space-x-1.5 font-medium transition"
+          role="menuitem"
+          class="arco-menu-item arco-menu-item-danger font-medium"
         >
+          <Trash2 class="w-3.5 h-3.5 shrink-0" />
           <span>{{ t('Delete') }}</span>
         </button>
-      </div>
-    </template>
+      </template>
 
-    <!-- CASE 3: Other Local Branch -->
-    <template v-else>
-      <div class="py-1">
+      <!-- CASE 3: Other Local Branch -->
+      <template v-else>
         <button
           @click="handleCheckout"
-          class="w-full px-3 py-1.5 text-left hover:bg-primary/10 hover:text-primary flex items-center justify-between font-semibold transition"
+          role="menuitem"
+          class="arco-menu-item text-primary font-semibold"
         >
+          <CheckCircle2 class="w-3.5 h-3.5 shrink-0" />
           <span>{{ t('Checkout') }}</span>
         </button>
 
         <button
           @click="handleNewBranchFrom"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-1.5 font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
+          <GitBranch class="w-3.5 h-3.5 text-violet-500 shrink-0" />
+          <span class="truncate">{{ t("New Branch from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleCheckoutAndRebase"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("Checkout and Rebase onto '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
+          <GitPullRequest class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+          <span class="truncate">{{ t("Checkout and Rebase onto '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
 
         <button
           @click="handleCheckoutAndUpdate"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Checkout and Update') }}
+          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-500 shrink-0" />
+          <span class="truncate">{{ t('Checkout and Update') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleCompare"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}
+          <GitCompareArrows class="w-3.5 h-3.5 text-primary shrink-0" />
+          <span class="truncate">{{ t("Compare with '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
         <button
           @click="handleShowDiffWithWorkingTree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Show Diff with Working Tree') }}
+          <FileDiff class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Show Diff with Working Tree') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleRebaseOnto"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
+          <GitPullRequest class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+          <span class="truncate">{{ t("Rebase '{source}' onto '{target}'", { source: repoStore.repoInfo?.head_branch || 'HEAD', target: branch.name }) }}</span>
         </button>
 
         <button
           @click="handleMergeInto"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          <span>{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
+          <GitMerge class="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <span class="truncate">{{ t("Merge '{source}' into '{target}'", { source: branch.name, target: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleNewWorktree"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}
+          <FolderTree class="w-3.5 h-3.5 text-teal-500 shrink-0" />
+          <span class="truncate">{{ t("New Worktree from '{branch}'...", { branch: branch.name }) }}</span>
         </button>
         <button
           @click="handleManageWorktrees"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Manage Worktrees') }}
+          <FolderGit2 class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span class="truncate">{{ t('Manage Worktrees') }}</span>
         </button>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleUpdate"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Update') }}
+          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-500 shrink-0" />
+          <span>{{ t('Update') }}</span>
         </button>
         <button
           @click="handlePush"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary font-medium transition"
+          role="menuitem"
+          class="arco-menu-item font-medium"
         >
-          {{ t('Push...') }}
+          <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <span>{{ t('Push...') }}</span>
         </button>
-        <div class="w-full px-3 py-1.5 flex items-center text-muted-foreground font-medium">
-          <span>{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
+        <div class="mx-1 px-2.5 py-1.5 flex items-center gap-2 text-muted-foreground text-[11px]">
+          <Globe class="w-3.5 h-3.5 shrink-0 opacity-70" />
+          <span class="truncate">{{ t("Tracked Branch '{branch}'", { branch: trackedBranchName }) }}</span>
         </div>
-      </div>
 
-      <div class="py-1">
+        <div class="arco-menu-divider"></div>
+
         <button
           @click="handleRename"
-          class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center justify-between font-medium transition"
+          role="menuitem"
+          class="arco-menu-item justify-between font-medium"
         >
-          <span>{{ t('Rename...') }}</span>
+          <span class="flex items-center gap-2 min-w-0">
+            <Edit3 class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span>{{ t('Rename...') }}</span>
+          </span>
           <span class="text-[10px] text-muted-foreground font-mono">Alt+Shift+R</span>
         </button>
 
         <button
           @click="handleDelete"
-          class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-destructive/20 text-rose-600 dark:text-rose-400 flex items-center space-x-1.5 font-medium transition"
+          role="menuitem"
+          class="arco-menu-item arco-menu-item-danger font-medium"
         >
+          <Trash2 class="w-3.5 h-3.5 shrink-0" />
           <span>{{ t('Delete') }}</span>
         </button>
-      </div>
-    </template>
-  </div>
+      </template>
+    </div>
+  </Teleport>
 </template>

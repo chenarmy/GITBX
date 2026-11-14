@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { X, AlertTriangle } from 'lucide-vue-next';
+import { AlertTriangle, HelpCircle } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { useI18n } from '@/i18n';
 
@@ -22,49 +23,45 @@ function accept() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="store.pending"
-    class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="cancel"
+    :title="store.pending.options.title || 'Confirmation Dialog'"
+    :aria-label="store.pending.options.title || 'Confirmation Dialog'"
+    z-index-class="z-[100]"
+    max-width-class="max-w-md"
+    :icon-bg-class="store.pending.options.danger ? 'bg-destructive/12 text-destructive' : 'bg-primary/12 text-primary'"
+    @close="cancel"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="store.pending.options.title || 'Confirmation Dialog'"
-      class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-sm"
-      @click.stop
-    >
-      <div class="h-11 px-4 flex items-center justify-between border-b border-border bg-muted/40">
-        <div class="flex items-center gap-2 font-semibold">
-          <AlertTriangle v-if="store.pending.options.danger" class="w-4 h-4 text-rose-500" />
-          <span>{{ store.pending.options.title }}</span>
-        </div>
-        <button class="p-1 rounded hover:bg-accent" aria-label="Close" @click="cancel"><X class="w-4 h-4" /></button>
-      </div>
-      <div class="p-4 space-y-3">
-        <p class="text-muted-foreground whitespace-pre-wrap">{{ store.pending.options.message }}</p>
-        <label v-if="store.pending.options.inputLabel" class="block space-y-1.5">
-          <span class="text-xs font-medium">{{ store.pending.options.inputLabel }}</span>
-          <input
-            v-model="inputValue"
-            autofocus
-            class="w-full px-2.5 py-2 rounded-md border border-border bg-background outline-none focus:ring-2 focus:ring-primary/40"
-            @keydown.enter="accept"
-          />
-        </label>
-      </div>
-      <div class="h-12 px-4 flex items-center justify-end gap-2 border-t border-border bg-muted/20">
-        <button class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground" @click="cancel">
-          {{ store.pending.options.cancelText || t('Cancel') }}
-        </button>
-        <button
-          class="px-4 py-1.5 rounded font-semibold text-white"
-          :class="store.pending.options.danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-primary hover:bg-primary/90'"
-          @click="accept"
-        >
-          {{ store.pending.options.confirmText || t('Confirm') }}
-        </button>
-      </div>
-    </div>
-  </div>
+    <template #icon>
+      <AlertTriangle v-if="store.pending.options.danger" class="w-4 h-4" />
+      <HelpCircle v-else class="w-4 h-4" />
+    </template>
+
+    <p class="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+      {{ store.pending.options.message }}
+    </p>
+    <label v-if="store.pending.options.inputLabel" class="block space-y-1.5">
+      <span class="text-xs font-medium text-foreground">{{ store.pending.options.inputLabel }}</span>
+      <input
+        v-model="inputValue"
+        autofocus
+        class="arco-input"
+        @keydown.enter="accept"
+      />
+    </label>
+
+    <template #footer>
+      <button type="button" class="arco-btn arco-btn-secondary" @click="cancel">
+        {{ store.pending.options.cancelText || t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        class="arco-btn"
+        :class="store.pending.options.danger ? 'arco-btn-danger' : 'arco-btn-primary'"
+        @click="accept"
+      >
+        {{ store.pending.options.confirmText || t('Confirm') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

@@ -34,6 +34,68 @@ fn checkout_error(error: git2::Error, branch_name: &str) -> GitbxError {
     }
 }
 
+fn ensure_branch_available_for_checkout(repo: &Repository, branch_name: &str) -> Result<()> {
+    let current_workdir = repo
+        .inner()
+        .workdir()
+        .and_then(|value| std::fs::canonicalize(value).ok())
+        .map(|value| crate::path_for_display(&value).replace('\\', "/"));
+    let Some(current_workdir) = current_workdir else {
+        return Ok(());
+    };
+    let output = crate::process::create_git_command()
+        .arg("-C")
+        .arg(repo.path())
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    let Ok(output) = output else {
+        return Ok(());
+    };
+    if !output.status.success() {
+        return Ok(());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    for block in text.split("\n\n").filter(|block| !block.trim().is_empty()) {
+        let mut wt_path = None;
+        let mut wt_branch = None;
+        let mut prunable = false;
+        for line in block.lines() {
+            if let Some(value) = line.strip_prefix("worktree ") {
+                wt_path = Some(value.trim().to_string());
+            } else if let Some(value) = line.strip_prefix("branch ") {
+                wt_branch = Some(
+                    value
+                        .trim()
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(value.trim())
+                        .to_string(),
+                );
+            } else if line.starts_with("prunable") {
+                prunable = true;
+            }
+        }
+        if prunable {
+            continue;
+        }
+        if wt_branch.as_deref() == Some(branch_name) {
+            if let Some(wt_path) = wt_path {
+                let normalized_wt = std::fs::canonicalize(&wt_path)
+                    .map(|value| crate::path_for_display(&value))
+                    .unwrap_or_else(|_| wt_path.clone())
+                    .trim_end_matches(['/', '\\'])
+                    .replace('\\', "/");
+                let normalized_current = current_workdir.trim_end_matches('/').replace('\\', "/");
+                if !normalized_wt.eq_ignore_ascii_case(&normalized_current) {
+                    return Err(GitbxError::General(format!(
+                        "Branch '{branch_name}' is already checked out in worktree '{wt_path}'. Open that worktree to merge, update, or modify it."
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BranchCheckoutResult {
     pub conflicts: bool,
@@ -161,6 +223,7 @@ impl Repository {
             if local_branch.is_head() {
                 return Ok(());
             }
+            ensure_branch_available_for_checkout(self, name)?;
             let reference = local_branch.get();
             let object = reference.peel_to_commit()?.into_object();
             self.inner()
@@ -187,6 +250,7 @@ impl Repository {
                 if existing_local.is_head() {
                     return Ok(());
                 }
+                ensure_branch_available_for_checkout(self, local_name)?;
                 let reference = existing_local.get();
                 let object = reference.peel_to_commit()?.into_object();
                 self.inner()

@@ -27,6 +27,9 @@ import {
   AtSign,
   Terminal,
   MessageSquare,
+  Search,
+  FileText,
+  GitBranch,
 } from 'lucide-vue-next';
 import ModelSelectorPopover from './ModelSelectorPopover.vue';
 import RepoBranchSelectorModal from './RepoBranchSelectorModal.vue';
@@ -527,48 +530,48 @@ function handleClearMessages() {
     />
 
     <!-- 1. Header Bar -->
-    <div class="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between shrink-0">
-      <div class="flex items-center space-x-2 min-w-0">
+    <div class="px-3.5 h-10 border-b border-border bg-card flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
         <!-- Session Dropdown -->
         <div class="relative">
           <button
             @click="isSessionDropdownOpen = !isSessionDropdownOpen"
-            class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary text-foreground text-xs font-semibold truncate transition"
+            class="arco-btn arco-btn-text h-7 px-2 text-foreground font-semibold truncate"
           >
             <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" />
-            <span class="truncate max-w-[130px]">{{ currentSession?.title || t('AI Copilot') }}</span>
-            <ChevronDown class="w-3 h-3 text-muted-foreground shrink-0" />
+            <span class="truncate max-w-[140px]">{{ currentSession?.title || t('AI Copilot') }}</span>
+            <ChevronDown class="w-3 h-3 text-muted-foreground shrink-0 transition-transform duration-150" :class="{ 'rotate-180': isSessionDropdownOpen }" />
           </button>
 
           <!-- Session List Dropdown Menu -->
           <div
             v-if="isSessionDropdownOpen"
-            class="absolute left-0 top-full mt-1.5 w-60 bg-popover border border-border rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+            class="arco-menu absolute left-0 top-full mt-1.5 w-64 z-50"
           >
-            <div class="px-2.5 py-1 flex items-center justify-between border-b border-border/50">
-              <span class="text-[10px] font-bold text-muted-foreground uppercase">{{ t('Chat Sessions') }}</span>
+            <div class="px-3 py-1.5 flex items-center justify-between border-b border-border/70 mb-1">
+              <span class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{{ t('Chat Sessions') }}</span>
               <button
                 @click="handleCreateNewSession"
-                class="flex items-center space-x-1 text-[11px] text-primary hover:underline font-semibold"
+                class="flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
               >
                 <Plus class="w-3 h-3" />
                 <span>{{ t('New') }}</span>
               </button>
             </div>
-            <div class="max-h-56 overflow-y-auto py-1 space-y-0.5">
+            <div class="max-h-56 overflow-y-auto space-y-0.5">
               <div
                 v-for="s in aiStore.sessions"
                 :key="s.id"
                 @click="aiStore.switchSession(s.id); isSessionDropdownOpen = false"
                 :class="[
-                  'group px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer transition',
-                  s.id === aiStore.activeSessionId ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-secondary text-foreground/90',
+                  'group mx-1 px-2.5 py-1.5 rounded-[4px] flex items-center justify-between text-xs cursor-pointer transition-colors',
+                  s.id === aiStore.activeSessionId ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-accent/70 text-foreground/90',
                 ]"
               >
                 <span class="truncate flex-1 pr-2">{{ s.title }}</span>
                 <button
                   @click.stop="aiStore.deleteSession(s.id)"
-                  class="p-1 rounded opacity-0 group-hover:opacity-100 hover:text-rose-500 hover:bg-rose-500/10 transition"
+                  class="arco-icon-btn arco-icon-btn-sm opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/15"
                   :title="t('Delete Session')"
                 >
                   <Trash2 class="w-3 h-3" />
@@ -580,17 +583,17 @@ function handleClearMessages() {
       </div>
 
       <!-- Header Action Controls -->
-      <div class="flex items-center space-x-1 shrink-0">
+      <div class="flex items-center gap-1 shrink-0">
         <button
           @click="handleClearMessages"
-          class="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          class="arco-icon-btn arco-icon-btn-sm"
           :title="t('Clear Chat History')"
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>
         <button
           @click="aiStore.closeSidebar()"
-          class="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          class="arco-icon-btn arco-icon-btn-sm"
           :title="t('Close AI Sidebar')"
         >
           <X class="w-3.5 h-3.5" />
@@ -599,13 +602,13 @@ function handleClearMessages() {
     </div>
 
     <!-- 2. Sub-Header: Context & Model Pills + Ask/Agent Switcher -->
-    <div class="px-3 py-1.5 border-b border-border bg-muted/10 flex flex-col space-y-1.5 shrink-0">
+    <div class="px-3.5 py-2 border-b border-border bg-muted/20 flex flex-col gap-2 shrink-0">
       <!-- Selector Pills Row -->
-      <div class="flex items-center justify-between text-xs space-x-2">
+      <div class="flex items-center justify-between text-xs gap-2">
         <!-- Target Context Pill -->
         <button
           @click="isContextModalOpen = true"
-          class="flex-1 flex items-center space-x-1.5 px-2 py-1 rounded bg-secondary/70 hover:bg-secondary text-foreground border border-border/60 transition truncate text-left"
+          class="arco-btn arco-btn-secondary arco-btn-sm flex-1 justify-start border border-border/70 hover:border-primary/40 truncate text-left"
           :title="t('Click to switch repository and branch context')"
         >
           <Compass class="w-3 h-3 text-primary shrink-0" />
@@ -616,7 +619,7 @@ function handleClearMessages() {
         <button
           data-testid="ai-model-selector-pill"
           @click="isModelSelectorOpen = true"
-          class="flex-1 flex items-center space-x-1.5 px-2 py-1 rounded bg-secondary/70 hover:bg-secondary text-foreground border border-border/60 transition truncate text-left"
+          class="arco-btn arco-btn-secondary arco-btn-sm flex-1 justify-start border border-border/70 hover:border-primary/40 truncate text-left"
           :title="t('Click to switch AI provider or model')"
         >
           <Cpu class="w-3 h-3 text-purple-500 shrink-0" />
@@ -625,56 +628,50 @@ function handleClearMessages() {
       </div>
 
       <!-- Ask / Agent Mode Segmented Switch -->
-      <div class="flex items-center justify-between pt-0.5">
-        <div class="flex p-0.5 rounded-lg bg-muted/50 border border-border text-xs w-full">
-          <button
-            data-testid="ai-mode-ask-btn"
-            @click="aiStore.setMode('ask')"
-            :class="[
-              'flex-1 py-1 rounded-md font-semibold text-center transition flex items-center justify-center space-x-1',
-              aiStore.activeMode === 'ask'
-                ? 'bg-background text-primary shadow-xs'
-                : 'text-muted-foreground hover:text-foreground',
-            ]"
-          >
-            <MessageSquare class="w-3 h-3" />
-            <span>{{ t('Ask Mode') }}</span>
-            <span class="text-[10px] text-muted-foreground/70 font-normal">({{ t('Q&A') }})</span>
-          </button>
-          <button
-            data-testid="ai-mode-agent-btn"
-            @click="aiStore.setMode('agent')"
-            :class="[
-              'flex-1 py-1 rounded-md font-semibold text-center transition flex items-center justify-center space-x-1',
-              aiStore.activeMode === 'agent'
-                ? 'bg-background text-primary shadow-xs'
-                : 'text-muted-foreground hover:text-foreground',
-            ]"
-          >
-            <Sparkles class="w-3 h-3" />
-            <span>{{ t('Agent Mode') }}</span>
-            <span class="text-[10px] text-muted-foreground/70 font-normal">({{ t('Autonomous') }})</span>
-          </button>
-        </div>
+      <div class="arco-segmented w-full">
+        <button
+          data-testid="ai-mode-ask-btn"
+          @click="aiStore.setMode('ask')"
+          :class="[
+            'arco-segmented-item flex-1 py-1',
+            { 'arco-segmented-item-active text-primary': aiStore.activeMode === 'ask' },
+          ]"
+        >
+          <MessageSquare class="w-3 h-3" />
+          <span>{{ t('Ask Mode') }}</span>
+          <span class="text-[10px] text-muted-foreground/75 font-normal">({{ t('Q&A') }})</span>
+        </button>
+        <button
+          data-testid="ai-mode-agent-btn"
+          @click="aiStore.setMode('agent')"
+          :class="[
+            'arco-segmented-item flex-1 py-1',
+            { 'arco-segmented-item-active text-primary': aiStore.activeMode === 'agent' },
+          ]"
+        >
+          <Sparkles class="w-3 h-3" />
+          <span>{{ t('Agent Mode') }}</span>
+          <span class="text-[10px] text-muted-foreground/75 font-normal">({{ t('Autonomous') }})</span>
+        </button>
       </div>
     </div>
 
     <!-- 3. Message Stream Timeline -->
     <div
       ref="messagesContainerRef"
-      class="flex-1 overflow-y-auto p-3 space-y-4 text-xs font-sans"
+      class="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs font-sans"
     >
       <!-- Empty Chat Welcome & Quick Chips -->
       <div
         v-if="!currentSession?.messages || currentSession.messages.length === 0"
-        class="h-full flex flex-col items-center justify-center text-center p-4 text-muted-foreground space-y-3"
+        class="h-full flex flex-col items-center justify-center text-center p-4 text-muted-foreground space-y-3.5"
       >
-        <div class="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+        <div class="w-12 h-12 rounded-[12px] bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
           <Bot class="w-6 h-6" />
         </div>
         <div>
-          <h4 class="font-bold text-foreground text-sm">{{ t('GITBX AI Assistant') }}</h4>
-          <p class="text-[11px] text-muted-foreground mt-1 max-w-[260px]">
+          <h4 class="font-semibold text-foreground text-sm">{{ t('GITBX AI Assistant') }}</h4>
+          <p class="text-[11px] text-muted-foreground mt-1 max-w-[260px] leading-relaxed">
             {{ aiStore.activeMode === 'agent'
               ? t('Agent mode can automatically inspect repository status, check diffs, and plan safe Git operations.')
               : t('Ask mode explains Git mechanics and provides verified commands with one-click copy.')
@@ -689,27 +686,31 @@ function handleClearMessages() {
           </div>
           <button
             @click="inputPrompt = t('Check unstaged changes and explain what was modified'); handleSendMessage()"
-            class="w-full p-2 rounded-lg border border-border bg-secondary/30 hover:bg-secondary text-foreground text-left text-xs transition"
+            class="w-full p-2.5 rounded-[6px] border border-border/80 bg-background/60 hover:bg-accent/70 hover:border-primary/40 text-foreground text-left text-xs transition-colors flex items-center gap-2"
           >
-            🔍 {{ t('Check unstaged working tree changes') }}
+            <Search class="w-3.5 h-3.5 text-primary shrink-0" />
+            <span>{{ t('Check unstaged working tree changes') }}</span>
           </button>
           <button
             @click="inputPrompt = t('Generate a commit message based on staged changes'); handleSendMessage()"
-            class="w-full p-2 rounded-lg border border-border bg-secondary/30 hover:bg-secondary text-foreground text-left text-xs transition"
+            class="w-full p-2.5 rounded-[6px] border border-border/80 bg-background/60 hover:bg-accent/70 hover:border-primary/40 text-foreground text-left text-xs transition-colors flex items-center gap-2"
           >
-            📝 {{ t('Suggest commit message for staged files') }}
+            <FileText class="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>{{ t('Suggest commit message for staged files') }}</span>
           </button>
           <button
             @click="inputPrompt = t('Compare current branch with origin and summarize differences'); handleSendMessage()"
-            class="w-full p-2 rounded-lg border border-border bg-secondary/30 hover:bg-secondary text-foreground text-left text-xs transition"
+            class="w-full p-2.5 rounded-[6px] border border-border/80 bg-background/60 hover:bg-accent/70 hover:border-primary/40 text-foreground text-left text-xs transition-colors flex items-center gap-2"
           >
-            🌿 {{ t('Inspect branch differences with remote') }}
+            <GitBranch class="w-3.5 h-3.5 text-violet-500 shrink-0" />
+            <span>{{ t('Inspect branch differences with remote') }}</span>
           </button>
           <button
             @click="inputPrompt = t('Check if there are any merge conflicts in the workspace'); handleSendMessage()"
-            class="w-full p-2 rounded-lg border border-border bg-secondary/30 hover:bg-secondary text-foreground text-left text-xs transition"
+            class="w-full p-2.5 rounded-[6px] border border-border/80 bg-background/60 hover:bg-accent/70 hover:border-primary/40 text-foreground text-left text-xs transition-colors flex items-center gap-2"
           >
-            ⚠️ {{ t('Analyze unresolved merge conflicts') }}
+            <AlertTriangle class="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>{{ t('Analyze unresolved merge conflicts') }}</span>
           </button>
         </div>
       </div>
@@ -719,12 +720,12 @@ function handleClearMessages() {
         <div
           v-for="msg in currentSession.messages"
           :key="msg.id"
-          class="space-y-2 animate-in fade-in duration-100"
+          class="space-y-2.5"
         >
           <!-- User Message -->
           <div v-if="msg.role === 'user'" class="flex justify-end">
-            <div class="max-w-[88%] bg-primary text-primary-foreground rounded-2xl rounded-tr-xs px-3.5 py-2 shadow-xs space-y-1">
-              <div v-if="msg.context_snapshot" class="text-[10px] opacity-80 font-mono pb-0.5 border-b border-primary-foreground/20">
+            <div class="max-w-[88%] bg-primary text-primary-foreground rounded-[12px] rounded-tr-[4px] px-3.5 py-2.5 shadow-sm space-y-1">
+              <div v-if="msg.context_snapshot" class="text-[10px] opacity-85 font-mono pb-1 border-b border-primary-foreground/20">
                 @{{ msg.context_snapshot.branch }}
               </div>
               <div class="whitespace-pre-wrap break-words leading-relaxed text-xs">
@@ -734,14 +735,14 @@ function handleClearMessages() {
           </div>
 
           <!-- Assistant / Tool Messages -->
-          <div v-else-if="msg.role === 'assistant'" class="flex flex-col space-y-2">
+          <div v-else-if="msg.role === 'assistant'" class="flex flex-col gap-2">
             <!-- Assistant Avatar & Tag -->
-            <div class="flex items-center space-x-1.5 text-muted-foreground text-[10px]">
-              <div class="w-4 h-4 rounded bg-primary/20 flex items-center justify-center text-primary">
-                <Sparkles class="w-2.5 h-2.5" />
+            <div class="flex items-center gap-1.5 text-muted-foreground text-[10px]">
+              <div class="w-5 h-5 rounded-[5px] bg-primary/15 text-primary flex items-center justify-center">
+                <Sparkles class="w-3 h-3" />
               </div>
               <span class="font-semibold text-foreground">AI Copilot</span>
-              <span v-if="msg.mode" class="px-1 py-0.2 rounded bg-muted text-[9px] uppercase font-mono">
+              <span v-if="msg.mode" class="arco-tag bg-secondary text-muted-foreground border-border uppercase font-mono">
                 {{ msg.mode }}
               </span>
             </div>
@@ -749,7 +750,7 @@ function handleClearMessages() {
             <!-- Assistant Text Content (Markdown) -->
             <div
               v-if="msg.content"
-              class="prose prose-xs dark:prose-invert max-w-none bg-muted/30 border border-border/50 rounded-xl p-3 text-xs leading-relaxed break-words"
+              class="prose prose-xs dark:prose-invert max-w-none bg-muted/35 border border-border/70 rounded-[8px] p-3.5 text-xs leading-relaxed break-words"
               v-html="renderMarkdown(msg.content)"
             />
 
@@ -757,17 +758,17 @@ function handleClearMessages() {
             <div
               v-for="(cmd, cIdx) in extractCommands(msg.content)"
               :key="'cmd_' + cIdx"
-              class="border border-border rounded-lg bg-card overflow-hidden shadow-xs"
+              class="arco-card rounded-[8px] overflow-hidden"
             >
-              <div class="px-2.5 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between text-[11px]">
-                <div class="flex items-center space-x-1 text-muted-foreground font-mono">
+              <div class="px-3 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between text-[11px]">
+                <div class="flex items-center gap-1.5 text-muted-foreground font-mono">
                   <Terminal class="w-3 h-3 text-emerald-500" />
                   <span>Git Command</span>
                 </div>
-                <div class="flex items-center space-x-1.5">
+                <div class="flex items-center gap-1.5">
                   <button
                     @click="copyToClipboard(cmd, msg.id + '_' + cIdx)"
-                    class="flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+                    class="arco-btn arco-btn-text arco-btn-sm h-6 px-2"
                   >
                     <Check v-if="copiedCodeMap[msg.id + '_' + cIdx]" class="w-3 h-3 text-emerald-500" />
                     <Copy v-else class="w-3 h-3" />
@@ -775,14 +776,14 @@ function handleClearMessages() {
                   </button>
                   <button
                     @click="runSuggestedCommand(cmd)"
-                    class="flex items-center space-x-1 px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-semibold transition"
+                    class="arco-btn arco-btn-sm bg-primary/10 hover:bg-primary/15 text-primary border border-primary/25 h-6 px-2"
                   >
                     <Play class="w-3 h-3 fill-current" />
                     <span>{{ t('Run') }}</span>
                   </button>
                 </div>
               </div>
-              <div class="p-2.5 font-mono text-[11px] bg-background/50 overflow-x-auto text-foreground whitespace-pre">
+              <div class="p-2.5 font-mono text-[11px] bg-background/60 overflow-x-auto text-foreground whitespace-pre">
                 {{ cmd }}
               </div>
             </div>
@@ -792,37 +793,37 @@ function handleClearMessages() {
               <div
                 v-for="tc in msg.tool_calls"
                 :key="tc.id"
-                class="border border-border rounded-xl bg-card overflow-hidden shadow-xs"
+                class="arco-card rounded-[8px] overflow-hidden"
               >
                 <!-- Tool Call Card Header -->
                 <div class="px-3 py-2 bg-muted/40 border-b border-border flex items-center justify-between text-xs">
-                  <div class="flex items-center space-x-2">
+                  <div class="flex items-center gap-2 min-w-0">
                     <span
-                      class="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                      class="arco-tag font-semibold shrink-0"
                       :class="tc.risk_level === 'safe'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'"
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'"
                     >
                       {{ tc.risk_level === 'safe' ? t('Safe Read') : t('Requires Confirmation') }}
                     </span>
-                    <span class="font-mono font-semibold text-foreground text-xs">{{ tc.name }}</span>
+                    <span class="font-mono font-semibold text-foreground text-xs truncate">{{ tc.name }}</span>
                   </div>
 
                   <!-- Status Indicator -->
-                  <div class="flex items-center space-x-1.5 text-[11px]">
-                    <span v-if="tc.status === 'running'" class="flex items-center space-x-1 text-primary">
+                  <div class="flex items-center gap-1.5 text-[11px] shrink-0">
+                    <span v-if="tc.status === 'running'" class="flex items-center gap-1 text-primary">
                       <Loader2 class="w-3 h-3 animate-spin" />
                       <span>{{ t('Running...') }}</span>
                     </span>
-                    <span v-else-if="tc.status === 'success'" class="flex items-center space-x-1 text-emerald-500">
+                    <span v-else-if="tc.status === 'success'" class="flex items-center gap-1 text-emerald-500">
                       <CheckCircle2 class="w-3 h-3" />
                       <span>{{ t('Executed') }}</span>
                     </span>
-                    <span v-else-if="tc.status === 'rejected'" class="flex items-center space-x-1 text-muted-foreground">
+                    <span v-else-if="tc.status === 'rejected'" class="flex items-center gap-1 text-muted-foreground">
                       <XCircle class="w-3 h-3" />
                       <span>{{ t('Cancelled') }}</span>
                     </span>
-                    <span v-else-if="tc.status === 'failed'" class="flex items-center space-x-1 text-rose-500">
+                    <span v-else-if="tc.status === 'failed'" class="flex items-center gap-1 text-destructive">
                       <AlertTriangle class="w-3 h-3" />
                       <span>{{ t('Failed') }}</span>
                     </span>
@@ -830,28 +831,29 @@ function handleClearMessages() {
                 </div>
 
                 <!-- Command / Arguments Preview -->
-                <div class="p-2.5 bg-background font-mono text-[11px] text-foreground border-b border-border/50 overflow-x-auto whitespace-pre">
+                <div class="p-2.5 bg-background/60 font-mono text-[11px] text-foreground border-b border-border/50 overflow-x-auto whitespace-pre">
                   {{ tc.command || JSON.stringify(tc.arguments, null, 2) }}
                 </div>
 
                 <!-- Interactive User Approval Buttons for Pending Destructive Tool -->
                 <div
                   v-if="tc.status === 'pending'"
-                  class="px-3 py-2 bg-amber-500/5 flex items-center justify-between text-xs"
+                  class="px-3 py-2 bg-amber-500/[0.06] flex items-center justify-between gap-2 text-xs"
                 >
-                  <span class="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    ⚠️ {{ t('Confirm execution of this operation?') }}
+                  <span class="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                    <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
+                    <span>{{ t('Confirm execution of this operation?') }}</span>
                   </span>
-                  <div class="flex items-center space-x-2">
+                  <div class="flex items-center gap-1.5 shrink-0">
                     <button
                       @click="handleRejectTool(msg.id, tc)"
-                      class="px-2.5 py-1 rounded bg-secondary hover:bg-secondary/80 text-foreground transition"
+                      class="arco-btn arco-btn-secondary arco-btn-sm"
                     >
                       {{ t('Reject') }}
                     </button>
                     <button
                       @click="handleConfirmTool(msg.id, tc)"
-                      class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition flex items-center space-x-1"
+                      class="arco-btn arco-btn-success arco-btn-sm"
                     >
                       <Check class="w-3 h-3" />
                       <span>{{ t('Run Command') }}</span>
@@ -859,13 +861,13 @@ function handleClearMessages() {
                   </div>
                 </div>
 
-                <!-- Result Box (Collapsible) -->
-                <div v-if="tc.result" class="p-2 bg-muted/20 text-[10px] font-mono max-h-36 overflow-y-auto text-muted-foreground whitespace-pre">
+                <!-- Result Box -->
+                <div v-if="tc.result" class="p-2.5 bg-muted/25 text-[10px] font-mono max-h-36 overflow-y-auto text-muted-foreground whitespace-pre">
                   {{ tc.result }}
                 </div>
 
                 <!-- Error Box -->
-                <div v-if="tc.error" class="p-2 bg-rose-500/10 text-[11px] text-rose-600 dark:text-rose-400">
+                <div v-if="tc.error" class="p-2.5 bg-destructive/10 text-[11px] text-destructive">
                   {{ tc.error }}
                 </div>
               </div>
@@ -874,7 +876,7 @@ function handleClearMessages() {
         </div>
 
         <!-- Streaming Indicator -->
-        <div v-if="isStreaming" class="flex items-center space-x-2 text-muted-foreground text-xs py-2">
+        <div v-if="isStreaming" class="flex items-center gap-2 text-muted-foreground text-xs py-2">
           <Loader2 class="w-3.5 h-3.5 animate-spin text-primary" />
           <span>{{ aiStore.activeMode === 'agent' ? t('Agent planning and executing operations...') : t('Thinking...') }}</span>
         </div>
@@ -882,36 +884,36 @@ function handleClearMessages() {
     </div>
 
     <!-- 4. Context Mentions Bar -->
-    <div class="px-3 py-1 border-t border-border bg-muted/20 flex items-center space-x-1 overflow-x-auto shrink-0">
-      <span class="text-[10px] text-muted-foreground font-semibold uppercase mr-1">{{ t('Context:') }}</span>
+    <div class="px-3.5 py-1.5 border-t border-border bg-muted/20 flex items-center gap-1.5 overflow-x-auto shrink-0">
+      <span class="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mr-0.5 shrink-0">{{ t('Context:') }}</span>
       <button
         @click="inputPrompt += ' @staged '; inputRef?.focus()"
-        class="px-1.5 py-0.5 rounded bg-muted hover:bg-secondary text-[10px] text-muted-foreground hover:text-foreground font-mono transition"
+        class="arco-tag bg-secondary hover:bg-primary/10 hover:text-primary hover:border-primary/35 border-border/70 text-muted-foreground font-mono transition-colors cursor-pointer"
       >
         @staged ({{ repoStore.statusSummary.staged_files.length }})
       </button>
       <button
         @click="inputPrompt += ' @unstaged '; inputRef?.focus()"
-        class="px-1.5 py-0.5 rounded bg-muted hover:bg-secondary text-[10px] text-muted-foreground hover:text-foreground font-mono transition"
+        class="arco-tag bg-secondary hover:bg-primary/10 hover:text-primary hover:border-primary/35 border-border/70 text-muted-foreground font-mono transition-colors cursor-pointer"
       >
         @unstaged ({{ repoStore.statusSummary.unstaged_files.length }})
       </button>
       <button
         @click="inputPrompt += ' @conflicts '; inputRef?.focus()"
-        class="px-1.5 py-0.5 rounded bg-muted hover:bg-secondary text-[10px] text-muted-foreground hover:text-foreground font-mono transition"
+        class="arco-tag bg-secondary hover:bg-primary/10 hover:text-primary hover:border-primary/35 border-border/70 text-muted-foreground font-mono transition-colors cursor-pointer"
       >
         @conflicts ({{ repoStore.statusSummary.conflicted_files.length }})
       </button>
       <button
         @click="inputPrompt += ' @commits '; inputRef?.focus()"
-        class="px-1.5 py-0.5 rounded bg-muted hover:bg-secondary text-[10px] text-muted-foreground hover:text-foreground font-mono transition"
+        class="arco-tag bg-secondary hover:bg-primary/10 hover:text-primary hover:border-primary/35 border-border/70 text-muted-foreground font-mono transition-colors cursor-pointer"
       >
         @commits
       </button>
     </div>
 
     <!-- 5. Bottom Input Area -->
-    <div class="p-3 border-t border-border bg-background relative shrink-0">
+    <div class="p-3 border-t border-border bg-card relative shrink-0">
       <!-- At Mention Suggestion Popup -->
       <div v-if="isAtMentionOpen" class="absolute bottom-full left-3 mb-2 z-50">
         <AtMentionPopup
@@ -921,7 +923,7 @@ function handleClearMessages() {
         />
       </div>
 
-      <div class="relative rounded-xl border border-border bg-muted/30 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition">
+      <div class="relative rounded-[8px] border border-input bg-background/80 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
         <textarea
           data-testid="ai-chat-input"
           ref="inputRef"
@@ -930,16 +932,16 @@ function handleClearMessages() {
           :placeholder="aiStore.activeMode === 'agent'
             ? t('Enter instruction (e.g. checkout new branch, inspect changes, commit)...')
             : t('Ask a Git question or explain changes... (@ to attach context)')"
-          class="w-full p-2.5 text-xs bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none leading-relaxed"
+          class="w-full p-2.5 text-xs bg-transparent text-foreground placeholder:text-muted-foreground/65 focus:outline-none resize-none leading-relaxed"
           @keydown="handleInputKeydown"
         />
 
-        <div class="px-2.5 py-1.5 flex items-center justify-between border-t border-border/40">
-          <div class="flex items-center space-x-1.5">
+        <div class="px-2.5 py-1.5 flex items-center justify-between border-t border-border/60">
+          <div class="flex items-center gap-1.5">
             <button
               data-testid="at-mention-toggle-btn"
               @click="isAtMentionOpen = !isAtMentionOpen"
-              class="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition text-xs flex items-center space-x-1"
+              class="arco-icon-btn arco-icon-btn-sm"
               :title="t('Insert Context Tag (@)')"
             >
               <AtSign class="w-3.5 h-3.5" />
@@ -949,13 +951,13 @@ function handleClearMessages() {
             </span>
           </div>
 
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center gap-1.5">
             <button
               v-if="isStreaming"
               @click="isStreaming = false"
-              class="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition flex items-center space-x-1 text-xs font-semibold"
+              class="arco-btn arco-btn-sm arco-btn-danger-outline"
             >
-              <Square class="w-3.5 h-3.5 fill-current" />
+              <Square class="w-3 h-3 fill-current" />
               <span>{{ t('Stop') }}</span>
             </button>
             <button
@@ -963,9 +965,9 @@ function handleClearMessages() {
               data-testid="ai-chat-send-btn"
               @click="handleSendMessage"
               :disabled="!inputPrompt.trim()"
-              class="p-1.5 px-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1 text-xs font-semibold shadow-xs"
+              class="arco-btn arco-btn-primary arco-btn-sm px-3"
             >
-              <Send class="w-3.5 h-3.5" />
+              <Send class="w-3 h-3" />
               <span>{{ t('Send') }}</span>
             </button>
           </div>

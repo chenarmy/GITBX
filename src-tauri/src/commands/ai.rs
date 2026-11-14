@@ -81,4 +81,3 @@ pub async fn chat_with_ai(
         .await
         .map_err(|e| e.to_string())
 }
-

@@ -196,72 +196,72 @@ onUnmounted(() => {
 
 <template>
   <header
-    class="dbx-header h-10 bg-card border-b border-border flex items-center justify-between px-3 text-xs select-none relative z-30"
+    class="dbx-header h-11 bg-card border-b border-border flex items-center justify-between px-3.5 text-xs select-none relative z-30"
     data-tauri-drag-region
     @dblclick="handleHeaderDoubleClick"
   >
     <!-- Left: App Logo & Repo Dropdown Selector -->
-    <div class="flex items-center space-x-2">
-      <div class="flex items-center space-x-1.5 font-bold tracking-tight cursor-pointer hover:opacity-85 transition">
-        <div class="w-5 h-5 rounded-sm bg-primary flex items-center justify-center text-primary-foreground">
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 font-bold tracking-tight cursor-pointer hover:opacity-90 transition-opacity pr-1">
+        <div class="w-6 h-6 rounded-[6px] bg-gradient-to-br from-primary to-blue-500 shadow-sm flex items-center justify-center text-primary-foreground">
           <FolderGit2 class="w-3.5 h-3.5" />
         </div>
-        <span class="text-sm font-black tracking-wider text-foreground">GITBX</span>
+        <span class="text-[13px] font-bold tracking-wide text-foreground">GITBX</span>
       </div>
 
-      <div class="h-4 w-[1px] bg-border mx-1"></div>
+      <div class="h-4 w-px bg-border/80 mx-0.5"></div>
 
       <!-- Repo Dropdown Menu Container -->
       <div id="repo-dropdown-container" class="relative">
         <button
           @click.stop="isRepoDropdownOpen = !isRepoDropdownOpen"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-sm bg-secondary hover:bg-accent border border-border text-foreground font-medium transition active:scale-95 max-w-[260px]"
+          class="arco-btn arco-btn-secondary h-7 px-2.5 border border-border/70 hover:border-primary/40 max-w-[260px]"
         >
           <FolderOpen class="w-3.5 h-3.5 text-primary shrink-0" />
-          <span class="truncate">{{ repoStore.repoInfo?.name || t('Select Repository') }}</span>
-          <ChevronDown class="w-3 h-3 text-muted-foreground shrink-0 transition-transform" :class="{ 'rotate-180': isRepoDropdownOpen }" />
+          <span class="truncate font-medium">{{ repoStore.repoInfo?.name || t('Select Repository') }}</span>
+          <ChevronDown class="w-3 h-3 text-muted-foreground shrink-0 transition-transform duration-150" :class="{ 'rotate-180': isRepoDropdownOpen }" />
         </button>
 
-        <!-- Dropdown Popover (DBX Card Style) -->
+        <!-- Dropdown Popover (Arco Popover) -->
         <div
           v-if="isRepoDropdownOpen"
-          class="absolute left-0 top-full mt-1.5 w-72 bg-card border border-border rounded-lg shadow-xl py-1 z-50 text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-border/60"
+          class="arco-popover absolute left-0 top-full mt-1.5 w-80 z-50 text-xs overflow-hidden p-0"
         >
-          <div class="px-3 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-            <span>{{ t('Managed Repositories') }}</span>
+          <div class="px-3 py-2 border-b border-border/70 flex items-center justify-between bg-muted/40">
+            <span class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{{ t('Managed Repositories') }}</span>
             <button
               @click.stop="isRepoDropdownOpen = false; repoStore.openModal('addRepo')"
-              class="text-primary hover:underline flex items-center space-x-0.5 font-semibold"
+              class="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
             >
               <Plus class="w-3 h-3" />
               <span>{{ t('Add') }}</span>
             </button>
           </div>
 
-          <div class="max-h-56 overflow-y-auto py-1 divide-y divide-border/30">
+          <div class="max-h-60 overflow-y-auto py-1 space-y-0.5">
             <div
               v-for="repo in repoStore.repoList"
               :key="repo.path"
               @click.stop="handleSelectRepo(repo.path)"
-              class="px-3 py-2 flex items-center justify-between hover:bg-secondary cursor-pointer group transition"
-              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'"
+              class="mx-1 px-2.5 py-2 rounded-[4px] flex items-center justify-between cursor-pointer group transition-colors"
+              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent/70'"
             >
-              <div class="truncate pr-2">
+              <div class="truncate pr-2 min-w-0">
                 <div class="flex items-center gap-1.5 truncate font-medium">
                   <span class="truncate">{{ repo.name }}</span>
                   <span
                     v-if="repo.group"
-                    class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-medium text-amber-600 dark:text-amber-400"
+                    class="arco-tag shrink-0 bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400"
                   >
                     {{ repo.group }}
                   </span>
                 </div>
-                <div class="text-[10px] text-muted-foreground truncate opacity-75">{{ repo.path }}</div>
+                <div class="text-[10px] text-muted-foreground truncate mt-0.5">{{ repo.path }}</div>
               </div>
               <button
                 v-if="repoStore.repoList.length > 1"
                 @click="handleRemoveRepo($event, repo.path)"
-                class="p-1 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 transition shrink-0"
+                class="arco-icon-btn arco-icon-btn-sm hover:bg-destructive/15 hover:text-destructive opacity-0 group-hover:opacity-100 shrink-0"
                 :title="t('Remove from Workspace')"
               >
                 <Trash2 class="w-3.5 h-3.5" />
@@ -271,109 +271,112 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Add Repo Quick Button -->
-      <button
-        @click="repoStore.openModal('addRepo')"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
-        :title="t('Add or Clone Repository')"
-      >
-        <Plus class="w-3.5 h-3.5" />
-      </button>
-
-      <!-- Repository-scoped escape hatch for advanced Git commands. -->
-      <div id="editor-dropdown-container" class="relative">
+      <!-- Quick Repository Actions -->
+      <div class="flex items-center gap-0.5 pl-0.5">
         <button
-          @click.stop="isEditorDropdownOpen = !isEditorDropdownOpen"
-          :disabled="!repoStore.activeRepoPath || Boolean(isOpeningEditor)"
-          class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
-          :title="t('Open Repository in Editor')"
+          @click="repoStore.openModal('addRepo')"
+          class="arco-icon-btn"
+          :title="t('Add or Clone Repository')"
         >
-          <Code2 class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningEditor }" />
-          <ChevronDown class="w-3 h-3 transition-transform" :class="{ 'rotate-180': isEditorDropdownOpen }" />
+          <Plus class="w-3.5 h-3.5" />
         </button>
-        <div
-          v-if="isEditorDropdownOpen"
-          class="absolute left-0 top-full mt-1.5 w-48 rounded-lg border border-border bg-card py-1 shadow-xl z-50"
-        >
+
+        <!-- Repository-scoped escape hatch for advanced Git commands. -->
+        <div id="editor-dropdown-container" class="relative">
           <button
-            class="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-secondary transition"
-            @click="handleOpenInEditor('vscode')"
+            @click.stop="isEditorDropdownOpen = !isEditorDropdownOpen"
+            :disabled="!repoStore.activeRepoPath || Boolean(isOpeningEditor)"
+            class="arco-btn arco-btn-text h-7 px-1.5 gap-0.5"
+            :title="t('Open Repository in Editor')"
           >
-            <Code2 class="h-3.5 w-3.5 text-sky-500" />
-            <span>Visual Studio Code</span>
+            <Code2 class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningEditor }" />
+            <ChevronDown class="w-3 h-3 transition-transform duration-150" :class="{ 'rotate-180': isEditorDropdownOpen }" />
           </button>
-          <button
-            class="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-secondary transition"
-            @click="handleOpenInEditor('idea')"
+          <div
+            v-if="isEditorDropdownOpen"
+            class="arco-menu absolute left-0 top-full mt-1.5 w-48 z-50"
           >
-            <Code2 class="h-3.5 w-3.5 text-violet-500" />
-            <span>IntelliJ IDEA</span>
-          </button>
+            <button
+              class="arco-menu-item"
+              @click="handleOpenInEditor('vscode')"
+            >
+              <Code2 class="h-3.5 w-3.5 text-sky-500" />
+              <span>Visual Studio Code</span>
+            </button>
+            <button
+              class="arco-menu-item"
+              @click="handleOpenInEditor('idea')"
+            >
+              <Code2 class="h-3.5 w-3.5 text-violet-500" />
+              <span>IntelliJ IDEA</span>
+            </button>
+          </div>
         </div>
+
+        <button
+          @click="handleOpenTerminal"
+          :disabled="!repoStore.activeRepoPath || isOpeningTerminal"
+          class="arco-icon-btn"
+          :title="t('Open System Terminal')"
+        >
+          <Terminal class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningTerminal }" />
+        </button>
+        <button
+          @click="handleOpenFileManager"
+          :disabled="!repoStore.activeRepoPath || isOpeningFileManager"
+          class="arco-icon-btn"
+          :title="t('Open File Explorer')"
+        >
+          <FolderOpen class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningFileManager }" />
+        </button>
       </div>
-
-      <button
-        @click="handleOpenTerminal"
-        :disabled="!repoStore.activeRepoPath || isOpeningTerminal"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
-        :title="t('Open System Terminal')"
-      >
-        <Terminal class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningTerminal }" />
-      </button>
-      <button
-        @click="handleOpenFileManager"
-        :disabled="!repoStore.activeRepoPath || isOpeningFileManager"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition disabled:opacity-40 disabled:cursor-not-allowed"
-        :title="t('Open File Explorer')"
-      >
-        <FolderOpen class="w-3.5 h-3.5" :class="{ 'animate-pulse': isOpeningFileManager }" />
-      </button>
-
     </div>
 
     <!-- Center: Active Repo Status Badge -->
-    <div class="flex items-center space-x-2">
+    <div class="flex items-center">
       <span
         v-if="repoStore.statusSummary.total_changes > 0"
-        class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
       >
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
         {{ t('{count} uncommitted changes', { count: repoStore.statusSummary.total_changes }) }}
       </span>
       <span
         v-else
-        class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
       >
-        ✓ {{ t('Working tree clean') }}
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        {{ t('Working tree clean') }}
       </span>
     </div>
 
     <!-- Right: AI Copilot Button, Refresh, Theme Toggle, Settings -->
-    <div class="flex items-center space-x-1.5">
+    <div class="flex items-center gap-1">
       <button
         @click="aiStore.toggleSidebar()"
         :class="[
-          'flex items-center space-x-1.5 px-2.5 py-1 rounded-sm border active:scale-95 transition font-medium',
+          'arco-btn h-7 px-2.5 mr-1',
           aiStore.isSidebarOpen
-            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-            : 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/30'
+            ? 'arco-btn-primary'
+            : 'bg-primary/10 hover:bg-primary/15 text-primary border border-primary/25'
         ]"
         :title="t('Toggle AI Chat Sidebar')"
       >
-        <Sparkles class="w-3.5 h-3.5" :class="aiStore.isSidebarOpen ? 'text-primary-foreground' : 'text-indigo-600 dark:text-indigo-400'" />
-        <span class="text-[11px] font-bold">{{ t('AI Copilot') }}</span>
+        <Sparkles class="w-3.5 h-3.5" :class="aiStore.isSidebarOpen ? 'text-primary-foreground' : 'text-primary'" />
+        <span class="text-[11px] font-semibold">{{ t('AI Copilot') }}</span>
       </button>
 
       <button
         @click="handleRefresh"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+        class="arco-icon-btn"
         :title="t('Refresh Repository')"
       >
-        <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': repoStore.isLoading }" />
+        <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin text-primary': repoStore.isLoading }" />
       </button>
 
       <button
         @click="handleToggleTheme"
-        class="p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+        class="arco-icon-btn"
         :title="t('Toggle Light/Dark Theme')"
       >
         <Sun v-if="settingsStore.isDark" class="w-3.5 h-3.5 text-amber-400" />
@@ -383,29 +386,29 @@ onUnmounted(() => {
       <button
         data-testid="navbar-settings-btn"
         @click="settingsStore.openSettingsModal()"
-        class="relative p-1.5 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition"
+        class="arco-icon-btn relative"
         :title="t('Open Settings')"
       >
         <Settings class="w-3.5 h-3.5" />
         <span
           v-if="updatesStore.hasUpdateAvailable"
-          class="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-card"
+          class="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive ring-2 ring-card"
           :title="t('New version available')"
           aria-label="New version available"
         />
       </button>
 
-      <div v-if="isTauriWindow" class="h-4 w-px bg-border ml-1"></div>
-      <div v-if="isTauriWindow" class="-my-2 -mr-3 ml-0.5 h-10 flex items-stretch" aria-label="Window controls">
+      <div v-if="isTauriWindow" class="h-4 w-px bg-border mx-1"></div>
+      <div v-if="isTauriWindow" class="-mr-3.5 h-11 flex items-stretch" aria-label="Window controls">
         <button
-          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           :title="t('Minimize Window')"
           @click="handleMinimize"
         >
           <Minus class="w-3.5 h-3.5" />
         </button>
         <button
-          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          class="w-10 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           :title="isMaximized ? t('Restore Window') : t('Maximize Window')"
           @click="handleToggleMaximize"
         >
@@ -413,7 +416,7 @@ onUnmounted(() => {
           <Square v-else class="w-3 h-3" />
         </button>
         <button
-          class="w-11 flex items-center justify-center text-muted-foreground hover:bg-red-600 hover:text-white transition-colors"
+          class="w-11 flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
           :title="t('Close Window')"
           @click="handleCloseWindow"
         >

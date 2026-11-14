@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Archive, X, AlertCircle, Play, Trash2, Pencil, Eye, Layers } from 'lucide-vue-next';
+import { Archive, AlertCircle, Play, Trash2, Pencil, Eye, Layers } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
@@ -87,74 +88,132 @@ async function dropSelected() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isStashModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('stash')"
+    :title="t('Stash and Shelf Manager')"
+    max-width-class="max-w-5xl"
+    height-class="h-[76vh]"
+    icon-bg-class="bg-orange-500/10 text-orange-500"
+    raw-body
+    @close="repoStore.closeModal('stash')"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Stash and Shelf Manager')"
-      class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border">
-        <div class="flex items-center gap-2">
-          <Archive class="w-4 h-4 text-orange-400" aria-hidden="true" />
-          <span class="font-bold text-sm">{{ t('Stash and Shelf Manager') }}</span>
-        </div>
-        <button
-          type="button"
-          aria-label="Close dialog"
-          class="p-1 rounded hover:bg-accent text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/50"
-          @click="repoStore.closeModal('stash')"
-        >
-          <X class="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
-      <div v-if="errorMsg" class="m-3 mb-0 p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-500 flex gap-2"><AlertCircle class="w-4 h-4" />{{ errorMsg }}</div>
-      <div class="flex-1 min-h-0 grid grid-cols-[300px_1fr]">
-        <div class="border-r border-border flex flex-col min-h-0">
-          <div class="p-3 border-b border-border space-y-2">
-            <div class="flex bg-muted rounded p-0.5">
-              <button v-for="item in (['stash', 'shelf'] as const)" :key="item" class="flex-1 py-1 rounded" :class="mode === item ? 'bg-card shadow text-primary' : 'text-muted-foreground'" @click="mode = item">{{ t(item === 'stash' ? 'Full Stash' : 'Shelf Selected Files') }}</button>
-            </div>
-            <input v-model="stashMessage" class="w-full bg-background border border-border rounded px-2 py-1.5" :placeholder="t('Stash Message (Optional)')" />
-            <div v-if="mode === 'shelf'" class="max-h-32 overflow-auto border border-border rounded divide-y divide-border">
-              <label v-for="file in changedFiles" :key="file.path" class="flex gap-2 px-2 py-1 hover:bg-accent"><input v-model="selectedPaths" type="checkbox" :value="file.path" /><span class="truncate font-mono">{{ file.path }}</span></label>
-            </div>
-            <button class="w-full py-1.5 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40" :disabled="isSubmitting || (mode === 'shelf' && selectedPaths.length === 0)" @click="handleSave">{{ t(mode === 'stash' ? 'Save Stash' : 'Create Shelf') }}</button>
-          </div>
-          <div class="px-3 py-2 font-bold text-muted-foreground uppercase text-[10px]">{{ t('Saved Stashes and Shelves') }}</div>
-          <div class="flex-1 overflow-auto divide-y divide-border">
-            <button v-for="stash in repoStore.stashes" :key="stash.commit_id" class="w-full text-left px-3 py-2 hover:bg-accent" :class="selectedStash?.commit_id === stash.commit_id ? 'bg-accent' : ''" @click="inspectStash(stash)">
-              <div class="flex items-center gap-2"><Layers class="w-3.5 h-3.5 text-orange-400" /><span class="truncate font-semibold">{{ stash.message }}</span></div>
-              <div class="font-mono text-[10px] text-muted-foreground mt-1">{{ stashRef(stash.index) }} · {{ stash.commit_id.slice(0, 8) }}</div>
+    <template #icon>
+      <Archive class="w-4 h-4" aria-hidden="true" />
+    </template>
+
+    <div v-if="errorMsg" class="arco-alert arco-alert-danger m-4 mb-0 shrink-0">
+      <AlertCircle class="w-4 h-4 shrink-0" />
+      <span>{{ errorMsg }}</span>
+    </div>
+
+    <div class="flex-1 min-h-0 grid grid-cols-[310px_1fr]">
+      <div class="border-r border-border/80 bg-[hsl(var(--arco-fill-1))] flex flex-col min-h-0">
+        <div class="p-3.5 border-b border-border/80 space-y-2.5">
+          <div class="arco-segmented w-full">
+            <button
+              v-for="item in (['stash', 'shelf'] as const)"
+              :key="item"
+              type="button"
+              class="arco-segmented-item flex-1"
+              :class="{ 'arco-segmented-item-active': mode === item }"
+              @click="mode = item"
+            >
+              {{ t(item === 'stash' ? 'Full Stash' : 'Shelf Selected Files') }}
             </button>
-            <div v-if="repoStore.stashes.length === 0" class="p-6 text-center text-muted-foreground">{{ t('No saved stashes or shelves.') }}</div>
           </div>
+          <input
+            v-model="stashMessage"
+            class="arco-input arco-input-sm"
+            :placeholder="t('Stash Message (Optional)')"
+          />
+          <div
+            v-if="mode === 'shelf'"
+            class="max-h-32 overflow-auto border border-border/80 bg-card rounded-[6px] divide-y divide-border/70"
+          >
+            <label
+              v-for="file in changedFiles"
+              :key="file.path"
+              class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-accent/55 cursor-pointer"
+            >
+              <input v-model="selectedPaths" type="checkbox" :value="file.path" class="accent-[hsl(var(--primary))]" />
+              <span class="truncate font-mono text-[11px]">{{ file.path }}</span>
+            </label>
+          </div>
+          <button
+            type="button"
+            class="arco-btn arco-btn-primary w-full"
+            :disabled="isSubmitting || (mode === 'shelf' && selectedPaths.length === 0)"
+            @click="handleSave"
+          >
+            {{ t(mode === 'stash' ? 'Save Stash' : 'Create Shelf') }}
+          </button>
         </div>
 
-        <div class="flex flex-col min-h-0">
-          <div v-if="selectedStash" class="p-3 border-b border-border flex gap-2 items-center">
-            <input v-model="renameMessage" class="flex-1 bg-background border border-border rounded px-2 py-1.5" />
-            <button class="action" @click="renameSelected"><Pencil class="w-3.5 h-3.5" />{{ t('Rename') }}</button>
-            <button class="action" @click="applySelected(false)"><Eye class="w-3.5 h-3.5" />{{ t('Apply and Keep') }}</button>
-            <button class="action text-primary" @click="applySelected(true)"><Play class="w-3.5 h-3.5" />{{ t('Pop') }}</button>
-            <button class="action text-rose-500" @click="dropSelected"><Trash2 class="w-3.5 h-3.5" />{{ t('Drop') }}</button>
+        <div class="px-3.5 py-2 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] border-b border-border/70 bg-[hsl(var(--arco-fill-2))]">
+          {{ t('Saved Stashes and Shelves') }}
+        </div>
+
+        <div class="flex-1 overflow-auto divide-y divide-border/70">
+          <button
+            v-for="stash in repoStore.stashes"
+            :key="stash.commit_id"
+            type="button"
+            class="w-full text-left px-3.5 py-2.5 hover:bg-accent/55 transition-colors"
+            :class="selectedStash?.commit_id === stash.commit_id ? 'bg-primary/[0.08] border-l-2 border-l-primary' : ''"
+            @click="inspectStash(stash)"
+          >
+            <div class="flex items-center gap-2">
+              <Layers class="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span class="truncate font-semibold text-foreground">{{ stash.message }}</span>
+            </div>
+            <div class="font-mono text-[10px] text-muted-foreground mt-1">
+              {{ stashRef(stash.index) }} · {{ stash.commit_id.slice(0, 8) }}
+            </div>
+          </button>
+          <div v-if="repoStore.stashes.length === 0" class="p-6 text-center text-muted-foreground">
+            {{ t('No saved stashes or shelves.') }}
           </div>
-          <div class="grid grid-cols-[1fr_100px] px-3 py-2 bg-muted/40 font-bold text-[10px] uppercase text-muted-foreground"><span>{{ t('Files in Stash') }}</span><span>{{ t('Status') }}</span></div>
-          <div class="flex-1 overflow-auto divide-y divide-border">
-            <div v-for="file in stashFiles" :key="file.path" class="grid grid-cols-[1fr_100px] px-3 py-2 font-mono"><span class="truncate">{{ file.path }}</span><span class="text-primary">{{ file.staged_status }}</span></div>
-            <div v-if="selectedStash && stashFiles.length === 0" class="p-8 text-center text-muted-foreground">{{ t('This stash contains no file changes.') }}</div>
+        </div>
+      </div>
+
+      <div class="flex flex-col min-h-0">
+        <div v-if="selectedStash" class="p-3.5 border-b border-border/80 bg-[hsl(var(--arco-fill-1))] flex flex-wrap gap-2 items-center shrink-0">
+          <input v-model="renameMessage" class="arco-input arco-input-sm flex-1 min-w-[160px]" />
+          <button type="button" class="arco-btn arco-btn-outline arco-btn-sm" @click="renameSelected">
+            <Pencil class="w-3.5 h-3.5" />{{ t('Rename') }}
+          </button>
+          <button type="button" class="arco-btn arco-btn-outline arco-btn-sm" @click="applySelected(false)">
+            <Eye class="w-3.5 h-3.5" />{{ t('Apply and Keep') }}
+          </button>
+          <button type="button" class="arco-btn arco-btn-primary arco-btn-sm" @click="applySelected(true)">
+            <Play class="w-3.5 h-3.5" />{{ t('Pop') }}
+          </button>
+          <button type="button" class="arco-btn arco-btn-danger-outline arco-btn-sm" @click="dropSelected">
+            <Trash2 class="w-3.5 h-3.5" />{{ t('Drop') }}
+          </button>
+        </div>
+
+        <div class="grid grid-cols-[1fr_110px] px-4 py-2 bg-[hsl(var(--arco-fill-2))] border-b border-border/80 font-semibold text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+          <span>{{ t('Files in Stash') }}</span>
+          <span>{{ t('Status') }}</span>
+        </div>
+
+        <div class="flex-1 overflow-auto divide-y divide-border/70">
+          <div
+            v-for="file in stashFiles"
+            :key="file.path"
+            class="grid grid-cols-[1fr_110px] px-4 py-2.5 font-mono items-center hover:bg-accent/40 transition-colors"
+          >
+            <span class="truncate text-foreground">{{ file.path }}</span>
+            <span>
+              <span class="arco-tag arco-tag-primary">{{ file.staged_status }}</span>
+            </span>
+          </div>
+          <div v-if="selectedStash && stashFiles.length === 0" class="p-8 text-center text-muted-foreground">
+            {{ t('This stash contains no file changes.') }}
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </ArcoModal>
 </template>
-
-<style scoped>
-.action { @apply px-2 py-1.5 rounded border border-border hover:bg-accent flex items-center gap-1 whitespace-nowrap; }
-</style>

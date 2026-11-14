@@ -3,7 +3,8 @@ import { ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useDiffStore } from '@/stores/diff';
 import { useNotificationStore } from '@/stores/notification';
-import { GitMerge, X, AlertCircle } from 'lucide-vue-next';
+import { GitMerge, AlertCircle } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -72,107 +73,95 @@ async function handleMerge() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isMergeModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('merge')"
+    :title="t('Merge into \'{branch}\'', { branch: repoStore.repoInfo?.head_branch || 'main' })"
+    icon-bg-class="bg-amber-500/10 text-amber-500"
+    body-class="space-y-4"
+    @close="repoStore.closeModal('merge')"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Merge into \'{branch}\'', { branch: repoStore.repoInfo?.head_branch || 'main' })"
-      class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
-        <div class="flex items-center space-x-2">
-          <GitMerge class="w-4 h-4 text-amber-400" />
-          <span class="font-bold text-sm text-foreground">
-            {{ t("Merge into '{branch}'", { branch: repoStore.repoInfo?.head_branch || 'main' }) }}
-          </span>
-        </div>
-        <button
-          @click="repoStore.closeModal('merge')"
-          aria-label="Close"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+    <template #icon>
+      <GitMerge class="w-4 h-4" aria-hidden="true" />
+    </template>
+
+    <div v-if="errorMsg" class="arco-alert arco-alert-danger">
+      <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
+      <span>{{ errorMsg }}</span>
+    </div>
+
+    <div>
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Source Branch to Merge') }}</label>
+      <select v-model="targetBranch" class="arco-select mt-1.5">
+        <option
+          v-for="b in repoStore.branches.filter(b => b.name !== repoStore.repoInfo?.head_branch)"
+          :key="b.name"
+          :value="b.name"
         >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
+          {{ b.name }}
+        </option>
+      </select>
+    </div>
 
-      <div class="p-4 space-y-4">
-        <div
-          v-if="errorMsg"
-          class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center space-x-2"
+    <div>
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Merge Strategy') }}</label>
+      <div class="space-y-1.5 mt-1.5">
+        <label
+          class="flex items-center space-x-2.5 rounded-[6px] border px-3 py-2 cursor-pointer transition-colors"
+          :class="strategy === 'default' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
         >
-          <AlertCircle class="w-4 h-4 shrink-0" />
-          <span>{{ errorMsg }}</span>
-        </div>
-
-        <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Source Branch to Merge') }}</label>
-          <select
-            v-model="targetBranch"
-            class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option
-              v-for="b in repoStore.branches.filter(b => b.name !== repoStore.repoInfo?.head_branch)"
-              :key="b.name"
-              :value="b.name"
-            >
-              {{ b.name }}
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Merge Strategy') }}</label>
-          <div class="space-y-1.5 mt-1">
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" v-model="strategy" value="default" class="text-primary" />
-              <span>{{ t('Default (Fast-forward if possible, otherwise merge commit)') }}</span>
-            </label>
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" v-model="strategy" value="no-ff" class="text-primary" />
-              <span>{{ t('Always create merge commit (--no-ff)') }}</span>
-            </label>
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" v-model="strategy" value="squash" class="text-primary" />
-              <span>{{ t('Squash merge (--squash)') }}</span>
-            </label>
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" v-model="strategy" value="ff-only" class="text-primary" />
-              <span>{{ t('Fast-forward only (--ff-only)') }}</span>
-            </label>
-          </div>
-        </div>
-
-        <div v-if="strategy === 'no-ff' || strategy === 'squash'">
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Custom Commit Message (Optional)') }}</label>
-          <input
-            v-model="customMessage"
-            type="text"
-            placeholder="e.g. merge: pull request #12 from feature/auth"
-            class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-      </div>
-
-      <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
-        <button
-          @click="repoStore.closeModal('merge')"
-          class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
+          <input type="radio" v-model="strategy" value="default" class="accent-[hsl(var(--primary))]" />
+          <span class="text-foreground">{{ t('Default (Fast-forward if possible, otherwise merge commit)') }}</span>
+        </label>
+        <label
+          class="flex items-center space-x-2.5 rounded-[6px] border px-3 py-2 cursor-pointer transition-colors"
+          :class="strategy === 'no-ff' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
         >
-          {{ t('Cancel') }}
-        </button>
-        <button
-          @click="handleMerge"
-          :disabled="!targetBranch || isSubmitting"
-          class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
+          <input type="radio" v-model="strategy" value="no-ff" class="accent-[hsl(var(--primary))]" />
+          <span class="text-foreground">{{ t('Always create merge commit (--no-ff)') }}</span>
+        </label>
+        <label
+          class="flex items-center space-x-2.5 rounded-[6px] border px-3 py-2 cursor-pointer transition-colors"
+          :class="strategy === 'squash' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
         >
-          {{ isSubmitting ? t('Merging...') : t("Merge '{branch}'", { branch: targetBranch }) }}
-        </button>
+          <input type="radio" v-model="strategy" value="squash" class="accent-[hsl(var(--primary))]" />
+          <span class="text-foreground">{{ t('Squash merge (--squash)') }}</span>
+        </label>
+        <label
+          class="flex items-center space-x-2.5 rounded-[6px] border px-3 py-2 cursor-pointer transition-colors"
+          :class="strategy === 'ff-only' ? 'border-primary/50 bg-primary/[0.04]' : 'border-border/80 bg-[hsl(var(--arco-fill-1))] hover:bg-accent/55'"
+        >
+          <input type="radio" v-model="strategy" value="ff-only" class="accent-[hsl(var(--primary))]" />
+          <span class="text-foreground">{{ t('Fast-forward only (--ff-only)') }}</span>
+        </label>
       </div>
     </div>
-  </div>
+
+    <div v-if="strategy === 'no-ff' || strategy === 'squash'">
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Custom Commit Message (Optional)') }}</label>
+      <input
+        v-model="customMessage"
+        type="text"
+        placeholder="e.g. merge: pull request #12 from feature/auth"
+        class="arco-input mt-1.5"
+      />
+    </div>
+
+    <template #footer>
+      <button
+        type="button"
+        @click="repoStore.closeModal('merge')"
+        class="arco-btn arco-btn-secondary"
+      >
+        {{ t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        @click="handleMerge"
+        :disabled="!targetBranch || isSubmitting"
+        class="arco-btn arco-btn-primary"
+      >
+        {{ isSubmitting ? t('Merging...') : t("Merge '{branch}'", { branch: targetBranch }) }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

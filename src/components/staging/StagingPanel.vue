@@ -252,37 +252,37 @@ async function handleDiscardFile(e: Event, filePath: string) {
     <!-- Conflicted Files Section -->
     <div
       v-if="repoStore.statusSummary.conflicted_files.length > 0"
-      class="max-h-[38%] min-h-[92px] flex flex-col border-b border-amber-500/40 bg-amber-500/5"
+      class="max-h-[38%] min-h-[92px] flex flex-col border-b border-amber-500/35 bg-amber-500/[0.06]"
     >
-      <div class="dbx-pane-header h-8 px-2.5 flex items-center justify-between font-bold text-amber-700 dark:text-amber-300 border-b border-amber-500/30">
-        <div class="flex items-center space-x-1.5">
-          <AlertTriangle class="w-3.5 h-3.5" />
+      <div class="h-8 px-3 flex items-center justify-between font-semibold text-amber-700 dark:text-amber-300 border-b border-amber-500/25">
+        <div class="flex items-center gap-1.5">
+          <AlertTriangle class="w-3.5 h-3.5 text-amber-500" />
           <span>{{ t('Conflicts') }}</span>
-          <span class="px-1.5 rounded text-[10px] bg-amber-200/70 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <span class="arco-tag bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300 font-semibold tabular-nums">
             {{ repoStore.statusSummary.conflicted_files.length }}
           </span>
         </div>
-        <span class="text-[10px] font-medium opacity-80">{{ t('Resolve before continuing') }}</span>
+        <span class="text-[10px] font-medium opacity-85">{{ t('Resolve before continuing') }}</span>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+      <div class="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         <button
           v-for="file in conflictedFiles"
           :key="file.path"
           @click="diffStore.selectConflictFile(file.path)"
-          class="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition"
-          :class="diffStore.selectedConflictFile === file.path ? 'bg-amber-500/20 text-amber-900 dark:text-amber-100 font-bold' : 'text-foreground hover:bg-amber-500/10'"
+          class="w-full flex items-center justify-between px-2 py-1.5 rounded-[4px] text-left transition-colors"
+          :class="diffStore.selectedConflictFile === file.path ? 'bg-amber-500/20 text-amber-900 dark:text-amber-100 font-semibold' : 'text-foreground hover:bg-amber-500/10'"
         >
-          <span class="flex items-center space-x-1.5 min-w-0">
-            <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span class="flex items-center gap-1.5 min-w-0">
+            <AlertTriangle class="w-3.5 h-3.5 text-amber-500 shrink-0" />
             <span class="truncate">{{ file.path }}</span>
           </span>
-          <span class="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">{{ t('Resolve') }}</span>
+          <span class="text-[10px] font-medium text-amber-600 dark:text-amber-300 shrink-0">{{ t('Resolve') }}</span>
         </button>
         <button
           v-if="conflictedFiles.length < repoStore.statusSummary.conflicted_files.length"
           @click="showMore('conflict')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded-[4px] transition-colors"
         >
           {{ t('Show more ({count} remaining)', { count: repoStore.statusSummary.conflicted_files.length - conflictedFiles.length }) }}
         </button>
@@ -292,10 +292,10 @@ async function handleDiscardFile(e: Event, filePath: string) {
     <!-- Branch Comparison Section -->
     <div
       v-if="repoStore.branchComparison"
-      class="flex-1 flex flex-col min-h-0 bg-muted/10"
+      class="flex-1 flex flex-col min-h-0"
     >
-      <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
-        <div class="flex items-center space-x-1.5 min-w-0">
+      <div class="dbx-pane-header h-8 px-3 flex items-center justify-between font-semibold text-foreground border-b border-border">
+        <div class="flex items-center gap-1.5 min-w-0">
           <GitCompareArrows class="w-3.5 h-3.5 text-primary shrink-0" />
           <span class="truncate text-[11px]">
             {{ repoStore.branchComparison.baseBranch }} → {{ repoStore.branchComparison.targetBranch }}
@@ -304,22 +304,22 @@ async function handleDiscardFile(e: Event, filePath: string) {
         </div>
         <button
           @click="repoStore.clearBranchComparison()"
-          class="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer shrink-0"
+          class="arco-btn arco-btn-text arco-btn-sm h-5 px-1.5 text-[10px] text-primary shrink-0"
         >
           {{ t('Working Tree') }}
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+      <div class="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         <div
           v-for="file in branchFiles"
           :key="`${file.old_path || ''}:${file.path}`"
           @click="diffStore.selectBranchComparisonFile(file.path, file.old_path, repoStore.activeRepoPath, repoStore.branchComparison!.baseCommitId, repoStore.branchComparison!.targetCommitId)"
-          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs"
-          :class="diffStore.selectedFile === file.path ? 'bg-primary/15 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+          class="flex items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs"
+          :class="diffStore.selectedFile === file.path ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent/70'"
         >
-          <div class="flex items-center space-x-1.5 truncate">
-            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
+          <div class="flex items-center gap-1.5 truncate">
+            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(file.staged_status)" />
             <span class="truncate">{{ file.path }}</span>
           </div>
         </div>
@@ -329,7 +329,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
         <button
           v-if="branchFiles.length < repoStore.branchComparisonFiles.length"
           @click="showMore('branch')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded-[4px] transition-colors"
         >
           {{ t('Show more ({count} remaining)', { count: repoStore.branchComparisonFiles.length - branchFiles.length }) }}
         </button>
@@ -339,47 +339,47 @@ async function handleDiscardFile(e: Event, filePath: string) {
     <!-- Selected Commit Changes Section (when inspecting a historical commit) -->
     <div
       v-else-if="repoStore.selectedCommit && diffStore.commitId"
-      class="flex-1 flex flex-col min-h-0 bg-muted/10"
+      class="flex-1 flex flex-col min-h-0"
     >
-      <div class="dbx-pane-header h-7.5 bg-muted/50 px-2.5 flex items-center justify-between font-bold text-foreground border-b border-border">
-        <div class="flex items-center space-x-1.5 min-w-0">
+      <div class="dbx-pane-header h-8 px-3 flex items-center justify-between font-semibold text-foreground border-b border-border">
+        <div class="flex items-center gap-1.5 min-w-0">
           <GitCommit class="w-3.5 h-3.5 text-primary shrink-0" />
           <span class="font-mono text-[11px] text-primary">{{ repoStore.selectedCommit.short_id }}</span>
           <span class="text-[10px] text-muted-foreground truncate font-normal">({{ repoStore.selectedCommitFiles.length }} {{ t('files') }})</span>
         </div>
         <button
           @click="diffStore.clearSelection(); repoStore.selectedCommit = null;"
-          class="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+          class="arco-btn arco-btn-text arco-btn-sm h-5 px-1.5 text-[10px] text-primary shrink-0"
         >
           {{ t('Working Tree') }}
         </button>
       </div>
 
-      <div class="p-2 border-b border-border bg-card/60">
+      <div class="px-3 py-2 border-b border-border bg-muted/25">
         <div class="font-medium text-foreground truncate text-[11px]">{{ repoStore.selectedCommit.summary }}</div>
-        <div class="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-between">
+        <div class="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-between tabular-nums">
           <span>{{ repoStore.selectedCommit.author_name }}</span>
           <span>{{ new Date(repoStore.selectedCommit.author_time * 1000).toLocaleDateString() }}</span>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+      <div class="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         <div
           v-for="file in commitFiles"
           :key="file.path"
           @click="diffStore.selectFile(file.path, false, repoStore.activeRepoPath, repoStore.selectedCommit?.id)"
-          class="flex items-center justify-between px-2 py-1 rounded-md cursor-pointer transition text-xs"
-          :class="diffStore.selectedFile === file.path ? 'bg-primary/15 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+          class="flex items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs"
+          :class="diffStore.selectedFile === file.path ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent/70'"
         >
-          <div class="flex items-center space-x-1.5 truncate">
-            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5" :class="getStatusColor(file.staged_status)" />
+          <div class="flex items-center gap-1.5 truncate">
+            <component :is="getStatusIcon(file.staged_status)" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(file.staged_status)" />
             <span class="truncate">{{ file.path }}</span>
           </div>
         </div>
         <button
           v-if="commitFiles.length < repoStore.selectedCommitFiles.length"
           @click="showMore('commit')"
-          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded"
+          class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded-[4px] transition-colors"
         >
           {{ t('Show more ({count} remaining)', { count: repoStore.selectedCommitFiles.length - commitFiles.length }) }}
         </button>
@@ -388,7 +388,7 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
     <!-- Unified working tree changes (normal working tree) -->
     <div v-else class="flex-1 flex flex-col min-h-0">
-      <div class="dbx-pane-header min-h-8 bg-muted/40 px-2 flex items-center justify-between gap-2 font-bold text-muted-foreground border-b border-border">
+      <div class="dbx-pane-header h-8 px-2.5 flex items-center justify-between gap-2 font-semibold text-foreground border-b border-border">
         <label class="flex items-center gap-1.5 min-w-0 cursor-pointer">
           <input
             type="checkbox"
@@ -397,50 +397,50 @@ async function handleDiscardFile(e: Event, filePath: string) {
             @change="toggleAllChanges"
           />
           <span>{{ t('Changes') }}</span>
-          <span class="px-1.5 rounded text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+          <span class="arco-tag bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-semibold tabular-nums">
             {{ workingFiles.length }}
           </span>
-          <span class="truncate text-[10px] font-normal">{{ t('{count} selected', { count: selectedCount }) }}</span>
+          <span class="truncate text-[10px] font-normal text-muted-foreground tabular-nums">{{ t('{count} selected', { count: selectedCount }) }}</span>
         </label>
-        <div class="flex items-center shrink-0 border border-border rounded p-0.5 bg-background/70">
+        <div class="arco-segmented shrink-0">
           <button
-            class="p-1 rounded"
-            :class="changeView === 'grouped' ? 'bg-accent text-primary' : 'hover:bg-accent'"
+            class="arco-segmented-item p-1"
+            :class="{ 'arco-segmented-item-active text-primary': changeView === 'grouped' }"
             :title="t('Group by Directory')"
             @click="setChangeView('grouped')"
           ><FolderTree class="w-3.5 h-3.5" /></button>
           <button
-            class="p-1 rounded"
-            :class="changeView === 'flat' ? 'bg-accent text-primary' : 'hover:bg-accent'"
+            class="arco-segmented-item p-1"
+            :class="{ 'arco-segmented-item-active text-primary': changeView === 'flat' }"
             :title="t('Flat View')"
             @click="setChangeView('flat')"
           ><ListIcon class="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
-      <div class="flex items-center gap-1 px-2 py-1 border-b border-border bg-card">
+      <div class="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border bg-card">
         <button
-          class="change-action"
+          class="change-action arco-btn arco-btn-secondary arco-btn-sm"
           :disabled="operationsLocked || (!selectedCount && !repoStore.statusSummary.unstaged_files.length && !repoStore.statusSummary.untracked_files.length)"
           :title="selectedCount ? t('Stage Selected') : t('Stage All')"
           @click="selectedCount ? handleStageSelected() : handleStageAll()"
         >
-          <Plus class="w-3 h-3" />{{ selectedCount ? t('Add') : t('Add All') }}
+          <Plus class="w-3 h-3 text-emerald-500" />{{ selectedCount ? t('Add') : t('Add All') }}
         </button>
         <button
-          class="change-action"
+          class="change-action arco-btn arco-btn-secondary arco-btn-sm"
           :disabled="operationsLocked || (!selectedCount && !repoStore.statusSummary.staged_files.length)"
           :title="selectedCount ? t('Unstage Selected') : t('Unstage All')"
           @click="selectedCount ? handleUnstageSelected() : handleUnstageAll()"
         >
-          <Minus class="w-3 h-3" />{{ selectedCount ? t('Unstage') : t('Unstage All') }}
+          <Minus class="w-3 h-3 text-amber-500" />{{ selectedCount ? t('Unstage') : t('Unstage All') }}
         </button>
-        <button class="change-action" :disabled="!selectedCount || operationsLocked" @click="handleStashSelected">
-          <Layers class="w-3 h-3" />{{ t('Stash Selected') }}
+        <button class="change-action arco-btn arco-btn-secondary arco-btn-sm" :disabled="!selectedCount || operationsLocked" @click="handleStashSelected">
+          <Layers class="w-3 h-3 text-primary" />{{ t('Stash Selected') }}
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+      <div class="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         <template v-if="changeView === 'grouped'">
           <template v-for="row in visibleTreeRows" :key="row.type === 'directory' ? `directory:${row.node.path}` : `file:${row.file.path}`">
             <div
@@ -458,21 +458,21 @@ async function handleDiscardFile(e: Event, filePath: string) {
               />
               <component :is="collapsedDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500" />
               <span class="truncate">{{ row.node.name }}</span>
-              <span class="ml-auto text-[9px] font-normal text-muted-foreground">{{ row.node.descendantFiles.length }}</span>
+              <span class="ml-auto text-[10px] font-normal text-muted-foreground tabular-nums">{{ row.node.descendantFiles.length }}</span>
             </div>
             <div
               v-else
               class="change-row"
               :style="{ paddingLeft: `${1.65 + row.depth * 0.85}rem` }"
-              :class="diffStore.selectedFile === row.file.path && diffStore.isStaged === showStagedDiff(row.file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+              :class="diffStore.selectedFile === row.file.path && diffStore.isStaged === showStagedDiff(row.file) ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent/70'"
               @click="selectWorkingFile(row.file)"
             >
               <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(row.file.path)" @click.stop="repoStore.toggleChangeSelection(row.file.path)" />
               <component :is="getStatusIcon(fileStatus(row.file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(row.file))" />
               <span class="truncate">{{ fileName(row.file.path) }}</span>
-              <span v-if="row.file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
-              <span class="status-badge">{{ t(changelistStore.listFor(row.file.path).name) }}</span>
-              <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, row.file.path)"><RotateCcw class="w-3 h-3" /></button>
+              <span v-if="row.file.is_staged" class="status-badge bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400">{{ t('Staged') }}</span>
+              <span class="status-badge bg-secondary border-border text-muted-foreground">{{ t(changelistStore.listFor(row.file.path).name) }}</span>
+              <button class="ml-auto p-0.5 rounded-[4px] text-destructive hover:bg-destructive/15 opacity-0 transition-opacity" :title="t('Discard changes')" @click="handleDiscardFile($event, row.file.path)"><RotateCcw class="w-3 h-3" /></button>
             </div>
           </template>
         </template>
@@ -482,20 +482,20 @@ async function handleDiscardFile(e: Event, filePath: string) {
             v-for="file in visibleWorkingFiles"
             :key="file.path"
             class="change-row"
-            :class="diffStore.selectedFile === file.path && diffStore.isStaged === showStagedDiff(file) ? 'bg-primary/10 text-primary font-bold shadow-xs' : 'text-foreground hover:bg-secondary'"
+            :class="diffStore.selectedFile === file.path && diffStore.isStaged === showStagedDiff(file) ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent/70'"
             @click="selectWorkingFile(file)"
           >
             <input type="checkbox" :checked="repoStore.selectedChangePaths.includes(file.path)" @click.stop="repoStore.toggleChangeSelection(file.path)" />
             <component :is="getStatusIcon(fileStatus(file))" class="w-3.5 h-3.5 shrink-0" :class="getStatusColor(fileStatus(file))" />
             <span class="truncate">{{ file.path }}</span>
-            <span v-if="file.is_staged" class="status-badge text-emerald-700 dark:text-emerald-300">{{ t('Staged') }}</span>
-            <span class="status-badge">{{ t(changelistStore.listFor(file.path).name) }}</span>
-            <button class="ml-auto p-0.5 text-rose-500 opacity-0 group-hover:opacity-100" :title="t('Discard changes')" @click="handleDiscardFile($event, file.path)"><RotateCcw class="w-3 h-3" /></button>
+            <span v-if="file.is_staged" class="status-badge bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400">{{ t('Staged') }}</span>
+            <span class="status-badge bg-secondary border-border text-muted-foreground">{{ t(changelistStore.listFor(file.path).name) }}</span>
+            <button class="ml-auto p-0.5 rounded-[4px] text-destructive hover:bg-destructive/15 opacity-0 transition-opacity" :title="t('Discard changes')" @click="handleDiscardFile($event, file.path)"><RotateCcw class="w-3 h-3" /></button>
           </div>
         </template>
 
         <div v-if="workingFiles.length === 0" class="p-8 text-center text-muted-foreground">{{ t('Working tree clean') }}</div>
-        <button v-if="visibleWorkingFiles.length < workingFiles.length" class="w-full py-1 text-[10px] text-primary hover:bg-primary/10 rounded" @click="showMore('changes')">
+        <button v-if="visibleWorkingFiles.length < workingFiles.length" class="w-full py-1.5 text-[10px] text-primary hover:bg-primary/10 rounded-[4px] transition-colors" @click="showMore('changes')">
           {{ t('Show more ({count} remaining)', { count: workingFiles.length - visibleWorkingFiles.length }) }}
         </button>
       </div>
@@ -505,18 +505,50 @@ async function handleDiscardFile(e: Event, filePath: string) {
 
 <style scoped>
 .change-action {
-  align-items: center;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.25rem;
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.2rem 0.45rem;
+  border-color: hsl(var(--border) / 0.7);
+  height: 24px;
+  padding: 0 0.5rem;
 }
-.change-action:hover:not(:disabled) { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
-.change-action:disabled { cursor: not-allowed; opacity: 0.4; }
-.change-row { align-items: center; border-radius: 0.375rem; cursor: pointer; display: flex; gap: 0.375rem; min-width: 0; padding: 0.3rem 0.5rem; }
-.change-row:hover button { opacity: 1; }
-.tree-directory-row { align-items: center; background: hsl(var(--muted) / 0.3); border-radius: 0.375rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: flex; font-size: calc(10px * var(--gitbx-font-scale, 1)); font-weight: 600; gap: 0.3rem; min-width: 0; padding-bottom: 0.25rem; padding-right: 0.5rem; padding-top: 0.25rem; }
-.tree-directory-row:hover { background: hsl(var(--muted) / 0.65); color: hsl(var(--foreground)); }
-.status-badge { background: hsl(var(--muted)); border-radius: 0.2rem; flex-shrink: 0; font-size: calc(9px * var(--gitbx-font-scale, 1)); padding: 0 0.25rem; }
+.change-row {
+  align-items: center;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.32rem 0.5rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.change-row:hover button {
+  opacity: 1;
+}
+.tree-directory-row {
+  align-items: center;
+  background: var(--arco-fill-1);
+  border-radius: 4px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  display: flex;
+  font-size: calc(10px * var(--gitbx-font-scale, 1));
+  font-weight: 600;
+  gap: 0.3rem;
+  min-width: 0;
+  padding-bottom: 0.3rem;
+  padding-right: 0.5rem;
+  padding-top: 0.3rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.tree-directory-row:hover {
+  background: var(--arco-fill-2);
+  color: hsl(var(--foreground));
+}
+.status-badge {
+  border-radius: 3px;
+  border-style: solid;
+  border-width: 1px;
+  flex-shrink: 0;
+  font-size: calc(9px * var(--gitbx-font-scale, 1));
+  font-weight: 500;
+  padding: 0.05rem 0.3rem;
+}
 </style>

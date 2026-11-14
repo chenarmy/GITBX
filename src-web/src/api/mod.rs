@@ -435,7 +435,9 @@ async fn repo_handler(
                 .get("destination")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            GitService::clone_repo(url, destination)
+            let username = body_json.get("username").and_then(Value::as_str);
+            let password = body_json.get("password").and_then(Value::as_str);
+            GitService::clone_repo_with_auth(url, destination, username, password)
                 .map(|info| json!({ "success": true, "path": info.path, "name": info.name }))
         }
         (Method::POST, "stage") => write_op(&path, || {
@@ -572,6 +574,35 @@ async fn repo_handler(
                 body_json.get("commit_id").and_then(Value::as_str),
             )
         }),
+        (Method::POST, "tag/sync") => write_op(&path, || {
+            GitService::sync_tags(&path, body_json.get("remote").and_then(Value::as_str))
+        }),
+        (Method::POST, "tag/push") => write_op(&path, || {
+            GitService::push_tag(
+                &path,
+                body_json
+                    .get("remote")
+                    .and_then(Value::as_str)
+                    .unwrap_or("origin"),
+                body_json.get("name").and_then(Value::as_str).unwrap_or(""),
+            )
+        }),
+        (Method::POST, "tag/push-all") => write_op(&path, || {
+            GitService::push_all_tags(
+                &path,
+                body_json
+                    .get("remote")
+                    .and_then(Value::as_str)
+                    .unwrap_or("origin"),
+            )
+        }),
+        (Method::POST, "tag/delete") => write_op(&path, || {
+            GitService::delete_tag(
+                &path,
+                body_json.get("name").and_then(Value::as_str).unwrap_or(""),
+                body_json.get("remote").and_then(Value::as_str),
+            )
+        }),
         (Method::POST, "stash/create") => write_op(&path, || {
             GitService::create_stash(&path, body_json.get("message").and_then(Value::as_str))
         }),
@@ -642,13 +673,17 @@ async fn repo_handler(
             )
         }),
         (Method::POST, "merge") => write_op(&path, || {
-            GitService::merge(
+            GitService::merge_with_options(
                 &path,
                 body_json
                     .get("target")
                     .and_then(Value::as_str)
                     .unwrap_or(""),
-                body_json.get("strategy").and_then(Value::as_str) == Some("no-ff"),
+                body_json
+                    .get("strategy")
+                    .and_then(Value::as_str)
+                    .unwrap_or("default"),
+                body_json.get("message").and_then(Value::as_str),
             )
         }),
         (Method::POST, "merge/abort") => write_op(&path, || GitService::abort_merge(&path)),

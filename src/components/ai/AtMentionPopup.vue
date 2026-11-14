@@ -111,9 +111,9 @@ const filteredItems = computed<MentionItem[]>(() => {
 
 <template>
   <div
-    class="bg-popover border border-border rounded-lg shadow-xl overflow-hidden py-1 w-72 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-100"
+    class="arco-menu overflow-hidden w-72 max-h-60 overflow-y-auto z-50"
   >
-    <div class="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground border-b border-border/50 uppercase tracking-wider">
+    <div class="arco-menu-section border-b border-border/60 mb-1">
       {{ t('Insert Git Context') }}
     </div>
     <div v-if="filteredItems.length === 0" class="px-3 py-2 text-xs text-muted-foreground">
@@ -123,11 +123,11 @@ const filteredItems = computed<MentionItem[]>(() => {
       v-for="item in filteredItems"
       :key="item.id"
       @click="emit('select', item)"
-      class="w-full px-2.5 py-1.5 flex items-center space-x-2 text-left hover:bg-accent/80 transition text-xs group"
+      class="arco-menu-item group py-1.5"
     >
       <component :is="item.icon" class="w-3.5 h-3.5 shrink-0" :class="item.iconClass" />
       <div class="min-w-0 flex-1">
-        <div class="font-mono font-medium text-foreground text-xs truncate group-hover:text-primary transition">
+        <div class="font-mono font-medium text-foreground text-xs truncate group-hover:text-primary transition-colors">
           {{ item.label }}
         </div>
         <div class="text-[10px] text-muted-foreground truncate">

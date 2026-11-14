@@ -265,12 +265,14 @@ export const useRepoStore = defineStore('repo', () => {
       const info = await gitApi.getRepoInfo(path);
       if (seq !== loadSequence) return false;
 
-      if (path !== activeRepoPath.value) {
+      const isSwitchingRepo = path !== activeRepoPath.value;
+      const previousSelectedCommitId = selectedCommit.value?.id || null;
+      if (isSwitchingRepo) {
         diffStore.clearSelection();
         activeRepoPath.value = path;
         saveReposToStorage();
+        clearLoadedRepoData();
       }
-      clearLoadedRepoData();
       repoInfo.value = info;
 
       const existing = repoList.value.find((r) => r.path === path);
@@ -286,7 +288,7 @@ export const useRepoStore = defineStore('repo', () => {
         gitApi.listRemotes(path),
         gitApi.listTags(path),
         gitApi.listStashes(path),
-        gitApi.getCommitGraph(path, 0, 150),
+        gitApi.getCommitGraph(path, 0, isSwitchingRepo ? 150 : Math.max(commitNodes.value.length, 150)),
         gitApi.getSyncStatus(path),
       ]);
 
@@ -309,7 +311,12 @@ export const useRepoStore = defineStore('repo', () => {
       if (graphResult.status === 'fulfilled') {
         commitNodes.value = graphResult.value.nodes;
         graphHasMore.value = graphResult.value.has_more;
-        selectedCommit.value = graphResult.value.nodes[0] || null;
+        selectedCommit.value =
+          (!isSwitchingRepo && previousSelectedCommitId
+            ? graphResult.value.nodes.find((commit) => commit.id === previousSelectedCommitId)
+            : null) ||
+          graphResult.value.nodes[0] ||
+          null;
       } else {
         failures.push(`commit graph: ${formatGitError(graphResult.reason)}`);
       }
@@ -537,8 +544,36 @@ export const useRepoStore = defineStore('repo', () => {
     repoInfo.value = await gitApi.getRepoInfo(activeRepoPath.value);
   };
 
-  const createTag = async (name: string, message?: string, commitId?: string) => {
+  const createTag = async (name: string, message?: string, commitId?: string, pushToRemote = false) => {
     await gitApi.createTag(activeRepoPath.value, name, message, commitId);
+    if (pushToRemote) {
+      const targetRemote = remotes.value[0]?.name || 'origin';
+      await gitApi.pushTag(activeRepoPath.value, name, targetRemote);
+    }
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const syncTags = async (remote?: string) => {
+    const targetRemote = remote || remotes.value[0]?.name || 'origin';
+    await gitApi.syncTags(activeRepoPath.value, targetRemote);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const pushTag = async (name: string, remote?: string) => {
+    const targetRemote = remote || remotes.value[0]?.name || 'origin';
+    await gitApi.pushTag(activeRepoPath.value, name, targetRemote);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const pushAllTags = async (remote?: string) => {
+    const targetRemote = remote || remotes.value[0]?.name || 'origin';
+    await gitApi.pushAllTags(activeRepoPath.value, targetRemote);
+    await loadRepo(activeRepoPath.value);
+  };
+
+  const deleteTag = async (name: string, deleteRemote = false, remote?: string) => {
+    const targetRemote = deleteRemote ? (remote || remotes.value[0]?.name || 'origin') : undefined;
+    await gitApi.deleteTag(activeRepoPath.value, name, targetRemote);
     await loadRepo(activeRepoPath.value);
   };
 
@@ -997,6 +1032,10 @@ export const useRepoStore = defineStore('repo', () => {
     renameBranch,
     updateRemoteUrl,
     createTag,
+    syncTags,
+    pushTag,
+    pushAllTags,
+    deleteTag,
     createStash,
     popStash,
     applyStash,

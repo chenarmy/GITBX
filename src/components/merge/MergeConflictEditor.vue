@@ -196,12 +196,14 @@ watch(
 
 <template>
   <div class="h-full flex flex-col bg-card overflow-hidden text-xs">
-    <div class="dbx-pane-header min-h-10 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-3">
-      <div class="flex items-center space-x-2 min-w-0">
-        <FileWarning class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+    <div class="min-h-11 px-3.5 py-2 bg-amber-500/[0.08] border-b border-amber-500/25 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-7 h-7 rounded-[6px] bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+          <FileWarning class="w-4 h-4" />
+        </div>
         <div class="min-w-0">
-          <div class="font-bold text-foreground truncate">{{ conflict?.file_path || diffStore.selectedConflictFile }}</div>
-          <div class="text-[10px] text-muted-foreground">
+          <div class="font-semibold text-foreground truncate">{{ conflict?.file_path || diffStore.selectedConflictFile }}</div>
+          <div class="text-[11px] text-muted-foreground tabular-nums">
             {{ conflict?.is_binary ? t('Binary conflict') : t('{count} unresolved blocks', { count: unresolvedCount }) }}
           </div>
         </div>
@@ -211,108 +213,115 @@ watch(
           <button
             @click="handleAiAnalyze"
             :disabled="isAiAnalyzing || isLoading"
-            class="px-2 py-1 rounded border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            class="arco-btn arco-btn-sm border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 cursor-pointer"
             :title="t('Get AI merge conflict resolution suggestion')"
           >
             <LoaderCircle v-if="isAiAnalyzing" class="w-3.5 h-3.5 animate-spin" />
             <Sparkles v-else class="w-3.5 h-3.5" />
             <span>{{ t('AI Suggestion') }}</span>
           </button>
-          <button @click="chooseAll('ours')" class="px-2 py-1 rounded border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/10">
+          <button @click="chooseAll('ours')" class="arco-btn arco-btn-sm arco-btn-outline border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50">
             {{ t('Use All Ours') }}
           </button>
-          <button @click="chooseAll('theirs')" class="px-2 py-1 rounded border border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10">
+          <button @click="chooseAll('theirs')" class="arco-btn arco-btn-sm arco-btn-outline border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50">
             {{ t('Use All Theirs') }}
           </button>
           <button
             @click="saveTextResolution"
             :disabled="isSaving || unresolvedCount > 0"
-            class="px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+            class="arco-btn arco-btn-sm arco-btn-success"
           >
             <LoaderCircle v-if="isSaving" class="w-3.5 h-3.5 animate-spin" />
             <Check v-else class="w-3.5 h-3.5" />
             {{ t('Save and Mark Resolved') }}
           </button>
         </template>
-        <button @click="diffStore.clearConflictSelection()" class="p-1 rounded hover:bg-secondary text-muted-foreground" :title="t('Close')">
+        <button @click="diffStore.clearConflictSelection()" class="arco-icon-btn arco-icon-btn-sm" :title="t('Close')">
           <X class="w-4 h-4" />
         </button>
       </div>
     </div>
 
     <div v-if="isLoading" class="flex-1 flex items-center justify-center text-muted-foreground gap-2">
-      <LoaderCircle class="w-4 h-4 animate-spin" />
+      <LoaderCircle class="w-4 h-4 animate-spin text-primary" />
       {{ t('Loading conflict...') }}
     </div>
 
-    <div v-else-if="errorMessage" class="m-3 p-3 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 flex items-start gap-2">
+    <div v-else-if="errorMessage" class="arco-alert m-4 border-destructive/30 bg-destructive/10 text-destructive">
       <AlertTriangle class="w-4 h-4 shrink-0 mt-0.5" />
       <span>{{ errorMessage }}</span>
     </div>
 
     <div v-else-if="conflict?.is_binary" class="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-      <FileWarning class="w-10 h-10 text-amber-500" />
+      <div class="w-12 h-12 rounded-[10px] bg-amber-500/10 text-amber-500 flex items-center justify-center">
+        <FileWarning class="w-6 h-6" />
+      </div>
       <div>
-        <div class="font-bold text-sm">{{ t('This binary file cannot be merged as text.') }}</div>
+        <div class="font-semibold text-sm text-foreground">{{ t('This binary file cannot be merged as text.') }}</div>
         <div class="text-muted-foreground mt-1">{{ t('Choose the complete local or incoming version.') }}</div>
       </div>
       <div class="flex gap-2">
-        <button @click="finishResolution({ side: 'ours' })" :disabled="isSaving" class="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-40">
+        <button @click="finishResolution({ side: 'ours' })" :disabled="isSaving" class="arco-btn arco-btn-primary">
           {{ t('Keep Ours') }}
         </button>
-        <button @click="finishResolution({ side: 'theirs' })" :disabled="isSaving" class="px-3 py-1.5 rounded bg-purple-600 text-white disabled:opacity-40">
+        <button @click="finishResolution({ side: 'theirs' })" :disabled="isSaving" class="arco-btn bg-purple-600 hover:bg-purple-500 text-white">
           {{ t('Keep Theirs') }}
         </button>
       </div>
     </div>
 
     <div v-else-if="conflict && conflictIndexes.length === 0" class="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-      <FileWarning class="w-10 h-10 text-amber-500" />
+      <div class="w-12 h-12 rounded-[10px] bg-amber-500/10 text-amber-500 flex items-center justify-center">
+        <FileWarning class="w-6 h-6" />
+      </div>
       <div>
-        <div class="font-bold text-sm">{{ t('Choose the complete version for this file conflict.') }}</div>
+        <div class="font-semibold text-sm text-foreground">{{ t('Choose the complete version for this file conflict.') }}</div>
         <div class="text-muted-foreground mt-1">{{ t('One side may delete the file.') }}</div>
       </div>
       <div class="flex gap-2">
-        <button @click="finishResolution({ side: 'ours' })" :disabled="isSaving" class="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-40">
+        <button @click="finishResolution({ side: 'ours' })" :disabled="isSaving" class="arco-btn arco-btn-primary">
           {{ t('Keep Ours') }}
         </button>
-        <button @click="finishResolution({ side: 'theirs' })" :disabled="isSaving" class="px-3 py-1.5 rounded bg-purple-600 text-white disabled:opacity-40">
+        <button @click="finishResolution({ side: 'theirs' })" :disabled="isSaving" class="arco-btn bg-purple-600 hover:bg-purple-500 text-white">
           {{ t('Keep Theirs') }}
         </button>
       </div>
     </div>
 
-    <div v-else-if="conflict" class="flex-1 overflow-y-auto p-3 space-y-3 bg-background/40">
+    <div v-else-if="conflict" class="flex-1 overflow-y-auto p-4 space-y-4 bg-background/50">
       <section
         v-for="index in conflictIndexes"
         :key="index"
-        class="rounded-lg border overflow-hidden"
+        class="arco-card rounded-[8px] border overflow-hidden transition-colors"
         :class="resolutions[index] === null ? 'border-amber-500/40' : 'border-emerald-500/40'"
       >
-        <div class="h-8 px-3 bg-muted/60 border-b border-border flex items-center justify-between">
-          <span class="font-bold">{{ t('Conflict block {index}', { index: conflictIndexes.indexOf(index) + 1 }) }}</span>
-          <span :class="resolutions[index] === null ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'">
+        <div class="h-8 px-3.5 bg-muted/50 border-b border-border flex items-center justify-between">
+          <span class="font-semibold text-foreground">{{ t('Conflict block {index}', { index: conflictIndexes.indexOf(index) + 1 }) }}</span>
+          <span
+            class="arco-tag font-semibold"
+            :class="resolutions[index] === null ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300'"
+          >
             {{ resolutions[index] === null ? t('Unresolved') : t('Resolved') }}
           </span>
         </div>
 
-        <div class="grid grid-cols-[minmax(0,1fr)_36px_minmax(0,1fr)_36px_minmax(0,1fr)] border-b border-border min-h-40">
+        <div class="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)_40px_minmax(0,1fr)] border-b border-border min-h-40">
           <div class="min-w-0 flex flex-col">
-            <div class="px-2 py-1.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border-b border-border">{{ t('Ours (Current)') }}</div>
-            <pre class="flex-1 p-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-blue-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.ours }}</pre>
+            <div class="px-2.5 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-300 font-semibold border-b border-border">{{ t('Ours (Current)') }}</div>
+            <pre class="flex-1 p-2.5 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-blue-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.ours }}</pre>
           </div>
 
-          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/40">
+          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/35">
             <button
               @click="applySide(index, 'ours')"
-              class="w-7 h-7 flex items-center justify-center rounded border border-blue-500/40 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20"
+              class="w-7 h-7 flex items-center justify-center rounded-[4px] border border-blue-500/35 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
               :title="t('Apply local content')"
             >
               <ArrowRight class="w-4 h-4" />
             </button>
             <button
               @click="removeSide(index, 'ours')"
-              class="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:bg-rose-500/15 hover:text-rose-500"
+              class="arco-icon-btn arco-icon-btn-sm hover:bg-destructive/15 hover:text-destructive"
               :title="t('Remove local content')"
             >
               <X class="w-4 h-4" />
@@ -320,27 +329,27 @@ watch(
           </div>
 
           <div class="min-w-0 flex flex-col bg-emerald-500/[0.03]">
-            <div class="px-2 py-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold border-b border-border">{{ t('Merge Result') }}</div>
+            <div class="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-semibold border-b border-border">{{ t('Merge Result') }}</div>
             <textarea
               :value="resolutions[index] ?? ''"
               @input="resolutions[index] = ($event.target as HTMLTextAreaElement).value"
               :placeholder="t('Choose a side or enter the resolved content')"
               spellcheck="false"
-              class="flex-1 min-h-32 w-full p-2 bg-transparent font-mono text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-inset focus:ring-emerald-500"
+              class="flex-1 min-h-32 w-full p-2.5 bg-transparent font-mono text-[11px] resize-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500/40"
             ></textarea>
           </div>
 
-          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/40">
+          <div class="flex flex-col items-center justify-center gap-2 border-x border-border bg-muted/35">
             <button
               @click="applySide(index, 'theirs')"
-              class="w-7 h-7 flex items-center justify-center rounded border border-purple-500/40 bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
+              class="w-7 h-7 flex items-center justify-center rounded-[4px] border border-purple-500/35 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 transition-colors"
               :title="t('Apply incoming content')"
             >
               <ArrowLeft class="w-4 h-4" />
             </button>
             <button
               @click="removeSide(index, 'theirs')"
-              class="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:bg-rose-500/15 hover:text-rose-500"
+              class="arco-icon-btn arco-icon-btn-sm hover:bg-destructive/15 hover:text-destructive"
               :title="t('Remove incoming content')"
             >
               <X class="w-4 h-4" />
@@ -348,14 +357,14 @@ watch(
           </div>
 
           <div class="min-w-0 flex flex-col">
-            <div class="px-2 py-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-semibold border-b border-border">{{ t('Theirs (Incoming)') }}</div>
-            <pre class="flex-1 p-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-purple-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.theirs }}</pre>
+            <div class="px-2.5 py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-300 font-semibold border-b border-border">{{ t('Theirs (Incoming)') }}</div>
+            <pre class="flex-1 p-2.5 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] bg-purple-500/[0.03]">{{ getConflictSection(conflict.chunks[index])?.theirs }}</pre>
           </div>
         </div>
 
-        <details v-if="getConflictSection(conflict.chunks[index])?.base" class="px-3 py-1.5 bg-muted/30 text-[10px] text-muted-foreground">
+        <details v-if="getConflictSection(conflict.chunks[index])?.base" class="px-3.5 py-2 bg-muted/30 text-[10px] text-muted-foreground">
           <summary class="cursor-pointer font-semibold">{{ t('Base') }}</summary>
-          <pre class="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono">{{ getConflictSection(conflict.chunks[index])?.base }}</pre>
+          <pre class="mt-1.5 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono">{{ getConflictSection(conflict.chunks[index])?.base }}</pre>
         </details>
       </section>
     </div>

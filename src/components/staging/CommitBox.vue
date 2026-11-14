@@ -102,31 +102,31 @@ async function handleCommitAndPush() {
 </script>
 
 <template>
-  <div class="dbx-commit-box h-full min-h-0 overflow-hidden bg-card flex flex-col p-2.5 text-xs select-none">
+  <div class="dbx-commit-box h-full min-h-0 overflow-hidden bg-card flex flex-col p-3 text-xs select-none">
     <!-- Conventional Commit shortcuts & AI Trigger -->
-    <div class="commit-tools mb-1.5 flex min-w-0 items-center gap-1">
+    <div class="commit-tools mb-2 flex min-w-0 items-center gap-1">
       <div class="commit-shortcuts flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
         <button
           v-for="tag in CONVENTIONAL_TAGS"
           :key="tag"
           @click="insertPrefix(tag)"
-          class="shortcut-tag px-1.5 py-0.5 rounded bg-secondary hover:bg-muted border border-border text-foreground font-mono text-[10px] transition active:scale-95 shadow-2xs shrink-0"
+          class="shortcut-tag px-2 py-0.5 rounded-[4px] bg-secondary/90 hover:bg-primary/10 hover:text-primary hover:border-primary/35 border border-border/70 text-muted-foreground font-mono text-[10px] font-medium transition-colors shrink-0"
         >
           {{ tag }}
         </button>
       </div>
 
       <div class="ml-auto flex shrink-0 items-center gap-1">
-        <button v-if="commitTemplate" @click="applyTemplate" class="p-1 rounded hover:bg-accent text-muted-foreground" :title="t('Apply Commit Template')"><FileText class="w-3.5 h-3.5" /></button>
+        <button v-if="commitTemplate" @click="applyTemplate" class="arco-icon-btn arco-icon-btn-sm" :title="t('Apply Commit Template')"><FileText class="w-3.5 h-3.5" /></button>
         <button
           @click="aiStore.openAiModal()"
-          class="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition text-[10px] font-bold active:scale-95 shrink-0 whitespace-nowrap"
+          class="arco-btn arco-btn-sm bg-primary/10 hover:bg-primary/15 text-primary border border-primary/25 h-6 px-2 shrink-0 whitespace-nowrap"
           :title="t('Open AI Commit & Assistant Modal')"
         >
-          <Sparkles class="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+          <Sparkles class="w-3 h-3 text-primary" />
           <span class="ai-message-label">{{ t('AI Msg') }}</span>
         </button>
-        <button @click="showAdvanced = !showAdvanced" class="p-1 rounded hover:bg-accent" :class="showAdvanced ? 'text-primary' : 'text-muted-foreground'" :title="t('Commit Options')"><Settings2 class="w-3.5 h-3.5" /></button>
+        <button @click="showAdvanced = !showAdvanced" class="arco-icon-btn arco-icon-btn-sm" :class="showAdvanced ? 'text-primary bg-primary/10' : ''" :title="t('Commit Options')"><Settings2 class="w-3.5 h-3.5" /></button>
       </div>
     </div>
 
@@ -134,27 +134,27 @@ async function handleCommitAndPush() {
     <textarea
       v-model="commitMessage"
       :placeholder="t('Commit summary (e.g. feat: add Canvas graph view)...')"
-      class="flex-1 w-full bg-background border border-border rounded-sm p-2 text-foreground font-sans text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground min-h-[60px]"
+      class="arco-textarea flex-1 w-full font-sans resize-none min-h-[60px]"
     ></textarea>
 
-    <div v-if="showAdvanced" class="mt-1.5 grid grid-cols-[auto_auto_1fr] gap-3 items-center text-[10px]">
-      <label class="flex items-center gap-1"><input v-model="amend" type="checkbox" />{{ t('Amend Previous Commit') }}</label>
-      <label class="flex items-center gap-1"><input v-model="signCommit" type="checkbox" />{{ t('Sign Commit') }}</label>
-      <input v-model="preCommitCommand" class="min-w-0 bg-background border border-border rounded px-2 py-1 font-mono" :placeholder="t('Pre-commit command (optional)')" />
+    <div v-if="showAdvanced" class="mt-2 grid grid-cols-[auto_auto_1fr] gap-3 items-center text-[11px] text-foreground">
+      <label class="flex items-center gap-1.5 cursor-pointer"><input v-model="amend" type="checkbox" />{{ t('Amend Previous Commit') }}</label>
+      <label class="flex items-center gap-1.5 cursor-pointer"><input v-model="signCommit" type="checkbox" />{{ t('Sign Commit') }}</label>
+      <input v-model="preCommitCommand" class="arco-input arco-input-sm min-w-0 font-mono" :placeholder="t('Pre-commit command (optional)')" />
     </div>
 
     <!-- Bottom Actions: Author info & Commit / Push Buttons -->
-    <div class="flex items-center justify-between mt-2 pt-1 border-t border-border gap-2">
+    <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-border/80 gap-2">
       <div class="text-[11px] text-muted-foreground truncate flex-1">
-        {{ t('Committer:') }} <span class="font-bold text-foreground">{{ settingsStore.authorName }}</span>
-        <span v-if="!amend" class="ml-1">· {{ t('{count} selected', { count: repoStore.selectedChangePaths.length }) }}</span>
+        {{ t('Committer:') }} <span class="font-semibold text-foreground">{{ settingsStore.authorName }}</span>
+        <span v-if="!amend" class="ml-1 tabular-nums">· {{ t('{count} selected', { count: repoStore.selectedChangePaths.length }) }}</span>
       </div>
 
-      <div class="flex items-center space-x-1.5">
+      <div class="flex items-center gap-1.5">
         <button
           @click="handleCommit"
           :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.selectedChangePaths.length === 0)"
-          class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
+          class="arco-btn arco-btn-primary shrink-0 whitespace-nowrap"
           :title="t('Commit to {branch}', { branch: repoStore.repoInfo?.head_branch || 'main' })"
         >
           <Send class="w-3.5 h-3.5" />
@@ -164,7 +164,7 @@ async function handleCommitAndPush() {
         <button
           @click="handleCommitAndPush"
           :disabled="!commitMessage.trim() || isSubmitting || (!amend && repoStore.selectedChangePaths.length === 0)"
-          class="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 whitespace-nowrap"
+          class="arco-btn arco-btn-success shrink-0 whitespace-nowrap"
           :title="t('Commit and Push to remote')"
         >
           <ArrowUpCircle class="w-3.5 h-3.5" />

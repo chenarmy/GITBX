@@ -183,96 +183,95 @@ function closeMenu() {
 <template>
   <Teleport to="body">
     <div
-      class="fixed z-50 w-56 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+      class="fixed z-50 arco-menu w-56 text-xs select-none"
       :style="menuStyle"
       role="menu"
       @click.stop
       @contextmenu.prevent
     >
-      <div class="py-1">
-        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handleFetchRepo">
-          <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-          <span>{{ t('Fetch') }}</span>
-        </button>
-        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handlePullRepo">
-          <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-          <span>{{ t('Pull') }}</span>
-        </button>
-        <button role="menuitem" :disabled="isSyncing" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50" @click="handlePushRepo">
-          <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span>{{ t('Push') }}</span>
-        </button>
-      </div>
+      <button role="menuitem" :disabled="isSyncing" class="arco-menu-item disabled:opacity-50" @click="handleFetchRepo">
+        <RefreshCw class="h-3.5 w-3.5 text-primary" />
+        <span>{{ t('Fetch') }}</span>
+      </button>
+      <button role="menuitem" :disabled="isSyncing" class="arco-menu-item disabled:opacity-50" @click="handlePullRepo">
+        <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
+        <span>{{ t('Pull') }}</span>
+      </button>
+      <button role="menuitem" :disabled="isSyncing" class="arco-menu-item disabled:opacity-50" @click="handlePushRepo">
+        <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
+        <span>{{ t('Push') }}</span>
+      </button>
 
-      <div class="py-1">
-        <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary" @click="openEditor('vscode')">
-          <Code2 class="h-3.5 w-3.5 text-sky-500" />
-          <span>Visual Studio Code</span>
-        </button>
-        <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary" @click="openEditor('idea')">
-          <Code2 class="h-3.5 w-3.5 text-violet-500" />
-          <span>IntelliJ IDEA</span>
-        </button>
-        <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary" @click="openTerminal">
-          <Terminal class="h-3.5 w-3.5" />
-          <span>{{ t('Open System Terminal') }}</span>
-        </button>
-        <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary" @click="openFileManager">
-          <FolderOpen class="h-3.5 w-3.5" />
-          <span>{{ t('Open File Explorer') }}</span>
-        </button>
-      </div>
+      <div class="arco-menu-divider"></div>
+
+      <button role="menuitem" class="arco-menu-item" @click="openEditor('vscode')">
+        <Code2 class="h-3.5 w-3.5 text-sky-500" />
+        <span>Visual Studio Code</span>
+      </button>
+      <button role="menuitem" class="arco-menu-item" @click="openEditor('idea')">
+        <Code2 class="h-3.5 w-3.5 text-violet-500" />
+        <span>IntelliJ IDEA</span>
+      </button>
+      <button role="menuitem" class="arco-menu-item" @click="openTerminal">
+        <Terminal class="h-3.5 w-3.5 text-muted-foreground" />
+        <span>{{ t('Open System Terminal') }}</span>
+      </button>
+      <button role="menuitem" class="arco-menu-item" @click="openFileManager">
+        <FolderOpen class="h-3.5 w-3.5 text-muted-foreground" />
+        <span>{{ t('Open File Explorer') }}</span>
+      </button>
+
+      <div class="arco-menu-divider"></div>
 
       <!-- Group Assignment Section -->
-      <div class="py-1">
-        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          {{ t('Repository Group') }}
-        </div>
-        <div v-if="allGroups.length > 0" class="max-h-36 overflow-y-auto">
-          <button
-            v-for="group in allGroups"
-            :key="group"
-            role="menuitem"
-            class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-secondary"
-            :class="currentGroup === group ? 'text-primary font-semibold' : ''"
-            @click="assignToGroup(group)"
-          >
-            <span class="flex min-w-0 items-center gap-2 truncate">
-              <Folder class="h-3.5 w-3.5 shrink-0 text-amber-500/90" />
-              <span class="truncate">{{ group }}</span>
-            </span>
-            <Check v-if="currentGroup === group" class="h-3.5 w-3.5 shrink-0 text-primary" />
-          </button>
-        </div>
+      <div class="arco-menu-section">
+        {{ t('Repository Group') }}
+      </div>
+      <div v-if="allGroups.length > 0" class="max-h-36 overflow-y-auto">
         <button
+          v-for="group in allGroups"
+          :key="group"
           role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary text-primary font-medium"
-          @click="createAndAssignGroup"
+          class="arco-menu-item justify-between"
+          :class="currentGroup === group ? 'text-primary font-semibold bg-primary/10' : ''"
+          @click="assignToGroup(group)"
         >
-          <FolderPlus class="h-3.5 w-3.5" />
-          <span>{{ t('New Group...') }}</span>
-        </button>
-        <button
-          v-if="currentGroup"
-          role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary text-muted-foreground hover:text-foreground"
-          @click="assignToGroup(null)"
-        >
-          <FolderMinus class="h-3.5 w-3.5" />
-          <span>{{ t('Remove from Group') }}</span>
+          <span class="flex min-w-0 items-center gap-2 truncate">
+            <Folder class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span class="truncate">{{ group }}</span>
+          </span>
+          <Check v-if="currentGroup === group" class="h-3.5 w-3.5 shrink-0 text-primary" />
         </button>
       </div>
+      <button
+        role="menuitem"
+        class="arco-menu-item text-primary font-medium"
+        @click="createAndAssignGroup"
+      >
+        <FolderPlus class="h-3.5 w-3.5" />
+        <span>{{ t('New Group...') }}</span>
+      </button>
+      <button
+        v-if="currentGroup"
+        role="menuitem"
+        class="arco-menu-item text-muted-foreground"
+        @click="assignToGroup(null)"
+      >
+        <FolderMinus class="h-3.5 w-3.5" />
+        <span>{{ t('Remove from Group') }}</span>
+      </button>
 
-      <div v-if="repoStore.repoList.length > 1" class="py-1">
+      <template v-if="repoStore.repoList.length > 1">
+        <div class="arco-menu-divider"></div>
         <button
           role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-destructive/20"
+          class="arco-menu-item arco-menu-item-danger"
           @click="removeFromWorkspace"
         >
           <Trash2 class="h-3.5 w-3.5" />
           <span>{{ t('Remove from Workspace') }}</span>
         </button>
-      </div>
+      </template>
     </div>
   </Teleport>
 </template>

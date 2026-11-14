@@ -288,12 +288,6 @@ impl GitService {
 
     pub fn list_worktrees(path: &str) -> Result<Vec<WorktreeInfo>> {
         let output = Self::git_output(path, &["worktree", "list", "--porcelain"])?;
-        let main_path = Self::open(path)?.inner().workdir().map(|value| {
-            value
-                .to_string_lossy()
-                .trim_end_matches(['/', '\\'])
-                .to_string()
-        });
         let mut result = Vec::new();
         for block in output
             .split("\n\n")
@@ -329,8 +323,8 @@ impl GitService {
                     prunable = true;
                 }
             }
-            let normalized = worktree_path.trim_end_matches(['/', '\\']);
-            let is_main = main_path.as_deref() == Some(normalized);
+            // Git always prints the main worktree first in `worktree list --porcelain`.
+            let is_main = result.is_empty();
             result.push(WorktreeInfo {
                 path: worktree_path,
                 head,
@@ -350,11 +344,16 @@ impl GitService {
         worktree_path: &str,
         allow_main: bool,
     ) -> Result<WorktreeInfo> {
-        let normalized_target = worktree_path.trim_end_matches(['/', '\\']).replace('\\', "/");
+        let normalized_target = worktree_path
+            .trim_end_matches(['/', '\\'])
+            .replace('\\', "/");
         let item = Self::list_worktrees(path)?
             .into_iter()
             .find(|item| {
-                item.path.trim_end_matches(['/', '\\']).replace('\\', "/").eq_ignore_ascii_case(&normalized_target)
+                item.path
+                    .trim_end_matches(['/', '\\'])
+                    .replace('\\', "/")
+                    .eq_ignore_ascii_case(&normalized_target)
             })
             .ok_or_else(|| {
                 GitbxError::General("Worktree is not registered in this repository".into())
@@ -467,26 +466,9 @@ impl GitService {
         };
         let stashed = Self::create_pull_autostash(path)?;
         let integration = match strategy {
-            "merge" => Self::merge_internal(path, &target, false, !stashed),
+            "merge" => Self::merge_internal(path, &target, "default", None, !stashed),
             "rebase" => Self::rebase_internal(path, &target, !stashed),
-            "ff-only" => {
-                let repo = Self::open(path)?;
-                let head = repo.inner().head()?.peel_to_commit()?.id();
-                let target_id = repo
-                    .inner()
-                    .revparse_single(&target)?
-                    .peel_to_commit()?
-                    .id();
-                if head != target_id && !repo.inner().graph_descendant_of(target_id, head)? {
-                    Err(GitbxError::General(
-                        "Fast-forward pull is not possible because the branches have diverged"
-                            .into(),
-                    ))
-                } else {
-                    drop(repo);
-                    Self::merge_internal(path, &target, false, !stashed)
-                }
-            }
+            "ff-only" => Self::merge_internal(path, &target, "ff-only", None, !stashed),
             _ => Err(GitbxError::General("Unknown pull strategy".into())),
         };
 
@@ -514,22 +496,76 @@ impl GitService {
         }
     }
 
-    /// Fetch remote references and fast-forward a local branch without checking
-    /// it out. This intentionally refuses diverged branches and branches that
-    /// are checked out in any worktree.
+    /// Fetch remote references and fast-forward a local branch. If the branch
+    /// is checked out in a linked/other worktree, safely fast-forward that
+    /// worktree directly when unlocked and clean.
     pub fn update_branch_fast_forward(path: &str, branch_name: &str) -> Result<()> {
-        Self::with_write_lock(path, |repo| {
+        let checked_out_worktree = Self::with_write_lock(path, |repo| {
             repo.fetch_all()?;
+            Ok(Self::list_worktrees(path)?.into_iter().find(|worktree| {
+                !worktree.is_prunable && worktree.branch.as_deref() == Some(branch_name)
+            }))
+        })?;
 
-            if Self::list_worktrees(path)?
-                .iter()
-                .any(|worktree| worktree.branch.as_deref() == Some(branch_name))
-            {
+        if let Some(worktree) = checked_out_worktree {
+            if worktree.is_locked {
                 return Err(GitbxError::General(format!(
-                    "Branch '{branch_name}' is checked out in a worktree and cannot be updated without switching that worktree"
+                    "Branch '{branch_name}' is checked out in locked worktree '{}'. Unlock it first.",
+                    worktree.path
                 )));
             }
+            return Self::with_write_lock(&worktree.path, |wt_repo| {
+                let branch = wt_repo
+                    .inner()
+                    .find_branch(branch_name, BranchType::Local)
+                    .map_err(|_| {
+                        GitbxError::General(format!("Local branch '{branch_name}' was not found"))
+                    })?;
+                let local_id = branch.get().peel_to_commit()?.id();
+                let upstream = branch
+                    .upstream()
+                    .or_else(|_| {
+                        wt_repo
+                            .inner()
+                            .find_branch(&format!("origin/{branch_name}"), BranchType::Remote)
+                    })
+                    .map_err(|_| {
+                        GitbxError::General(format!(
+                            "Branch '{branch_name}' has no tracked remote branch"
+                        ))
+                    })?;
+                let upstream_name = upstream.name()?.unwrap_or("upstream").to_string();
+                let upstream_id = upstream.get().peel_to_commit()?.id();
+                let (ahead, behind) = wt_repo.inner().graph_ahead_behind(local_id, upstream_id)?;
+                if behind == 0 {
+                    return Ok(());
+                }
+                if ahead > 0 {
+                    return Err(GitbxError::General(format!(
+                        "Branch '{branch_name}' has diverged from '{upstream_name}' and cannot be fast-forwarded"
+                    )));
+                }
+                Self::ensure_clean_worktree(
+                    wt_repo,
+                    &format!(
+                        "updating branch '{branch_name}' in worktree '{}'",
+                        worktree.path
+                    ),
+                )?;
+                let reference_name = format!("refs/heads/{branch_name}");
+                let mut reference = wt_repo.inner().find_reference(&reference_name)?;
+                reference.set_target(
+                    upstream_id,
+                    &format!("GITBX fast-forward worktree from {upstream_name}"),
+                )?;
+                let mut checkout = git2::build::CheckoutBuilder::new();
+                checkout.force();
+                wt_repo.inner().checkout_head(Some(&mut checkout))?;
+                Ok(())
+            });
+        }
 
+        Self::with_write_lock(path, |repo| {
             let branch = repo
                 .inner()
                 .find_branch(branch_name, BranchType::Local)
@@ -1057,22 +1093,93 @@ impl GitService {
     }
 
     pub fn clone_repo(url: &str, destination: &str) -> Result<RepositoryInfo> {
+        Self::clone_repo_with_auth(url, destination, None, None)
+    }
+
+    pub fn clone_repo_with_auth(
+        url: &str,
+        destination: &str,
+        username: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<RepositoryInfo> {
         let dest_path = Path::new(destination);
+        let existed_before = dest_path.exists();
         if dest_path.is_dir() && std::fs::read_dir(dest_path)?.next().is_some() {
             return Err(GitbxError::CloneDestinationNotEmpty(
                 destination.to_string(),
             ));
         }
+
+        let clean_username = username
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        let clean_password = password
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+
         let mut fetch_options = git2::FetchOptions::new();
-        fetch_options.remote_callbacks(crate::remote::authenticated_remote_callbacks(
-            git2::Config::open_default().ok(),
-            None,
-        )?);
+        fetch_options.remote_callbacks(
+            crate::remote::authenticated_remote_callbacks_with_credentials(
+                git2::Config::open_default().ok(),
+                None,
+                clean_username.clone(),
+                clean_password.clone(),
+            )?,
+        );
         fetch_options.proxy_options(crate::proxy_options());
         let mut builder = git2::build::RepoBuilder::new();
         builder.fetch_options(fetch_options);
-        builder.clone(url, dest_path)?;
-        Self::info(destination)
+
+        match builder.clone(url, dest_path) {
+            Ok(_) => {
+                if let (Some(u), Some(p)) = (clean_username.as_deref(), clean_password.as_deref()) {
+                    crate::remote::save_credentials_with_helper(None, url, u, p);
+                }
+                Self::info(destination)
+            }
+            Err(git2_err) => {
+                // Clean up an empty directory created by a failed clone attempt before retry or exit.
+                if !existed_before && dest_path.is_dir() {
+                    let _ = std::fs::remove_dir_all(dest_path);
+                } else if dest_path.is_dir() {
+                    let _ = std::fs::remove_dir_all(dest_path.join(".git"));
+                }
+
+                // Fallback to system git CLI (with optional askpass credentials) when transport/helper differs.
+                match crate::remote::clone_with_git_cli(
+                    url,
+                    dest_path,
+                    clean_username.as_deref(),
+                    clean_password.as_deref(),
+                ) {
+                    Ok(()) => {
+                        if let (Some(u), Some(p)) =
+                            (clean_username.as_deref(), clean_password.as_deref())
+                        {
+                            crate::remote::save_credentials_with_helper(None, url, u, p);
+                        }
+                        Self::info(destination)
+                    }
+                    Err(cli_err) => {
+                        if !existed_before && dest_path.is_dir() {
+                            let _ = std::fs::remove_dir_all(dest_path);
+                        }
+                        if matches!(cli_err, GitbxError::AuthFailed(_)) {
+                            return Err(cli_err);
+                        }
+                        let raw_msg = git2_err.message();
+                        if crate::remote::classify_remote_auth_error(raw_msg) {
+                            return Err(GitbxError::AuthFailed(
+                                "Authentication required to clone this repository. Please enter your username and password or access token."
+                                    .into(),
+                            ));
+                        }
+                        Err(cli_err)
+                    }
+                }
+            }
+        }
     }
 
     pub fn create_branch(
@@ -1095,6 +1202,15 @@ impl GitService {
     }
 
     pub fn delete_branch(path: &str, name: &str, _force: bool) -> Result<()> {
+        if let Some(worktree) = Self::list_worktrees(path)?
+            .into_iter()
+            .find(|worktree| !worktree.is_prunable && worktree.branch.as_deref() == Some(name))
+        {
+            return Err(GitbxError::General(format!(
+                "Cannot delete branch '{name}' while it is checked out in worktree '{}'",
+                worktree.path
+            )));
+        }
         Self::with_write_lock(path, |repo| {
             if let Ok(mut local_branch) = repo.inner().find_branch(name, BranchType::Local) {
                 if local_branch.is_head() {
@@ -1143,6 +1259,35 @@ impl GitService {
                     .tag(name, &object, &signature, message, false)?;
             } else {
                 repo.inner().tag_lightweight(name, &object, false)?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn sync_tags(path: &str, remote: Option<&str>) -> Result<()> {
+        Self::with_write_lock(path, |repo| repo.sync_tags(remote.unwrap_or("")))
+    }
+
+    pub fn push_tag(path: &str, remote: &str, name: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| repo.push_tag(remote, name))
+    }
+
+    pub fn push_all_tags(path: &str, remote: &str) -> Result<()> {
+        Self::with_write_lock(path, |repo| repo.push_all_tags(remote))
+    }
+
+    pub fn delete_tag(path: &str, name: &str, remote: Option<&str>) -> Result<()> {
+        Self::with_write_lock(path, |repo| {
+            let tag_name = name.trim();
+            if repo
+                .inner()
+                .find_reference(&format!("refs/tags/{tag_name}"))
+                .is_ok()
+            {
+                repo.inner().tag_delete(tag_name)?;
+            }
+            if let Some(remote_name) = remote.map(str::trim).filter(|value| !value.is_empty()) {
+                repo.delete_remote_tag(remote_name, tag_name)?;
             }
             Ok(())
         })
@@ -1327,8 +1472,17 @@ impl GitService {
     }
 
     pub fn merge(path: &str, target: &str, no_ff: bool) -> Result<()> {
+        Self::merge_with_options(path, target, if no_ff { "no-ff" } else { "default" }, None)
+    }
+
+    pub fn merge_with_options(
+        path: &str,
+        target: &str,
+        strategy: &str,
+        message: Option<&str>,
+    ) -> Result<()> {
         let stashed = Self::create_pull_autostash(path)?;
-        let integration = Self::merge_internal(path, target, no_ff, !stashed);
+        let integration = Self::merge_internal(path, target, strategy, message, !stashed);
 
         if !stashed {
             return integration;
@@ -1353,24 +1507,52 @@ impl GitService {
         }
     }
 
+    fn resolve_merge_target(repo: &Repository, target: &str) -> Result<git2::Oid> {
+        let trimmed = target.trim();
+        for candidate in [
+            format!("refs/heads/{trimmed}"),
+            format!("refs/remotes/{trimmed}"),
+            format!("refs/tags/{trimmed}"),
+        ] {
+            if let Ok(reference) = repo.inner().find_reference(&candidate) {
+                if let Ok(commit) = reference.peel_to_commit() {
+                    return Ok(commit.id());
+                }
+            }
+        }
+        Ok(repo
+            .inner()
+            .revparse_single(trimmed)?
+            .peel_to_commit()?
+            .id())
+    }
+
     fn merge_internal(
         path: &str,
         target: &str,
-        no_ff: bool,
+        strategy: &str,
+        message: Option<&str>,
         require_clean_worktree: bool,
     ) -> Result<()> {
         Self::with_write_lock(path, |repo| {
             if require_clean_worktree {
                 Self::ensure_clean_worktree(repo, "a merge")?;
             }
-            let annotated = repo
-                .inner()
-                .find_annotated_commit(repo.inner().revparse_single(target)?.id())?;
+            let target_oid = Self::resolve_merge_target(repo, target)?;
+            let annotated = repo.inner().find_annotated_commit(target_oid)?;
             let (analysis, _) = repo.inner().merge_analysis(&[&annotated])?;
             if analysis.is_up_to_date() {
                 return Ok(());
             }
-            if analysis.is_fast_forward() && !no_ff {
+            let no_ff = strategy == "no-ff";
+            let ff_only = strategy == "ff-only";
+            let squash = strategy == "squash";
+            if ff_only && !analysis.is_fast_forward() {
+                return Err(GitbxError::General(
+                    "Fast-forward merge is not possible because the branches have diverged".into(),
+                ));
+            }
+            if analysis.is_fast_forward() && !no_ff && !squash {
                 let reference = repo.inner().head()?.name().unwrap_or("HEAD").to_string();
                 let mut reference = repo.inner().find_reference(&reference)?;
                 reference.set_target(annotated.id(), "GITBX fast-forward merge")?;
@@ -1399,14 +1581,32 @@ impl GitService {
                 .inner()
                 .signature()
                 .or_else(|_| git2::Signature::now("GITBX", "gitbx@localhost"))?;
-            repo.inner().commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                "Merge commit",
-                &tree,
-                &[&head, &theirs],
-            )?;
+            let custom_msg = message.map(str::trim).filter(|value| !value.is_empty());
+            if squash {
+                let commit_message = custom_msg
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| format!("Squash merge '{target}'"));
+                repo.inner().commit(
+                    Some("HEAD"),
+                    &signature,
+                    &signature,
+                    &commit_message,
+                    &tree,
+                    &[&head],
+                )?;
+            } else {
+                let commit_message = custom_msg
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| format!("Merge '{target}'"));
+                repo.inner().commit(
+                    Some("HEAD"),
+                    &signature,
+                    &signature,
+                    &commit_message,
+                    &tree,
+                    &[&head, &theirs],
+                )?;
+            }
             drop(theirs);
             drop(head);
             drop(tree);
@@ -3200,5 +3400,209 @@ mod tests {
             .unwrap()
             .len();
         assert_eq!(stash_count, 1);
+    }
+
+    #[test]
+    fn worktree_merge_scenarios() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        let worktree_path = dir.path().join("wt-feature");
+        fs::create_dir(&repo_path).unwrap();
+        let repo = init_branch_fixture(&repo_path);
+        drop(repo);
+
+        let main_path = repo_path.to_str().unwrap();
+        let wt_path = worktree_path.to_str().unwrap();
+        GitService::worktree(main_path, wt_path, "feature").expect("create feature worktree");
+
+        // 1. Commit in worktree on feature, then fast-forward merge feature into main (from main repo)
+        let wt_repo = Repository::open(&worktree_path).unwrap();
+        fs::write(worktree_path.join("wt1.txt"), "wt1\n").unwrap();
+        commit_all(&wt_repo, "wt1");
+        drop(wt_repo);
+
+        let res1 = GitService::merge(main_path, "feature", false);
+        println!(
+            "Scenario 1 (FF merge feature worktree branch into main): {:?}",
+            res1
+        );
+
+        // 2. Diverge main and feature (still checked out in worktree), merge feature into main (3-way merge)
+        let main_repo = Repository::open(&repo_path).unwrap();
+        fs::write(repo_path.join("main1.txt"), "main1\n").unwrap();
+        commit_all(&main_repo, "main1");
+        drop(main_repo);
+
+        let wt_repo = Repository::open(&worktree_path).unwrap();
+        fs::write(worktree_path.join("wt2.txt"), "wt2\n").unwrap();
+        commit_all(&wt_repo, "wt2");
+        drop(wt_repo);
+
+        let res2 = GitService::merge(main_path, "feature", false);
+        println!(
+            "Scenario 2 (3-way merge feature worktree branch into main): {:?}",
+            res2
+        );
+
+        // 3. Inside worktree, merge main into feature (FF merge inside linked worktree!)
+        let res3 = GitService::merge(wt_path, "main", false);
+        println!(
+            "Scenario 3 (FF merge main into linked worktree): {:?}",
+            res3
+        );
+
+        // 4. Inside linked worktree with dirty file, merge another commit from main (autostash + 3-way/FF inside worktree)
+        let main_repo = Repository::open(&repo_path).unwrap();
+        fs::write(repo_path.join("main2.txt"), "main2\n").unwrap();
+        commit_all(&main_repo, "main2");
+        drop(main_repo);
+
+        fs::write(worktree_path.join("wt_untracked.txt"), "dirty\n").unwrap();
+        let res4 = GitService::merge(wt_path, "main", false);
+        println!(
+            "Scenario 4 (dirty worktree autostash merge main into worktree): {:?}",
+            res4
+        );
+
+        // 5. Commit in worktree & try 3-way merge inside worktree when clean
+        let wt_repo = Repository::open(&worktree_path).unwrap();
+        fs::write(worktree_path.join("wt3.txt"), "wt3\n").unwrap();
+        commit_all(&wt_repo, "wt3");
+        drop(wt_repo);
+
+        let main_repo = Repository::open(&repo_path).unwrap();
+        fs::write(repo_path.join("main3.txt"), "main3\n").unwrap();
+        commit_all(&main_repo, "main3");
+        drop(main_repo);
+
+        let res5 = GitService::merge(wt_path, "main", false);
+        println!(
+            "Scenario 5 (3-way merge main into linked worktree): {:?}",
+            res5
+        );
+
+        // 6. Dirty TRACKED file in worktree + merge
+        fs::write(worktree_path.join("wt1.txt"), "wt1 modified dirty\n").unwrap();
+        let main_repo = Repository::open(&repo_path).unwrap();
+        fs::write(repo_path.join("main4.txt"), "main4\n").unwrap();
+        commit_all(&main_repo, "main4");
+        drop(main_repo);
+        let res6 = GitService::merge(wt_path, "main", false);
+        println!(
+            "Scenario 6 (dirty tracked file in worktree + merge): {:?}",
+            res6
+        );
+
+        // 7. Create worktree using GITBX's default path inside repo/worktrees/<branch>,
+        //    then merge from main repo AND inside worktree!
+        let nested_wt = repo_path.join("worktrees").join("nested-feat");
+        {
+            let main_repo = Repository::open(&repo_path).unwrap();
+            let head_commit = main_repo.head().unwrap().peel_to_commit().unwrap();
+            main_repo
+                .branch("nested-feat", &head_commit, false)
+                .unwrap();
+        }
+        let nested_wt_str = nested_wt.to_str().unwrap();
+        GitService::worktree(main_path, nested_wt_str, "nested-feat").expect("create nested wt");
+        {
+            let nested_repo = Repository::open(&nested_wt).unwrap();
+            fs::write(nested_wt.join("nested.txt"), "nested\n").unwrap();
+            commit_all(&nested_repo, "nested commit");
+        }
+        let res_nested = GitService::merge(main_path, "nested-feat", false);
+        res1.unwrap();
+        res2.unwrap();
+        res3.unwrap();
+        res4.unwrap();
+        res5.unwrap();
+        res6.unwrap();
+        res_nested.unwrap();
+
+        // 8. Linked worktree list_worktrees reports real main worktree accurately
+        let wt_listed = GitService::list_worktrees(wt_path).unwrap();
+        assert_eq!(wt_listed.iter().filter(|w| w.is_main).count(), 1);
+        assert!(wt_listed
+            .iter()
+            .find(|w| w.is_main)
+            .is_some_and(|w| w.branch.as_deref() == Some("main")));
+
+        // 9. Checking out a branch already checked out in a worktree is blocked cleanly
+        let blocked_checkout =
+            GitService::with_write_lock(main_path, |repo| repo.checkout_branch("feature"));
+        assert!(blocked_checkout.is_err());
+
+        // 10. ff-only rejects diverged branches & squash creates single-parent commit
+        {
+            let main_repo = Repository::open(&repo_path).unwrap();
+            let diverged_head = main_repo.head().unwrap().peel_to_commit().unwrap();
+            main_repo
+                .branch("squash-feat", &diverged_head, false)
+                .unwrap();
+            fs::write(repo_path.join("div_main.txt"), "m\n").unwrap();
+            commit_all(&main_repo, "div main");
+        }
+
+        GitService::with_write_lock(main_path, |repo| repo.checkout_branch("squash-feat")).unwrap();
+        {
+            let main_repo = Repository::open(&repo_path).unwrap();
+            fs::write(repo_path.join("div_feat.txt"), "f\n").unwrap();
+            commit_all(&main_repo, "div feat");
+        }
+
+        GitService::with_write_lock(main_path, |repo| repo.checkout_branch("main")).unwrap();
+        assert!(GitService::merge_with_options(main_path, "squash-feat", "ff-only", None).is_err());
+        GitService::merge_with_options(main_path, "squash-feat", "squash", Some("custom squash"))
+            .unwrap();
+        let main_repo = Repository::open(&repo_path).unwrap();
+        let head_commit = main_repo.head().unwrap().peel_to_commit().unwrap();
+        assert_eq!(head_commit.parent_count(), 1);
+        assert_eq!(head_commit.summary(), Some("custom squash"));
+    }
+
+    #[test]
+    fn updates_worktree_checked_out_branch_via_fast_forward() {
+        let dir = tempdir().unwrap();
+        let origin_path = dir.path().join("origin.git");
+        let repo_path = dir.path().join("repo");
+        let wt_path = dir.path().join("wt-feature");
+        crate::Repository::init(&origin_path, true).unwrap();
+
+        {
+            let repo = crate::Repository::init(&repo_path, false).unwrap();
+            repo.inner()
+                .remote("origin", origin_path.to_str().unwrap())
+                .unwrap();
+            repo.inner().set_head("refs/heads/main").unwrap();
+            fs::write(repo_path.join("base.txt"), "base\n").unwrap();
+            commit_all(repo.inner(), "base");
+            repo.create_branch("feature", None).unwrap();
+            repo.push_branch("origin", "main").unwrap();
+            repo.push_branch("origin", "feature").unwrap();
+        }
+
+        let main_str = repo_path.to_str().unwrap();
+        let wt_str = wt_path.to_str().unwrap();
+        GitService::worktree(main_str, wt_str, "feature").unwrap();
+
+        // Advance origin/feature from a temporary clone
+        let peer_path = dir.path().join("peer");
+        GitService::clone_repo(origin_path.to_str().unwrap(), peer_path.to_str().unwrap()).unwrap();
+        {
+            let peer = crate::Repository::open(&peer_path).unwrap();
+            peer.checkout_branch("feature").unwrap();
+            fs::write(peer_path.join("upstream.txt"), "upstream update\n").unwrap();
+            commit_all(peer.inner(), "upstream update");
+            peer.push_branch("origin", "feature").unwrap();
+        }
+
+        // Updating 'feature' from main_str updates worktree wt_str cleanly!
+        GitService::update_branch_fast_forward(main_str, "feature").unwrap();
+        assert_eq!(
+            fs::read_to_string(wt_path.join("upstream.txt"))
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "upstream update\n"
+        );
     }
 }

@@ -72,35 +72,35 @@ watch(
 <template>
   <div class="dbx-console h-full min-h-0 bg-card flex flex-col select-none text-xs z-20">
     <!-- Console Toolbar Header -->
-    <div class="dbx-pane-header h-8 bg-muted/50 border-b border-border flex items-center justify-between px-3 select-none">
-      <div class="flex items-center space-x-2">
-        <div class="flex items-center space-x-1.5 font-bold text-foreground">
+    <div class="dbx-pane-header h-9 border-b border-border flex items-center justify-between px-3.5 select-none">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="flex items-center gap-1.5 font-semibold text-foreground shrink-0">
           <Terminal class="w-3.5 h-3.5 text-primary" />
           <span>{{ t('Output & Operation Console') }}</span>
         </div>
 
-        <div class="h-3.5 w-[1px] bg-border mx-1"></div>
+        <div class="h-3.5 w-px bg-border"></div>
 
-        <!-- Filter tabs -->
-        <div class="flex items-center space-x-1">
+        <!-- Filter segmented tabs -->
+        <div class="arco-segmented">
           <button
             @click="consoleStore.activeFilter = 'all'"
-            class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
-            :class="consoleStore.activeFilter === 'all' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+            class="arco-segmented-item text-[11px] py-0.5 px-2"
+            :class="{ 'arco-segmented-item-active': consoleStore.activeFilter === 'all' }"
           >
             {{ t('All') }} ({{ consoleStore.logs.length }})
           </button>
           <button
             @click="consoleStore.activeFilter = 'command'"
-            class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
-            :class="consoleStore.activeFilter === 'command' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+            class="arco-segmented-item text-[11px] py-0.5 px-2"
+            :class="{ 'arco-segmented-item-active': consoleStore.activeFilter === 'command' }"
           >
             {{ t('Git Commands') }} ({{ consoleStore.logs.filter(l => l.level === 'command').length }})
           </button>
           <button
             @click="consoleStore.activeFilter = 'error'"
-            class="px-2 py-0.5 rounded text-[11px] font-semibold transition"
-            :class="consoleStore.activeFilter === 'error' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'text-muted-foreground hover:text-foreground'"
+            class="arco-segmented-item text-[11px] py-0.5 px-2"
+            :class="consoleStore.activeFilter === 'error' ? 'arco-segmented-item-active text-destructive' : ''"
           >
             {{ t('Errors') }} ({{ consoleStore.logs.filter(l => l.level === 'error').length }})
           </button>
@@ -108,21 +108,21 @@ watch(
       </div>
 
       <!-- Right actions: Search, Copy, Clear, Close -->
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-1.5 shrink-0">
         <!-- Search filter input -->
         <div class="relative flex items-center">
-          <Search class="w-3 h-3 text-muted-foreground absolute left-2 pointer-events-none" />
+          <Search class="w-3 h-3 text-muted-foreground absolute left-2.5 pointer-events-none" />
           <input
             v-model="searchQuery"
             type="text"
             :placeholder="t('Filter logs...')"
-            class="bg-background border border-border rounded-md pl-6 pr-2 py-0.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-36"
+            class="arco-input arco-input-sm h-6 pl-7 pr-2 w-40"
           />
         </div>
 
         <button
           @click="handleCopyAll"
-          class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition flex items-center space-x-1"
+          class="arco-icon-btn arco-icon-btn-sm"
           :title="t('Copy Console Logs')"
         >
           <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5" :class="{ 'text-emerald-500': isCopied }" />
@@ -130,7 +130,7 @@ watch(
 
         <button
           @click="consoleStore.clearLogs"
-          class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          class="arco-icon-btn arco-icon-btn-sm"
           :title="t('Clear Console')"
         >
           <Trash2 class="w-3.5 h-3.5" />
@@ -138,7 +138,7 @@ watch(
 
         <button
           @click="consoleStore.isOpen = false"
-          class="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition"
+          class="arco-icon-btn arco-icon-btn-sm"
           :title="t('Close Console')"
         >
           <X class="w-3.5 h-3.5" />
@@ -149,7 +149,7 @@ watch(
     <!-- Logs Content Stream -->
     <div
       ref="scrollContainer"
-      class="flex-1 overflow-y-auto p-2 font-mono text-[11px] space-y-1 bg-card text-foreground select-text"
+      class="flex-1 overflow-y-auto p-2.5 font-mono text-[11px] space-y-1 bg-card text-foreground select-text"
     >
       <div v-if="filteredLogs.length === 0" class="text-center py-6 text-muted-foreground">
         {{ t('No log entries matching filter.') }}
@@ -158,48 +158,48 @@ watch(
       <div
         v-for="log in filteredLogs"
         :key="log.id"
-        class="flex items-start space-x-2 py-0.5 hover:bg-secondary/50 rounded px-1.5 transition"
+        class="flex items-start gap-2 py-1 hover:bg-accent/50 rounded-[4px] px-2 transition-colors"
       >
         <!-- Timestamp -->
-        <span class="text-muted-foreground/60 select-none shrink-0 font-sans text-[10px] mt-0.5">
+        <span class="text-muted-foreground/65 select-none shrink-0 font-sans text-[10px] mt-0.5 tabular-nums">
           {{ formatTime(log.timestamp) }}
         </span>
 
         <!-- Level badge -->
         <span
           v-if="log.level === 'command'"
-          class="px-1 rounded text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800 select-none shrink-0"
+          class="arco-tag bg-primary/10 text-primary border-primary/25 select-none shrink-0 font-mono font-semibold"
         >
           CMD
         </span>
         <span
           v-else-if="log.level === 'success'"
-          class="px-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 select-none shrink-0"
+          class="arco-tag bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 select-none shrink-0 font-mono font-semibold"
         >
           OK
         </span>
         <span
           v-else-if="log.level === 'error'"
-          class="px-1 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 select-none shrink-0"
+          class="arco-tag bg-destructive/10 text-destructive border-destructive/25 select-none shrink-0 font-mono font-semibold"
         >
           ERR
         </span>
         <span
           v-else-if="log.level === 'warning'"
-          class="px-1 rounded text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800 select-none shrink-0"
+          class="arco-tag bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 select-none shrink-0 font-mono font-semibold"
         >
           WARN
         </span>
         <span
           v-else
-          class="px-1 rounded text-[10px] font-bold bg-secondary text-muted-foreground border border-border select-none shrink-0"
+          class="arco-tag bg-secondary text-muted-foreground border-border select-none shrink-0 font-mono font-semibold"
         >
           INFO
         </span>
 
         <!-- Message and Command Details -->
         <div class="flex-1 overflow-x-auto">
-          <div v-if="log.command" class="font-bold text-primary flex items-center space-x-1">
+          <div v-if="log.command" class="font-semibold text-primary flex items-center gap-1">
             <span class="text-muted-foreground select-none">$</span>
             <span>{{ log.command }}</span>
           </div>
@@ -207,7 +207,7 @@ watch(
           <div
             :class="{
               'text-emerald-600 dark:text-emerald-400': log.level === 'success',
-              'text-rose-600 dark:text-rose-400 font-semibold': log.level === 'error',
+              'text-destructive font-semibold': log.level === 'error',
               'text-amber-600 dark:text-amber-400': log.level === 'warning',
               'text-muted-foreground': log.level === 'command',
               'text-foreground': log.level === 'info',
@@ -216,7 +216,7 @@ watch(
             {{ log.message }}
           </div>
 
-          <pre v-if="log.detail" class="mt-1 p-1.5 rounded bg-muted/40 text-[10px] text-muted-foreground whitespace-pre-wrap overflow-x-auto">{{ log.detail }}</pre>
+          <pre v-if="log.detail" class="mt-1 p-2 rounded-[4px] bg-muted/60 border border-border/50 text-[10px] text-muted-foreground whitespace-pre-wrap overflow-x-auto">{{ log.detail }}</pre>
         </div>
       </div>
     </div>

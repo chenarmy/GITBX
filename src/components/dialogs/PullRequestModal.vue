@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { GitPullRequest, X } from 'lucide-vue-next';
+import { GitPullRequest } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useGitApi, formatGitError } from '@/composables/useGitApi';
@@ -34,60 +35,46 @@ async function open() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isPullRequestOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('pullRequest')"
+    :title="t('Create Pull or Merge Request')"
+    max-width-class="max-w-lg"
+    icon-bg-class="bg-fuchsia-500/10 text-fuchsia-500"
+    body-class="space-y-4"
+    @close="repoStore.closeModal('pullRequest')"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Create Pull or Merge Request')"
-      class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-xs"
-      @click.stop
-    >
-      <div class="h-11 px-4 flex justify-between items-center border-b border-border bg-muted/50">
-        <div class="flex gap-2 items-center">
-          <GitPullRequest class="w-4 h-4 text-fuchsia-500" aria-hidden="true" />
-          <span class="font-bold text-sm">{{ t('Create Pull or Merge Request') }}</span>
-        </div>
-        <button
-          type="button"
-          aria-label="Close dialog"
-          class="p-1 rounded hover:bg-accent focus:outline-none focus:ring-1 focus:ring-foreground/50"
-          @click="repoStore.closeModal('pullRequest')"
-        >
-          <X class="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
-      <div class="p-4 space-y-4">
-        <p class="text-muted-foreground">{{ t('Open the remote provider with the source and target branches preselected.') }}</p>
-        <label class="block space-y-1">
-          <span class="font-semibold">{{ t('Target Branch') }}</span>
-          <input v-model="base" class="w-full bg-background border border-border rounded px-3 py-2 font-mono" />
-        </label>
-        <label class="block space-y-1">
-          <span class="font-semibold">{{ t('Source Branch') }}</span>
-          <input v-model="compare" class="w-full bg-background border border-border rounded px-3 py-2 font-mono" />
-        </label>
-      </div>
-      <div class="h-12 px-4 flex justify-end gap-2 border-t border-border bg-muted/30">
-        <button
-          type="button"
-          class="px-3 rounded hover:bg-accent"
-          @click="repoStore.closeModal('pullRequest')"
-        >
-          {{ t('Cancel') }}
-        </button>
-        <button
-          type="button"
-          class="px-4 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40"
-          :disabled="!base.trim() || !compare.trim() || submitting"
-          @click="open"
-        >
-          {{ t('Open PR/MR') }}
-        </button>
-      </div>
-    </div>
-  </div>
+    <template #icon>
+      <GitPullRequest class="w-4 h-4" aria-hidden="true" />
+    </template>
+
+    <p class="text-[12px] text-muted-foreground leading-relaxed">
+      {{ t('Open the remote provider with the source and target branches preselected.') }}
+    </p>
+    <label class="block space-y-1.5">
+      <span class="text-[11px] font-semibold text-muted-foreground">{{ t('Target Branch') }}</span>
+      <input v-model="base" class="arco-input font-mono" />
+    </label>
+    <label class="block space-y-1.5">
+      <span class="text-[11px] font-semibold text-muted-foreground">{{ t('Source Branch') }}</span>
+      <input v-model="compare" class="arco-input font-mono" />
+    </label>
+
+    <template #footer>
+      <button
+        type="button"
+        class="arco-btn arco-btn-secondary"
+        @click="repoStore.closeModal('pullRequest')"
+      >
+        {{ t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        class="arco-btn arco-btn-primary"
+        :disabled="!base.trim() || !compare.trim() || submitting"
+        @click="open"
+      >
+        {{ t('Open PR/MR') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

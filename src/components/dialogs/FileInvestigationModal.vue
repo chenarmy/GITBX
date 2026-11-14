@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { History, ListTree, GitCompareArrows, X, LoaderCircle } from 'lucide-vue-next';
+import { History, ListTree, GitCompareArrows, LoaderCircle } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useDiffStore } from '@/stores/diff';
 import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
@@ -94,77 +95,99 @@ watch(
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="diffStore.isFileInvestigationOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="close"
+    :title="t('File Investigation')"
+    :subtitle="diffStore.selectedFile || ''"
+    max-width-class="max-w-5xl"
+    height-class="h-[76vh]"
+    raw-body
+    @close="close"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('File Investigation')"
-      class="w-full max-w-5xl h-[76vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border">
-        <div class="min-w-0">
-          <div class="font-bold text-sm">{{ t('File Investigation') }}</div>
-          <div class="text-[10px] text-muted-foreground font-mono truncate">{{ diffStore.selectedFile }}</div>
+    <template #icon>
+      <History class="w-4 h-4" aria-hidden="true" />
+    </template>
+
+    <template #below-header>
+      <div class="arco-tabs bg-[hsl(var(--arco-fill-1))] shrink-0 select-none">
+        <button
+          v-for="tab in ([['history', History, 'File History'], ['blame', ListTree, 'Blame'], ['compare', GitCompareArrows, 'Compare Revisions']] as const)"
+          :key="tab[0]"
+          type="button"
+          class="arco-tab"
+          :class="{ 'arco-tab-active': diffStore.fileInvestigationTab === tab[0] }"
+          @click="selectTab(tab[0])"
+        >
+          <component :is="tab[1]" class="w-3.5 h-3.5" />
+          <span>{{ t(tab[2]) }}</span>
+        </button>
+      </div>
+    </template>
+
+    <div class="flex-1 min-h-0 overflow-auto">
+      <div v-if="loading" class="h-full flex items-center justify-center text-muted-foreground gap-2">
+        <LoaderCircle class="w-4 h-4 animate-spin text-primary" />
+        {{ t('Loading...') }}
+      </div>
+      <div v-else-if="errorMessage" class="arco-alert arco-alert-danger m-4">{{ errorMessage }}</div>
+
+      <div v-else-if="diffStore.fileInvestigationTab === 'history'" class="divide-y divide-border/70">
+        <button
+          v-for="entry in history"
+          :key="entry.id"
+          type="button"
+          class="w-full text-left px-4 py-3 hover:bg-accent/55 transition-colors grid grid-cols-[84px_1fr_150px_156px] gap-3 items-center"
+          @click="showCommit(entry)"
+        >
+          <span class="font-mono text-primary font-medium">{{ entry.short_id }}</span>
+          <span class="font-semibold text-foreground truncate" :title="entry.message">{{ entry.summary }}</span>
+          <span class="truncate text-muted-foreground">{{ entry.author_name }}</span>
+          <span class="text-muted-foreground tabular-nums text-right">{{ new Date(entry.author_time * 1000).toLocaleString() }}</span>
+        </button>
+        <div v-if="history.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No file history found.') }}</div>
+      </div>
+
+      <div v-else-if="diffStore.fileInvestigationTab === 'blame'" class="font-mono text-[11px] min-w-max">
+        <button
+          v-for="line in blame"
+          :key="line.line_number"
+          type="button"
+          class="w-full text-left grid grid-cols-[54px_76px_130px_1fr] hover:bg-accent/45 transition-colors group"
+          :title="`${line.summary} — ${line.author_email}`"
+          @click="locateBlameCommit(line)"
+        >
+          <span class="px-2 py-0.5 text-right text-muted-foreground bg-[hsl(var(--arco-fill-1))] border-r border-border/60 tabular-nums">{{ line.line_number }}</span>
+          <span class="px-2 py-0.5 text-primary">{{ line.short_id }}</span>
+          <span class="px-2 py-0.5 truncate text-muted-foreground">{{ line.author_name }}</span>
+          <span class="px-2 py-0.5 whitespace-pre text-foreground">{{ line.content || ' ' }}</span>
+        </button>
+        <div v-if="blame.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No blame information found.') }}</div>
+      </div>
+
+      <div v-else class="p-6 max-w-2xl space-y-5">
+        <p class="text-[12px] text-muted-foreground leading-relaxed">
+          {{ t('Compare this file between any two branches, tags, or commit hashes.') }}
+        </p>
+        <div class="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
+          <label class="space-y-1.5">
+            <span class="text-[11px] font-semibold text-muted-foreground">{{ t('Base Revision') }}</span>
+            <input v-model="baseRevision" class="arco-input font-mono" />
+          </label>
+          <GitCompareArrows class="w-5 h-5 mb-2 text-muted-foreground" />
+          <label class="space-y-1.5">
+            <span class="text-[11px] font-semibold text-muted-foreground">{{ t('Target Revision') }}</span>
+            <input v-model="targetRevision" class="arco-input font-mono" />
+          </label>
         </div>
         <button
           type="button"
-          aria-label="Close dialog"
-          class="p-1 rounded hover:bg-accent text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/50"
-          :title="t('Close')"
-          @click="close"
+          :disabled="!baseRevision.trim() || !targetRevision.trim()"
+          class="arco-btn arco-btn-primary"
+          @click="compareRevisions"
         >
-          <X class="w-4 h-4" aria-hidden="true" />
+          {{ t('Compare Revisions') }}
         </button>
-      </div>
-
-      <div class="flex border-b border-border bg-muted/20 px-3 pt-2 gap-1">
-        <button v-for="tab in ([['history', History, 'File History'], ['blame', ListTree, 'Blame'], ['compare', GitCompareArrows, 'Compare Revisions']] as const)" :key="tab[0]"
-          class="px-3 py-2 rounded-t flex items-center gap-1.5 border border-b-0 transition"
-          :class="diffStore.fileInvestigationTab === tab[0] ? 'bg-card text-primary border-border' : 'border-transparent text-muted-foreground hover:text-foreground'"
-          @click="selectTab(tab[0])">
-          <component :is="tab[1]" class="w-3.5 h-3.5" /><span>{{ t(tab[2]) }}</span>
-        </button>
-      </div>
-
-      <div class="flex-1 min-h-0 overflow-auto">
-        <div v-if="loading" class="h-full flex items-center justify-center text-muted-foreground gap-2"><LoaderCircle class="w-4 h-4 animate-spin" />{{ t('Loading...') }}</div>
-        <div v-else-if="errorMessage" class="m-4 p-3 rounded border border-rose-500/30 bg-rose-500/10 text-rose-500">{{ errorMessage }}</div>
-
-        <div v-else-if="diffStore.fileInvestigationTab === 'history'" class="divide-y divide-border">
-          <button v-for="entry in history" :key="entry.id" class="w-full text-left px-4 py-3 hover:bg-accent/60 grid grid-cols-[80px_1fr_150px_150px] gap-3 items-center" @click="showCommit(entry)">
-            <span class="font-mono text-primary">{{ entry.short_id }}</span>
-            <span class="font-semibold truncate" :title="entry.message">{{ entry.summary }}</span>
-            <span class="truncate text-muted-foreground">{{ entry.author_name }}</span>
-            <span class="text-muted-foreground">{{ new Date(entry.author_time * 1000).toLocaleString() }}</span>
-          </button>
-          <div v-if="history.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No file history found.') }}</div>
-        </div>
-
-        <div v-else-if="diffStore.fileInvestigationTab === 'blame'" class="font-mono text-[11px] min-w-max">
-          <button v-for="line in blame" :key="line.line_number" class="w-full text-left grid grid-cols-[54px_76px_130px_1fr] hover:bg-accent/50 group" :title="`${line.summary} — ${line.author_email}`" @click="locateBlameCommit(line)">
-            <span class="px-2 py-0.5 text-right text-muted-foreground bg-muted/30">{{ line.line_number }}</span>
-            <span class="px-2 py-0.5 text-primary">{{ line.short_id }}</span>
-            <span class="px-2 py-0.5 truncate text-muted-foreground">{{ line.author_name }}</span>
-            <span class="px-2 py-0.5 whitespace-pre">{{ line.content || ' ' }}</span>
-          </button>
-          <div v-if="blame.length === 0" class="p-8 text-center text-muted-foreground">{{ t('No blame information found.') }}</div>
-        </div>
-
-        <div v-else class="p-6 max-w-2xl space-y-5">
-          <p class="text-muted-foreground">{{ t('Compare this file between any two branches, tags, or commit hashes.') }}</p>
-          <div class="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
-            <label class="space-y-1"><span class="font-semibold">{{ t('Base Revision') }}</span><input v-model="baseRevision" class="w-full bg-background border border-border rounded px-3 py-2 font-mono focus:outline-none focus:ring-1 focus:ring-primary" /></label>
-            <GitCompareArrows class="w-5 h-5 mb-2 text-muted-foreground" />
-            <label class="space-y-1"><span class="font-semibold">{{ t('Target Revision') }}</span><input v-model="targetRevision" class="w-full bg-background border border-border rounded px-3 py-2 font-mono focus:outline-none focus:ring-1 focus:ring-primary" /></label>
-          </div>
-          <button :disabled="!baseRevision.trim() || !targetRevision.trim()" class="px-4 py-2 rounded bg-primary text-primary-foreground font-semibold disabled:opacity-40" @click="compareRevisions">{{ t('Compare Revisions') }}</button>
-        </div>
       </div>
     </div>
-  </div>
+  </ArcoModal>
 </template>

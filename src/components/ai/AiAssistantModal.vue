@@ -6,10 +6,10 @@ import { useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
 import { useSettingsStore } from '@/stores/settings';
 import { useI18n } from '@/i18n';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import {
   Sparkles,
   Send,
-  X,
   Copy,
   Check,
   ShieldAlert,
@@ -176,142 +176,123 @@ function copyMessage() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="aiStore.isAiModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="aiStore.closeAiModal()"
+    :title="t('GITBX AI Assistant')"
+    max-width-class="max-w-lg"
+    height-class="max-h-[85vh]"
+    @close="aiStore.closeAiModal()"
   >
+    <template #icon>
+      <Sparkles class="w-4 h-4" aria-hidden="true" />
+    </template>
+    <template #header-extra>
+      <span class="arco-tag bg-primary/10 text-primary border-primary/25 font-mono">
+        {{ aiStore.llmConfig.provider }} / {{ aiStore.llmConfig.model }}
+      </span>
+    </template>
+
+    <!-- 1. Secret Scanning Alert -->
     <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('GITBX AI Assistant')"
-      class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs animate-in fade-in zoom-in-95 duration-150"
-      @click.stop
+      v-if="aiStore.detectedSecrets.length > 0"
+      class="p-3.5 bg-destructive/10 border border-destructive/30 rounded-[6px] text-destructive space-y-2"
     >
-      <!-- Header -->
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
-        <div class="flex items-center space-x-2">
-          <Sparkles class="w-4 h-4 text-indigo-400 animate-pulse" aria-hidden="true" />
-          <span class="font-bold text-sm text-foreground">{{ t('GITBX AI Assistant') }}</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            {{ aiStore.llmConfig.provider }} / {{ aiStore.llmConfig.model }}
-          </span>
-        </div>
-        <button
-          type="button"
-          aria-label="Close dialog"
-          @click="aiStore.closeAiModal()"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition cursor-pointer focus:outline-none focus:ring-1 focus:ring-foreground/50"
-        >
-          <X class="w-4 h-4" aria-hidden="true" />
-        </button>
+      <div class="flex items-center gap-2 font-semibold">
+        <ShieldAlert class="w-4 h-4 shrink-0" />
+        <span>{{ t('Security Warning: Secrets Detected!') }}</span>
       </div>
-
-      <!-- Body Content -->
-      <div class="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
-        <!-- 1. Secret Scanning Alert -->
+      <p class="text-[11px] text-muted-foreground">
+        {{ t('GITBX detected sensitive tokens in your selected diff. Please review and remove them before committing.') }}
+      </p>
+      <div class="space-y-1 pt-1">
         <div
-          v-if="aiStore.detectedSecrets.length > 0"
-          class="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 space-y-2"
+          v-for="(sec, index) in aiStore.detectedSecrets"
+          :key="index"
+          class="flex items-center justify-between bg-card/80 px-2.5 py-1 rounded-[4px] text-[11px] border border-destructive/20"
         >
-          <div class="flex items-center space-x-2 font-bold text-rose-400">
-            <ShieldAlert class="w-4 h-4 shrink-0" />
-            <span>{{ t('Security Warning: Secrets Detected!') }}</span>
-          </div>
-          <p class="text-[11px] text-muted-foreground">
-            {{ t('GITBX detected sensitive tokens in your selected diff. Please review and remove them before committing.') }}
-          </p>
-          <div class="space-y-1 mt-2">
-            <div
-              v-for="(sec, index) in aiStore.detectedSecrets"
-              :key="index"
-              class="flex items-center justify-between bg-card/60 px-2 py-1 rounded text-[11px] border border-rose-500/20"
-            >
-              <span class="font-medium text-rose-200">{{ sec.rule_name }}</span>
-              <span class="font-mono text-muted-foreground">Line {{ sec.line_number }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. AI Generated Commit Preview -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <span class="font-semibold text-foreground">{{ t('Generated Conventional Commit') }}</span>
-              <span class="text-[10px] text-muted-foreground">({{ aiStore.llmConfig.model }})</span>
-            </div>
-            <button
-              @click="generate"
-              :disabled="aiStore.isGenerating"
-              class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': aiStore.isGenerating }" />
-              <span>{{ t('Regenerate') }}</span>
-            </button>
-          </div>
-
-          <div class="bg-background border border-border rounded-lg p-3 space-y-2">
-            <div>
-              <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{{ t('Summary') }}</label>
-              <input
-                v-model="summaryDraft"
-                type="text"
-                class="w-full bg-card border border-border rounded px-2.5 py-1.5 mt-0.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{{ t('Body (Optional)') }}</label>
-              <textarea
-                v-model="bodyDraft"
-                rows="3"
-                class="w-full bg-card border border-border rounded px-2.5 py-1.5 mt-0.5 font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y"
-              ></textarea>
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex items-center justify-end space-x-2 pt-1">
-            <button
-              @click="copyMessage"
-              :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded border border-border hover:bg-accent text-foreground transition disabled:opacity-40 cursor-pointer"
-            >
-              <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-blue-400" />
-              <span>{{ isCopied ? t('Copied') : t('Copy Message') }}</span>
-            </button>
-            <button
-              @click="applyToCommitBox"
-              :disabled="!hasGeneratedMessage"
-              class="flex items-center space-x-1 px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <Check class="w-3.5 h-3.5" />
-              <span>{{ t('Apply to Commit Box') }}</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- 3. Natural Language Git Assistant -->
-        <div class="space-y-2 border-t border-border pt-3">
-          <span class="font-semibold text-foreground">{{ t('Natural Language Git Assistant') }}</span>
-          <div class="flex items-center space-x-2">
-            <input
-              v-model="naturalCommand"
-              type="text"
-              :placeholder="naturalCommandPlaceholder"
-              @keydown.enter="handleNaturalCommand"
-              class="flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-xs"
-            />
-            <button
-              @click="handleNaturalCommand"
-              :disabled="aiStore.isGenerating || !naturalCommand.trim()"
-              class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
-            >
-              <Send class="w-3.5 h-3.5" />
-              <span>{{ t('Run') }}</span>
-            </button>
-          </div>
+          <span class="font-medium text-foreground">{{ sec.rule_name }}</span>
+          <span class="font-mono text-muted-foreground">Line {{ sec.line_number }}</span>
         </div>
       </div>
     </div>
-  </div>
+
+    <!-- 2. AI Generated Commit Preview -->
+    <div class="space-y-2.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-foreground">{{ t('Generated Conventional Commit') }}</span>
+          <span class="text-[10px] text-muted-foreground font-mono">({{ aiStore.llmConfig.model }})</span>
+        </div>
+        <button
+          @click="generate"
+          :disabled="aiStore.isGenerating"
+          class="arco-btn arco-btn-text arco-btn-sm text-primary cursor-pointer"
+        >
+          <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': aiStore.isGenerating }" />
+          <span>{{ t('Regenerate') }}</span>
+        </button>
+      </div>
+
+      <div class="arco-card p-3.5 space-y-3 bg-background/50">
+        <div>
+          <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block mb-1">{{ t('Summary') }}</label>
+          <input
+            v-model="summaryDraft"
+            type="text"
+            class="arco-input font-mono"
+          />
+        </div>
+        <div>
+          <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block mb-1">{{ t('Body (Optional)') }}</label>
+          <textarea
+            v-model="bodyDraft"
+            rows="3"
+            class="arco-textarea font-mono resize-y"
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button
+          @click="copyMessage"
+          :disabled="!hasGeneratedMessage"
+          class="arco-btn arco-btn-outline cursor-pointer"
+        >
+          <component :is="isCopied ? Check : Copy" class="w-3.5 h-3.5 text-primary" />
+          <span>{{ isCopied ? t('Copied') : t('Copy Message') }}</span>
+        </button>
+        <button
+          @click="applyToCommitBox"
+          :disabled="!hasGeneratedMessage"
+          class="arco-btn arco-btn-primary cursor-pointer"
+        >
+          <Check class="w-3.5 h-3.5" />
+          <span>{{ t('Apply to Commit Box') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. Natural Language Git Assistant -->
+    <div class="space-y-2 border-t border-border pt-3.5">
+      <span class="font-semibold text-foreground block">{{ t('Natural Language Git Assistant') }}</span>
+      <div class="flex items-center gap-2">
+        <input
+          v-model="naturalCommand"
+          type="text"
+          :placeholder="naturalCommandPlaceholder"
+          @keydown.enter="handleNaturalCommand"
+          class="arco-input flex-1"
+        />
+        <button
+          @click="handleNaturalCommand"
+          :disabled="aiStore.isGenerating || !naturalCommand.trim()"
+          class="arco-btn arco-btn-primary h-8 px-3.5 cursor-pointer shrink-0"
+        >
+          <Send class="w-3.5 h-3.5" />
+          <span>{{ t('Run') }}</span>
+        </button>
+      </div>
+    </div>
+  </ArcoModal>
 </template>

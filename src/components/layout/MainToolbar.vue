@@ -331,23 +331,23 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
     <!-- In-progress Operation Banner (Merge / Rebase / Cherry-pick / Revert) -->
     <div
       v-if="repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking || repoStore.repoInfo?.is_reverting"
-      class="h-8 bg-amber-500/10 border-b border-amber-500/30 px-3 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 select-none animate-pulse"
+      class="min-h-9 py-1 bg-amber-500/10 border-b border-amber-500/25 px-3.5 flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-300 select-none"
     >
-      <div class="flex items-center space-x-2">
-        <AlertTriangle class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-        <span class="font-bold">
+      <div class="flex items-center gap-2 min-w-0">
+        <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0" />
+        <span class="font-semibold">
           {{ repoStore.repoInfo?.is_merging ? t('Merge in progress') : repoStore.repoInfo?.is_rebasing ? t('Rebase in progress') : repoStore.repoInfo?.is_cherry_picking ? t('Cherry-pick in progress') : t('Revert in progress') }}
         </span>
-        <span class="text-[11px] opacity-80">
+        <span class="text-[11px] opacity-85 truncate">
           ({{ t('Resolve conflicted files in staging panel, then Continue or Abort') }})
         </span>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-1.5 shrink-0">
         <button
           v-if="repoStore.repoInfo?.is_merging"
           @click="handleAbortOperation('merge')"
-          class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
+          class="arco-btn arco-btn-sm arco-btn-danger-outline"
         >
           <XCircle class="w-3 h-3" />
           <span>{{ t('Abort Merge') }}</span>
@@ -356,7 +356,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           v-if="repoStore.repoInfo?.is_merging"
           @click="handleContinueOperation('merge')"
           :disabled="repoStore.statusSummary.conflicted_files.length > 0"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          class="arco-btn arco-btn-sm arco-btn-primary"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Merge') }}</span>
@@ -365,7 +365,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <button
           v-if="repoStore.repoInfo?.is_rebasing"
           @click="handleAbortOperation('rebase')"
-          class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
+          class="arco-btn arco-btn-sm arco-btn-danger-outline"
         >
           <XCircle class="w-3 h-3" />
           <span>{{ t('Abort Rebase') }}</span>
@@ -374,7 +374,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           v-if="repoStore.repoInfo?.is_rebasing"
           @click="handleContinueOperation('rebase')"
           :disabled="repoStore.statusSummary.conflicted_files.length > 0"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          class="arco-btn arco-btn-sm arco-btn-primary"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Rebase') }}</span>
@@ -383,7 +383,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <button
           v-if="repoStore.repoInfo?.is_cherry_picking"
           @click="handleAbortOperation('cherry-pick')"
-          class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
+          class="arco-btn arco-btn-sm arco-btn-danger-outline"
         >
           <XCircle class="w-3 h-3" />
           <span>{{ t('Abort Cherry-pick') }}</span>
@@ -392,7 +392,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           v-if="repoStore.repoInfo?.is_cherry_picking"
           @click="handleContinueOperation('cherry-pick')"
           :disabled="repoStore.statusSummary.conflicted_files.length > 0"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          class="arco-btn arco-btn-sm arco-btn-primary"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Cherry-pick') }}</span>
@@ -401,7 +401,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         <button
           v-if="repoStore.repoInfo?.is_reverting"
           @click="handleAbortOperation('revert')"
-          class="px-2.5 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center space-x-1 transition active:scale-95 text-[11px] font-semibold"
+          class="arco-btn arco-btn-sm arco-btn-danger-outline"
         >
           <XCircle class="w-3 h-3" />
           <span>{{ t('Abort Revert') }}</span>
@@ -410,7 +410,7 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           v-if="repoStore.repoInfo?.is_reverting"
           @click="handleContinueOperation('revert')"
           :disabled="repoStore.statusSummary.conflicted_files.length > 0"
-          class="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-1 font-semibold transition active:scale-95 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          class="arco-btn arco-btn-sm arco-btn-primary"
         >
           <Play class="w-3 h-3" />
           <span>{{ t('Continue Revert') }}</span>
@@ -419,17 +419,17 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
     </div>
 
     <!-- Main Toolbar Row -->
-    <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3 text-xs select-none">
-      <div class="flex items-center space-x-1 min-w-0">
+    <div class="dbx-toolbar-actions h-10 flex items-center justify-between px-3.5 text-xs select-none">
+      <div class="flex items-center gap-1 min-w-0">
         <!-- Fetch Button -->
         <button
           @click="handleFetch"
           @contextmenu.prevent="openToolbarMenu($event, 'fetch')"
           :disabled="isFetching"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
+          class="dbx-toolbar-button disabled:opacity-45 disabled:pointer-events-none"
           :title="t('Fetch from all remotes')"
         >
-          <RefreshCw class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" :class="{ 'animate-spin': isFetching }" />
+          <RefreshCw class="w-3.5 h-3.5 text-primary" :class="{ 'animate-spin': isFetching }" />
           <span>{{ isFetching ? t('Fetching...') : t('Fetch') }}</span>
         </button>
 
@@ -438,114 +438,116 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
           @click="handlePull"
           @contextmenu.prevent="openToolbarMenu($event, 'pull')"
           :disabled="isPulling"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
+          class="dbx-toolbar-button disabled:opacity-45 disabled:pointer-events-none"
           :title="t('Pull latest changes from upstream')"
         >
-          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" :class="{ 'animate-bounce': isPulling }" />
+          <ArrowDownCircle class="w-3.5 h-3.5 text-rose-500" :class="{ 'animate-bounce': isPulling }" />
           <span>{{ isPulling ? t('Pulling...') : t('Pull') }}</span>
         </button>
+
         <!-- Push Button -->
         <button
           @click="handlePush"
           @contextmenu.prevent="openToolbarMenu($event, 'push')"
           :disabled="isPushing"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium disabled:opacity-50"
+          class="dbx-toolbar-button disabled:opacity-45 disabled:pointer-events-none"
           :title="t('Push local commits to remote')"
         >
-          <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" :class="{ 'animate-bounce': isPushing }" />
+          <ArrowUpCircle class="w-3.5 h-3.5 text-emerald-500" :class="{ 'animate-bounce': isPushing }" />
           <span>{{ isPushing ? t('Pushing...') : t('Push') }}</span>
         </button>
-        <div class="h-4 w-[1px] bg-border mx-1"></div>
+
+        <div class="h-4 w-px bg-border/80 mx-1"></div>
 
         <!-- Branch Button -->
         <button
           @click="handleOpenBranch"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
+          class="dbx-toolbar-button"
           :title="t('Create new branch')"
         >
-          <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <GitBranch class="w-3.5 h-3.5 text-violet-500" />
           <span>{{ t('Branch') }}</span>
         </button>
 
         <!-- Merge Button -->
         <button
           @click="handleOpenMerge"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
+          class="dbx-toolbar-button"
           :title="t('Merge branch into current branch')"
         >
-          <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+          <GitMerge class="w-3.5 h-3.5 text-amber-500" />
           <span>{{ t('Merge') }}</span>
         </button>
 
-        <div class="h-4 w-[1px] bg-border mx-1"></div>
+        <div class="h-4 w-px bg-border/80 mx-1"></div>
 
         <!-- Stash Button -->
         <button
           @click="handleOpenStash"
-          class="flex items-center space-x-1.5 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-foreground transition font-medium"
+          class="dbx-toolbar-button"
           :title="t('Save uncommitted changes to stash')"
         >
-          <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+          <Archive class="w-3.5 h-3.5 text-orange-500" />
           <span>{{ t('Stash') }}</span>
         </button>
 
         <div ref="moreActionsRef" class="relative">
           <button
-            class="flex items-center space-x-1 px-2.5 py-1 rounded-md hover:bg-secondary active:scale-95 text-muted-foreground hover:text-foreground transition font-medium"
-            :class="{ 'bg-secondary text-foreground': isMoreActionsOpen }"
+            class="dbx-toolbar-button text-muted-foreground hover:text-foreground"
+            :class="{ 'bg-accent text-foreground border-border': isMoreActionsOpen }"
             :title="t('More actions')"
             @click.stop="isMoreActionsOpen = !isMoreActionsOpen"
           >
             <MoreHorizontal class="w-3.5 h-3.5" />
             <span>{{ t('More actions') }}</span>
-            <ChevronDown class="w-3 h-3" />
+            <ChevronDown class="w-3 h-3 transition-transform duration-150" :class="{ 'rotate-180': isMoreActionsOpen }" />
           </button>
 
           <div
             v-if="isMoreActionsOpen"
-            class="absolute left-0 top-full mt-1 w-64 bg-popover text-popover-foreground border border-border rounded-md py-1 z-50"
+            class="arco-menu absolute left-0 top-full mt-1.5 w-64 z-50 text-xs"
           >
-            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div class="arco-menu-section">
               {{ t('Git Options') }}
             </div>
-            <label class="flex items-center justify-between gap-3 px-2.5 py-1.5 hover:bg-accent cursor-pointer">
+            <label class="flex items-center justify-between gap-3 mx-1 px-2.5 py-1.5 rounded-[4px] hover:bg-accent/70 cursor-pointer">
               <span>{{ t('Pull Strategy') }}</span>
-              <select v-model="pullStrategy" class="bg-background border border-border rounded px-1.5 py-1 text-[10px]" @click.stop>
+              <select v-model="pullStrategy" class="arco-select arco-select-sm w-24" @click.stop>
                 <option value="merge">merge</option>
                 <option value="rebase">rebase</option>
                 <option value="ff-only">ff-only</option>
               </select>
             </label>
-            <label class="flex items-center justify-between gap-3 px-2.5 py-1.5 hover:bg-accent cursor-pointer">
+            <label class="flex items-center justify-between gap-3 mx-1 px-2.5 py-1.5 rounded-[4px] hover:bg-accent/70 cursor-pointer">
               <span>{{ t('Force Push with Lease') }}</span>
-              <input v-model="forceWithLease" type="checkbox" />
+              <input v-model="forceWithLease" type="checkbox" class="rounded-[3px]" />
             </label>
 
-            <div class="my-1 border-t border-border"></div>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; handleOpenRebase()">
+            <div class="arco-menu-divider"></div>
+            <button class="arco-menu-item" @click="isMoreActionsOpen = false; handleOpenRebase()">
               <GitPullRequest class="w-3.5 h-3.5 text-sky-500" />
               <span>{{ t('Rebase') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; handleCherryPick()">
+            <button class="arco-menu-item" @click="isMoreActionsOpen = false; handleCherryPick()">
               <GitCommit class="w-3.5 h-3.5 text-indigo-500" />
               <span>{{ t('Cherry-pick') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('worktreeManager')">
+            <button class="arco-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('worktreeManager')">
               <FolderGit2 class="w-3.5 h-3.5 text-teal-500" />
               <span>{{ t('Worktrees') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; changelistStore.isManagerOpen = true">
+            <button class="arco-menu-item" @click="isMoreActionsOpen = false; changelistStore.isManagerOpen = true">
               <ListTodo class="w-3.5 h-3.5 text-violet-500" />
               <span>{{ t('Changelists') }}</span>
             </button>
-            <button class="toolbar-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('pullRequest')">
+            <button class="arco-menu-item" @click="isMoreActionsOpen = false; repoStore.openModal('pullRequest')">
               <GitPullRequest class="w-3.5 h-3.5 text-fuchsia-500" />
               <span>{{ t('PR/MR') }}</span>
             </button>
 
-            <div class="my-1 border-t border-border"></div>
+            <div class="arco-menu-divider"></div>
             <button
-              class="toolbar-menu-item text-rose-600 dark:text-rose-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="arco-menu-item arco-menu-item-danger disabled:opacity-40 disabled:cursor-not-allowed"
               :disabled="repoStore.statusSummary.total_changes === 0 || repoStore.repoInfo?.is_merging || repoStore.repoInfo?.is_rebasing || repoStore.repoInfo?.is_cherry_picking"
               @click="isMoreActionsOpen = false; handleDiscardAll()"
             >
@@ -557,18 +559,30 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
       </div>
 
       <!-- Active Branch Badge -->
-      <div class="flex items-center space-x-2">
-        <button class="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-secondary text-[10px]" :title="t('Incoming and Outgoing Commits')" @click="repoStore.openModal('syncStatus')">
-          <span class="text-rose-600 dark:text-rose-400">↓{{ repoStore.syncStatus.incoming.length }}</span><span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          class="arco-btn arco-btn-outline arco-btn-sm font-mono tabular-nums px-2"
+          :title="t('Incoming and Outgoing Commits')"
+          @click="repoStore.openModal('syncStatus')"
+        >
+          <span class="text-rose-500">↓{{ repoStore.syncStatus.incoming.length }}</span>
+          <span class="text-emerald-500">↑{{ repoStore.syncStatus.outgoing.length }}</span>
         </button>
-        <button class="p-1 rounded hover:bg-secondary" :class="autoFetchEnabled ? 'text-primary' : 'text-muted-foreground'" :title="t(autoFetchEnabled ? 'Background Fetch Enabled' : 'Background Fetch Disabled')" @click="toggleAutoFetch"><Timer class="w-3.5 h-3.5" /></button>
+        <button
+          class="arco-icon-btn arco-icon-btn-sm"
+          :class="autoFetchEnabled ? 'text-primary bg-primary/10' : 'text-muted-foreground'"
+          :title="t(autoFetchEnabled ? 'Background Fetch Enabled' : 'Background Fetch Disabled')"
+          @click="toggleAutoFetch"
+        >
+          <Timer class="w-3.5 h-3.5" />
+        </button>
         <div
           @click="handleOpenBranch"
-          class="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-md bg-secondary/80 hover:bg-secondary border border-border font-mono text-[11px] cursor-pointer transition active:scale-95 shadow-sm"
+          class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[4px] bg-primary/10 hover:bg-primary/15 border border-primary/25 font-mono text-[11px] cursor-pointer transition-colors"
           :title="t('Current checked out branch')"
         >
           <GitBranch class="w-3.5 h-3.5 text-primary" />
-          <span class="font-bold text-foreground">{{ repoStore.repoInfo?.head_branch || 'main' }}</span>
+          <span class="font-semibold text-foreground">{{ repoStore.repoInfo?.head_branch || 'main' }}</span>
         </div>
       </div>
     </div>
@@ -582,84 +596,83 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         @contextmenu.prevent="closeToolbarMenu"
       >
         <div
-          class="fixed w-60 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          class="fixed arco-menu w-60 text-xs select-none"
           :style="{ left: `${toolbarMenu.x}px`, top: `${toolbarMenu.y}px` }"
           role="menu"
           @click.stop
         >
-          <div class="py-1">
-            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {{ t('Current Repository') }}
-            </div>
-            <button
-              v-if="toolbarMenu.kind === 'fetch'"
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isFetching"
-              @click="closeToolbarMenu(); handleFetch()"
-            >
-              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span>{{ t('Fetch') }}</span>
-            </button>
-            <button
-              v-if="toolbarMenu.kind === 'pull'"
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isPulling"
-              @click="closeToolbarMenu(); handlePull()"
-            >
-              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-              <span>{{ t('Pull') }}</span>
-            </button>
-            <button
-              v-if="toolbarMenu.kind === 'push'"
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isPushing"
-              @click="closeToolbarMenu(); handlePush()"
-            >
-              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{{ t('Push') }}</span>
-            </button>
+          <div class="arco-menu-section">
+            {{ t('Current Repository') }}
           </div>
-          <div class="py-1">
-            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
-            </div>
-            <button
-              v-if="toolbarMenu.kind === 'fetch'"
-              role="menuitem"
-              data-testid="toolbar-fetch-all"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isFetching || isBulkOperating"
-              @click="handleFetchAll"
-            >
-              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span>{{ t('Fetch All') }}</span>
-            </button>
-            <button
-              v-if="toolbarMenu.kind === 'pull'"
-              role="menuitem"
-              data-testid="toolbar-pull-all"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isPulling || isBulkOperating"
-              @click="handlePullAll"
-            >
-              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-              <span>{{ t('Pull All') }}</span>
-            </button>
-            <button
-              v-if="toolbarMenu.kind === 'push'"
-              role="menuitem"
-              data-testid="toolbar-push-all"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isPushing || isBulkOperating"
-              @click="handlePushAll"
-            >
-              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{{ t('Push All') }}</span>
-            </button>
+          <button
+            v-if="toolbarMenu.kind === 'fetch'"
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isFetching"
+            @click="closeToolbarMenu(); handleFetch()"
+          >
+            <RefreshCw class="h-3.5 w-3.5 text-primary" />
+            <span>{{ t('Fetch') }}</span>
+          </button>
+          <button
+            v-if="toolbarMenu.kind === 'pull'"
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isPulling"
+            @click="closeToolbarMenu(); handlePull()"
+          >
+            <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
+            <span>{{ t('Pull') }}</span>
+          </button>
+          <button
+            v-if="toolbarMenu.kind === 'push'"
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isPushing"
+            @click="closeToolbarMenu(); handlePush()"
+          >
+            <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
+            <span>{{ t('Push') }}</span>
+          </button>
+
+          <div class="arco-menu-divider"></div>
+
+          <div class="arco-menu-section">
+            {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
           </div>
+          <button
+            v-if="toolbarMenu.kind === 'fetch'"
+            role="menuitem"
+            data-testid="toolbar-fetch-all"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isFetching || isBulkOperating"
+            @click="handleFetchAll"
+          >
+            <RefreshCw class="h-3.5 w-3.5 text-primary" />
+            <span>{{ t('Fetch All') }}</span>
+          </button>
+          <button
+            v-if="toolbarMenu.kind === 'pull'"
+            role="menuitem"
+            data-testid="toolbar-pull-all"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isPulling || isBulkOperating"
+            @click="handlePullAll"
+          >
+            <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
+            <span>{{ t('Pull All') }}</span>
+          </button>
+          <button
+            v-if="toolbarMenu.kind === 'push'"
+            role="menuitem"
+            data-testid="toolbar-push-all"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isPushing || isBulkOperating"
+            @click="handlePushAll"
+          >
+            <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
+            <span>{{ t('Push All') }}</span>
+          </button>
         </div>
       </div>
     </Teleport>

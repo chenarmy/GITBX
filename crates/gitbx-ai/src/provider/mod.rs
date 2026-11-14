@@ -119,9 +119,24 @@ pub async fn list_models(config: &LlmConfig) -> anyhow::Result<Vec<ModelInfo>> {
             }
         }
         return Ok(vec![
-            ModelInfo { id: "claude-3-5-sonnet-latest".into(), name: "Claude 3.5 Sonnet".into(), context_length: Some(200000), description: None },
-            ModelInfo { id: "claude-3-7-sonnet-latest".into(), name: "Claude 3.7 Sonnet".into(), context_length: Some(200000), description: None },
-            ModelInfo { id: "claude-3-haiku-20240307".into(), name: "Claude 3 Haiku".into(), context_length: Some(200000), description: None },
+            ModelInfo {
+                id: "claude-3-5-sonnet-latest".into(),
+                name: "Claude 3.5 Sonnet".into(),
+                context_length: Some(200000),
+                description: None,
+            },
+            ModelInfo {
+                id: "claude-3-7-sonnet-latest".into(),
+                name: "Claude 3.7 Sonnet".into(),
+                context_length: Some(200000),
+                description: None,
+            },
+            ModelInfo {
+                id: "claude-3-haiku-20240307".into(),
+                name: "Claude 3 Haiku".into(),
+                context_length: Some(200000),
+                description: None,
+            },
         ]);
     }
 
@@ -139,7 +154,10 @@ pub async fn list_models(config: &LlmConfig) -> anyhow::Result<Vec<ModelInfo>> {
         Ok(res) if res.status().is_success() => {
             if let Ok(json) = res.json::<serde_json::Value>().await {
                 let mut list = Vec::new();
-                if let Some(arr) = json["data"].as_array().or_else(|| json["models"].as_array()) {
+                if let Some(arr) = json["data"]
+                    .as_array()
+                    .or_else(|| json["models"].as_array())
+                {
                     for item in arr {
                         if let Some(id) = item["id"].as_str().or_else(|| item["name"].as_str()) {
                             let name = item["name"].as_str().unwrap_or(id).to_string();
@@ -164,10 +182,20 @@ pub async fn list_models(config: &LlmConfig) -> anyhow::Result<Vec<ModelInfo>> {
 
     // Provider-specific fallback if network or key not set
     let fallback = match config.provider.to_lowercase().as_str() {
-        "gemini" => vec!["gemini-2.0-flash", "gemini-2.0-pro-exp-02-05", "gemini-1.5-pro", "gemini-1.5-flash"],
+        "gemini" => vec![
+            "gemini-2.0-flash",
+            "gemini-2.0-pro-exp-02-05",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+        ],
         "deepseek" => vec!["deepseek-chat", "deepseek-reasoner"],
         "kimi" => vec!["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
-        "qwen" => vec!["qwen-plus", "qwen-turbo", "qwen-max", "qwen2.5-coder-32b-instruct"],
+        "qwen" => vec![
+            "qwen-plus",
+            "qwen-turbo",
+            "qwen-max",
+            "qwen2.5-coder-32b-instruct",
+        ],
         "zhipu" => vec!["glm-4-flash", "glm-4-plus", "glm-4-long", "codegeex-4"],
         "minimax" => vec!["MiniMax-Text-01", "abab6.5s-chat"],
         _ => vec!["gpt-4o-mini", "gpt-4o", "o1-mini"],
@@ -240,7 +268,9 @@ impl LlmClient for GenericOpenAiClient {
         let base = self.config.api_base.trim_end_matches('/');
 
         // CLI Agent without remote API base
-        if (self.config.provider.contains("cli") || self.config.provider.contains("agent")) && base.is_empty() {
+        if (self.config.provider.contains("cli") || self.config.provider.contains("agent"))
+            && base.is_empty()
+        {
             let tool = match self.config.provider.as_str() {
                 "claude-code-cli" => "claude",
                 "cursor-cli" => "cursor",
@@ -264,7 +294,10 @@ impl LlmClient for GenericOpenAiClient {
         }
 
         if self.config.provider.eq_ignore_ascii_case("claude")
-            || self.config.provider.eq_ignore_ascii_case("anthropic-compatible")
+            || self
+                .config
+                .provider
+                .eq_ignore_ascii_case("anthropic-compatible")
         {
             let url = format!("{base}/messages");
             let mut req = self
@@ -342,7 +375,11 @@ impl LlmClient for GenericOpenAiClient {
                     }
                 }
             }
-            let tc_value = if tool_calls.is_empty() { serde_json::Value::Null } else { serde_json::json!(tool_calls) };
+            let tc_value = if tool_calls.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(tool_calls)
+            };
             return Ok(serde_json::json!({
                 "content": content_text,
                 "tool_calls": tc_value,
@@ -382,7 +419,10 @@ impl LlmClient for GenericOpenAiClient {
 
         let choice = &json["choices"][0]["message"];
         let content = choice["content"].as_str().unwrap_or("").to_string();
-        let tool_calls = choice.get("tool_calls").cloned().unwrap_or(serde_json::Value::Null);
+        let tool_calls = choice
+            .get("tool_calls")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
 
         Ok(serde_json::json!({
             "content": content,
@@ -398,4 +438,3 @@ impl LlmClient for GenericOpenAiClient {
         }))
     }
 }
-

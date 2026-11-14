@@ -10,97 +10,143 @@
     --gitbx-font-scale: 1.1666666667;
     --gitbx-mono-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
   }
-  /* DBX family: dark desktop-workbench defaults with a quiet blue accent. */
+
+  /* Arco Design Dark Theme Tokens */
   :root {
-    --background: 220 13% 9%;
-    --foreground: 220 18% 89%;
-    --card: 220 13% 12%;
-    --card-foreground: 220 18% 89%;
-    --popover: 220 13% 14%;
-    --popover-foreground: 220 18% 89%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 220 20% 98%;
-    --secondary: 220 12% 16%;
-    --secondary-foreground: 220 18% 89%;
-    --muted: 220 12% 15%;
-    --muted-foreground: 220 8% 62%;
-    --accent: 220 12% 19%;
-    --accent-foreground: 220 18% 94%;
-    --destructive: 0 63% 55%;
-    --destructive-foreground: 220 20% 98%;
-    --border: 220 10% 23%;
-    --input: 220 10% 25%;
-    --ring: 217 91% 60%;
-    --radius: 0.3rem;
+    --background: 240 6% 10%;
+    --foreground: 220 14% 91%;
+    --card: 240 2% 14%;
+    --card-foreground: 220 14% 91%;
+    --popover: 240 2% 17%;
+    --popover-foreground: 220 14% 91%;
+    --primary: 220 100% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 2% 19%;
+    --secondary-foreground: 220 10% 82%;
+    --muted: 240 3% 15%;
+    --muted-foreground: 220 6% 59%;
+    --accent: 240 2% 22%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 1 90% 67%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 3% 21%;
+    --input: 240 3% 26%;
+    --ring: 220 100% 62%;
+    --radius: 0.375rem;
+
+    --arco-success: 132 67% 46%;
+    --arco-warning: 31 100% 59%;
+    --arco-danger: 1 90% 67%;
+    --arco-fill-1: #202022;
+    --arco-fill-2: #2a2a2e;
+    --arco-fill-3: #36363b;
+    --arco-header-bg: #1e1e21;
+    --arco-sidebar-bg: #18181b;
+    --arco-backdrop: rgba(10, 10, 14, 0.65);
+    --arco-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+    --arco-shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --arco-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 
+  /* Arco Design Light Theme Tokens */
   .light {
-    --background: 220 18% 97%;
-    --foreground: 220 18% 16%;
+    --background: 220 14% 96%;
+    --foreground: 222 18% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 220 18% 16%;
+    --card-foreground: 222 18% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 16%;
-    --primary: 217 83% 53%;
+    --popover-foreground: 222 18% 13%;
+    --primary: 222 100% 54%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 16% 94%;
-    --secondary-foreground: 220 18% 20%;
-    --muted: 220 16% 95%;
-    --muted-foreground: 220 8% 47%;
-    --accent: 220 16% 91%;
-    --accent-foreground: 220 18% 18%;
-    --destructive: 0 72% 51%;
+    --secondary: 220 14% 95%;
+    --secondary-foreground: 220 13% 28%;
+    --muted: 220 16% 97%;
+    --muted-foreground: 220 9% 54%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 222 18% 13%;
+    --destructive: 0 89% 61%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 87%;
-    --input: 220 14% 84%;
-    --ring: 217 83% 53%;
+    --border: 220 14% 90%;
+    --input: 220 13% 84%;
+    --ring: 222 100% 54%;
+
+    --arco-success: 133 100% 35%;
+    --arco-warning: 29 100% 50%;
+    --arco-danger: 0 89% 61%;
+    --arco-fill-1: #f7f8fa;
+    --arco-fill-2: #f2f3f5;
+    --arco-fill-3: #e5e6eb;
+    --arco-header-bg: #ffffff;
+    --arco-sidebar-bg: #f7f8fa;
+    --arco-backdrop: rgba(29, 33, 41, 0.48);
+    --arco-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --arco-shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    --arco-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html,
+  body,
+  #app {
+    background: hsl(var(--background));
+  }
+
+  html {
+    /* Scales every rem-based Tailwind size (text-xs/sm/base/...) with the font setting. */
+    font-size: calc(16px * var(--gitbx-font-scale, 1));
+  }
+
+  body {
+    color: hsl(var(--foreground));
+    font-family: var(--gitbx-font-family);
+    font-size: var(--gitbx-font-size, 14px);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Code / diff views follow the configured monospace font. */
+  code,
+  pre,
+  .font-mono {
+    font-family: var(--gitbx-mono-family) !important;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: hsl(var(--primary));
+  }
+
+  svg.lucide {
+    stroke-width: 1.75;
+    flex-shrink: 0;
   }
 }
 
-/* Global scrollbars styled DBX look */
+/* Global scrollbars styled for Arco Design */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 2px;
+  background: hsl(var(--muted-foreground) / 0.25);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.65);
+  background: hsl(var(--muted-foreground) / 0.48);
+  border: 1px solid transparent;
+  background-clip: content-box;
 }
-
-/* DBX uses compact, flat workbench surfaces instead of floating cards. */
-* {
-  border-color: hsl(var(--border));
-}
-
-html,
-body,
-#app {
-  background: hsl(var(--background));
-}
-
-html {
-  /* Scales every rem-based Tailwind size (text-xs/sm/base/...) with the font setting. */
-  font-size: calc(16px * var(--gitbx-font-scale, 1));
-}
-
-body {
-  color: hsl(var(--foreground));
-  font-family: var(--gitbx-font-family);
-  font-size: var(--gitbx-font-size, 14px);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Code / diff views follow the configured monospace font. */
-code,
-pre,
-.font-mono {
-  font-family: var(--gitbx-mono-family) !important;
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /*
@@ -112,28 +158,212 @@ pre,
 .text-\[11px\] { font-size: calc(11px * var(--gitbx-font-scale, 1)) !important; }
 .text-\[12px\] { font-size: calc(12px * var(--gitbx-font-scale, 1)) !important; }
 
-.dbx-shell {
-  letter-spacing: -0.01em;
+/* Arco Keyframes */
+@keyframes arcoFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.dbx-shell button,
-.dbx-shell input,
-.dbx-shell textarea {
-  border-radius: 3px;
+@keyframes arcoModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.dbx-shell .shadow-2xl,
-.dbx-shell .shadow-xl,
-.dbx-shell .shadow-lg,
-.dbx-shell .shadow-md,
-.dbx-shell .shadow-sm,
-.dbx-shell .shadow-xs,
-.dbx-shell .shadow-2xs {
-  box-shadow: none;
+@keyframes arcoMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
+@keyframes arcoToastIn {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@layer components {
+  /* Arco Buttons */
+  .arco-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[4px] px-3 h-7 text-xs font-medium transition-all duration-150 select-none disabled:opacity-45 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 active:scale-[0.98];
+  }
+  .arco-btn-sm {
+    @apply h-6 px-2.5 text-[11px] gap-1;
+  }
+  .arco-btn-lg {
+    @apply h-8 px-4 text-xs gap-1.5;
+  }
+  .arco-btn-primary {
+    @apply bg-primary text-primary-foreground hover:brightness-110 active:brightness-95 shadow-sm;
+  }
+  .arco-btn-secondary {
+    background: var(--arco-fill-2);
+    @apply text-foreground border border-transparent hover:bg-accent hover:border-border/70;
+  }
+  .arco-btn-outline {
+    @apply bg-card text-foreground border border-border hover:border-primary/60 hover:text-primary hover:bg-primary/[0.04];
+  }
+  .arco-btn-dashed {
+    @apply bg-transparent text-muted-foreground border border-dashed border-border hover:border-primary/60 hover:text-primary hover:bg-primary/[0.03];
+  }
+  .arco-btn-text {
+    @apply bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent/75;
+  }
+  .arco-btn-danger {
+    background: hsl(var(--arco-danger));
+    @apply text-white hover:brightness-110 active:brightness-95;
+  }
+  .arco-btn-danger-outline {
+    @apply bg-card text-destructive border border-destructive/35 hover:bg-destructive/10 hover:border-destructive/60;
+  }
+  .arco-btn-success {
+    background: hsl(var(--arco-success));
+    @apply text-white hover:brightness-110 active:brightness-95;
+  }
+  .arco-btn-warning {
+    background: hsl(var(--arco-warning));
+    @apply text-white hover:brightness-110 active:brightness-95;
+  }
+
+  .arco-icon-btn {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded-[4px] text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .arco-icon-btn-sm {
+    @apply w-6 h-6;
+  }
+
+  /* Arco Form Controls */
+  .arco-input,
+  .arco-select {
+    @apply w-full h-8 px-2.5 rounded-[4px] border border-input bg-background/85 text-xs text-foreground placeholder:text-muted-foreground/60 transition-all hover:border-primary/50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50;
+  }
+  .arco-input-sm,
+  .arco-select-sm {
+    @apply h-7 px-2 text-[11px];
+  }
+  .arco-textarea {
+    @apply w-full px-2.5 py-2 rounded-[4px] border border-input bg-background/85 text-xs text-foreground placeholder:text-muted-foreground/60 leading-relaxed transition-all hover:border-primary/50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50;
+  }
+
+  /* Arco Modals & Dialogs */
+  .arco-modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background: var(--arco-backdrop);
+    backdrop-filter: blur(4px);
+    animation: arcoFadeIn 150ms ease-out;
+  }
+  .arco-modal {
+    @apply bg-popover text-popover-foreground border border-border/80 rounded-[8px] overflow-hidden flex flex-col w-full;
+    box-shadow: var(--arco-shadow-modal);
+    animation: arcoModalIn 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .arco-modal-header {
+    @apply flex items-center justify-between px-5 h-12 border-b border-border/80 shrink-0 bg-card/60;
+  }
+  .arco-modal-title-group {
+    @apply flex items-center gap-2.5 min-w-0;
+  }
+  .arco-modal-icon {
+    @apply w-7 h-7 rounded-[6px] bg-primary/10 text-primary flex items-center justify-center shrink-0;
+  }
+  .arco-modal-title {
+    @apply text-[13px] font-semibold text-foreground tracking-tight truncate;
+  }
+  .arco-modal-close {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded-[4px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 disabled:opacity-45 shrink-0;
+  }
+  .arco-modal-body {
+    @apply p-5 space-y-4 overflow-y-auto flex-1 text-xs;
+  }
+  .arco-modal-footer {
+    @apply px-5 py-3 border-t border-border/80 flex items-center justify-end gap-2 shrink-0;
+    background: var(--arco-fill-1);
+  }
+
+  /* Arco Floating Popovers & Menus */
+  .arco-popover,
+  .arco-menu {
+    @apply bg-popover text-popover-foreground border border-border/90 rounded-[6px] py-1.5;
+    box-shadow: var(--arco-shadow-popover);
+    animation: arcoMenuIn 130ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .arco-menu-section {
+    @apply px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80;
+  }
+  .arco-menu-divider {
+    @apply my-1 border-t border-border/70;
+  }
+  .arco-menu-item {
+    @apply w-[calc(100%-8px)] mx-1 px-2.5 py-1.5 rounded-[4px] text-left text-xs flex items-center gap-2 text-foreground hover:bg-primary/10 hover:text-primary transition-colors;
+  }
+  .arco-menu-item-danger {
+    @apply text-destructive hover:bg-destructive/10 hover:text-destructive;
+  }
+
+  /* Arco Tabs & Segmented Controls */
+  .arco-tabs {
+    @apply flex items-center gap-5 border-b border-border px-5 shrink-0;
+  }
+  .arco-tab {
+    @apply relative py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5;
+  }
+  .arco-tab-active {
+    @apply text-primary font-semibold;
+  }
+  .arco-tab-active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: hsl(var(--primary));
+  }
+
+  .arco-segmented {
+    @apply inline-flex items-center p-0.5 rounded-[4px] border border-border/70;
+    background: var(--arco-fill-2);
+  }
+  .arco-segmented-item {
+    @apply px-2.5 py-1 rounded-[3px] text-[11px] font-medium text-muted-foreground hover:text-foreground transition-all inline-flex items-center justify-center gap-1.5;
+  }
+  .arco-segmented-item-active {
+    @apply bg-card text-foreground font-semibold;
+    box-shadow: var(--arco-shadow-card);
+  }
+
+  /* Arco Cards, Tags & Alerts */
+  .arco-card {
+    @apply bg-card border border-border rounded-[6px];
+    box-shadow: var(--arco-shadow-card);
+  }
+  .arco-tag {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-[10px] font-medium leading-none border;
+  }
+  .arco-alert {
+    @apply rounded-[6px] border px-3 py-2.5 text-xs flex items-start gap-2.5;
+  }
+}
+
+/* Workbench Surface Helpers */
 .dbx-shell .dbx-header {
-  background: hsl(var(--card));
+  background: var(--arco-header-bg);
   border-bottom-color: hsl(var(--border));
 }
 
@@ -142,54 +372,49 @@ pre,
 }
 
 .dbx-shell .dbx-sidebar {
-  background: hsl(var(--background));
+  background: var(--arco-sidebar-bg);
 }
 
 .dbx-shell .dbx-section-heading {
   color: hsl(var(--muted-foreground));
   font-size: calc(10px * var(--gitbx-font-scale, 1));
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .dbx-shell .dbx-selected {
-  background: hsl(var(--primary) / 0.14);
+  background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
 }
 
 .dbx-shell .dbx-pane-header {
-  background: hsl(var(--muted) / 0.72);
+  background: var(--arco-fill-1);
   color: hsl(var(--muted-foreground));
   font-size: calc(11px * var(--gitbx-font-scale, 1));
-  letter-spacing: 0.01em;
 }
 
 .dbx-shell .dbx-muted-button {
-  color: hsl(var(--muted-foreground));
+  @apply text-muted-foreground rounded-[4px] transition-colors;
 }
 
 .dbx-shell .dbx-muted-button:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--accent));
+  @apply text-foreground bg-accent/80;
 }
 
 .dbx-shell .dbx-icon-button {
-  height: 24px;
-  width: 24px;
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
+  @apply h-7 w-7 rounded-[4px] inline-flex items-center justify-center transition-colors;
 }
 
 .dbx-shell .dbx-toolbar-button {
-  border: 1px solid transparent;
-  color: hsl(var(--foreground));
-  font-size: calc(11px * var(--gitbx-font-scale, 1));
-  height: 26px;
+  @apply h-7 px-2.5 rounded-[4px] border border-transparent text-foreground text-[11px] font-medium inline-flex items-center gap-1.5 transition-all;
 }
 
 .dbx-shell .dbx-toolbar-button:hover {
-  background: hsl(var(--accent));
+  background: var(--arco-fill-2);
   border-color: hsl(var(--border));
+}
+
+.arco-toast-enter {
+  animation: arcoToastIn 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }

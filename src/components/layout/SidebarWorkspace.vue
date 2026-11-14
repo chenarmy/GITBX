@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import type { BranchItem } from '@/types/git';
 import BranchContextMenu from '@/components/menus/BranchContextMenu.vue';
@@ -30,6 +30,8 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-vue-next';
 
 const repoStore = useRepoStore();
@@ -57,7 +59,22 @@ const isReposOpen = ref(true);
 const isBranchesOpen = ref(true);
 const isRemotesOpen = ref(true);
 const isTagsOpen = ref(true);
+const tagFilterQuery = ref('');
+const visibleTagLimit = ref(50);
+const isSyncingTags = ref(false);
 const isStashesOpen = ref(true);
+
+const filteredTags = computed(() => {
+  const query = tagFilterQuery.value.trim().toLowerCase();
+  if (!query) return repoStore.tags;
+  return repoStore.tags.filter((tag) => tag.name.toLowerCase().includes(query));
+});
+
+const visibleTags = computed(() => filteredTags.value.slice(0, visibleTagLimit.value));
+
+watch(tagFilterQuery, () => {
+  visibleTagLimit.value = 50;
+});
 const collapsedLocalBranchDirectories = ref(new Set<string>());
 const collapsedRemoteBranchDirectories = ref(new Set<string>());
 
@@ -418,28 +435,78 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     y: Math.max(8, Math.min(e.clientY, window.innerHeight - 140)),
   };
 }
+
+async function handleSyncTags() {
+  if (isSyncingTags.value || !repoStore.remotes.length) return;
+  isSyncingTags.value = true;
+  try {
+    await repoStore.syncTags();
+    notification.success(t('Tags Synchronized'), t('Synchronized tags with remote.'));
+  } catch (error) {
+    notification.error(t('Tag Sync Failed'), formatGitError(error));
+  } finally {
+    isSyncingTags.value = false;
+  }
+}
+
+async function handlePushAllTags() {
+  if (!repoStore.tags.length || !repoStore.remotes.length) return;
+  try {
+    await repoStore.pushAllTags();
+    notification.success(t('Tags Pushed'), t('Pushed all tags to remote.'));
+  } catch (error) {
+    notification.error(t('Push Tag Failed'), formatGitError(error));
+  }
+}
+
+async function handlePushTag(name: string) {
+  if (!repoStore.remotes.length) return;
+  try {
+    await repoStore.pushTag(name);
+    notification.success(t('Tag Pushed'), t("Pushed tag '{name}' to remote.", { name }));
+  } catch (error) {
+    notification.error(t('Push Tag Failed'), formatGitError(error));
+  }
+}
+
+async function handleDeleteTag(name: string) {
+  const confirmed = await confirmation.confirm({
+    title: t('Delete Tag'),
+    message: t("Delete local tag '{name}'?", { name }),
+    confirmText: t('Delete'),
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    await repoStore.deleteTag(name, false);
+    notification.success(t('Tag Deleted'), name);
+  } catch (error) {
+    notification.error(t('Delete Tag Failed'), formatGitError(error));
+  }
+}
 </script>
 
 <template>
-  <aside class="dbx-sidebar w-full h-full max-h-full min-h-0 self-stretch bg-muted/30 dark:bg-card flex flex-col select-none overflow-hidden text-xs">
-    <div class="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-contain">
-    <!-- Repositories Section (SourceTree style) -->
-    <div class="p-2 border-b border-border">
+  <aside class="dbx-sidebar w-full h-full max-h-full min-h-0 self-stretch flex flex-col select-none overflow-hidden text-xs">
+    <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain divide-y divide-border/70">
+    <!-- Repositories Section -->
+    <div class="p-2">
       <div
         @click="isReposOpen = !isReposOpen"
         @contextmenu.prevent.stop="openWorkspaceContextMenu($event)"
-        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 mb-1 text-[10px] tracking-wider uppercase cursor-pointer hover:text-foreground"
+        class="dbx-section-heading flex items-center justify-between px-1.5 py-1 mb-1 rounded-[4px] cursor-pointer hover:text-foreground transition-colors"
       >
-        <div class="flex items-center space-x-1">
-          <button @click.stop="discoverRoots" :disabled="!repoStore.activeRepoPath" class="p-0.5 rounded hover:bg-secondary text-muted-foreground disabled:opacity-40" :title="t('Discover Nested Git Roots')"><FolderTree class="w-3.5 h-3.5" /></button>
+        <div class="flex items-center gap-1 min-w-0">
+          <button @click.stop="discoverRoots" :disabled="!repoStore.activeRepoPath" class="p-0.5 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors" :title="t('Discover Nested Git Roots')"><FolderTree class="w-3.5 h-3.5" /></button>
           <component :is="isReposOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Repositories') }} ({{ repoStore.repoList.length }})</span>
+          <span class="truncate">{{ t('Repositories') }}</span>
+          <span class="ml-0.5 px-1.5 py-0 rounded-full bg-secondary text-[10px] font-medium tabular-nums text-muted-foreground">{{ repoStore.repoList.length }}</span>
         </div>
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-0.5 shrink-0">
           <button
             @click.stop="handleCreateGroup()"
             data-testid="sidebar-new-repo-group-btn"
-            class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             :title="t('New Group')"
           >
             <FolderPlus class="w-3.5 h-3.5" />
@@ -447,14 +514,14 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
           <button
             @click.stop="repoStore.openModal('remote')"
             :disabled="!repoStore.activeRepoPath"
-            class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             :title="t('View and edit Git remotes')"
           >
             <GitFork class="w-3.5 h-3.5" />
           </button>
           <button
             @click.stop="openAddRepoModal()"
-            class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             :title="t('Add Repository')"
           >
             <Plus class="w-3.5 h-3.5" />
@@ -467,7 +534,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
         <div
           v-for="group in groupedRepositories"
           :key="`repo-group:${group.name}`"
-          class="space-y-0.5 rounded-md transition"
+          class="space-y-0.5 rounded-[6px] transition-colors"
           :class="dragOverTarget === `group:${group.name}` ? 'bg-primary/10 ring-1 ring-primary/40' : ''"
           @dragover="handleGroupDragOver($event, `group:${group.name}`)"
           @dragleave="handleGroupDragLeave(`group:${group.name}`)"
@@ -478,30 +545,30 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @click.stop="toggleRepoGroup(group.name)"
             @contextmenu.prevent.stop="openGroupContextMenu($event, group.name)"
           >
-            <div class="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+            <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               <component :is="collapsedRepoGroups.has(group.name) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
-              <component :is="collapsedRepoGroups.has(group.name) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+              <component :is="collapsedRepoGroups.has(group.name) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500" />
               <span class="truncate text-[11px] font-semibold text-foreground/90">{{ group.name }}</span>
-              <span class="shrink-0 text-[10px] text-muted-foreground">({{ group.repos.length }})</span>
+              <span class="shrink-0 text-[10px] text-muted-foreground tabular-nums">({{ group.repos.length }})</span>
             </div>
-            <div class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover/repogroup:opacity-100 focus-within:opacity-100 transition">
+            <div class="flex shrink-0 items-center gap-0.5 opacity-0 group-hover/repogroup:opacity-100 focus-within:opacity-100 transition-opacity">
               <button
                 @click.stop="openAddRepoModal(group.name)"
-                class="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground"
+                class="p-0.5 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground"
                 :title="t('Add Repository to Group')"
               >
                 <Plus class="w-3 h-3" />
               </button>
               <button
                 @click.stop="handleRenameGroup(group.name)"
-                class="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground"
+                class="p-0.5 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground"
                 :title="t('Rename Group')"
               >
                 <Edit3 class="w-3 h-3" />
               </button>
               <button
                 @click.stop="handleDeleteGroup(group.name)"
-                class="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-rose-600"
+                class="p-0.5 rounded-[4px] hover:bg-destructive/15 text-muted-foreground hover:text-destructive"
                 :title="t('Delete Group')"
               >
                 <Trash2 class="w-3 h-3" />
@@ -509,10 +576,10 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             </div>
           </div>
 
-          <div v-if="!collapsedRepoGroups.has(group.name)" class="ml-2.5 pl-1.5 border-l border-border/60 space-y-0.5">
+          <div v-if="!collapsedRepoGroups.has(group.name)" class="ml-2.5 pl-1.5 border-l border-border/70 space-y-0.5">
             <div
               v-if="group.repos.length === 0"
-              class="px-2 py-1 text-[10px] text-muted-foreground/70 italic select-none"
+              class="px-2 py-1 text-[10px] text-muted-foreground/75 italic select-none"
             >
               {{ t('No repositories in group') }}
             </div>
@@ -528,35 +595,35 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
               @keydown.space.prevent="handleSwitchRepo(repo.path)"
               role="button"
               tabindex="0"
-              class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
+              class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
+              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70'"
             >
-              <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
+              <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                 <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
                 <span class="min-w-0 truncate">{{ repo.name }}</span>
               </div>
 
-              <div class="ml-1 flex shrink-0 items-center gap-1">
+              <div class="ml-1 flex shrink-0 items-center gap-1 text-[10px] tabular-nums">
                 <span
                   v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
-                  class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                  class="flex items-center gap-0.5 font-semibold text-rose-500"
                   :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
                 >
-                  <ArrowDownCircle class="h-3.5 w-3.5" />
+                  <ArrowDownCircle class="h-3 w-3" />
                   <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
                 </span>
                 <span
                   v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
-                  class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                  class="flex items-center gap-0.5 font-semibold text-emerald-500"
                   :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
                 >
-                  <ArrowUpCircle class="h-3.5 w-3.5" />
+                  <ArrowUpCircle class="h-3 w-3" />
                   <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
                 </span>
                 <button
                   v-if="repoStore.repoList.length > 1"
                   @click.stop="repoStore.removeRepo(repo.path)"
-                  class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                  class="shrink-0 p-0.5 rounded-[4px] hover:bg-destructive/15 hover:text-destructive text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                   :title="t('Remove from Workspace')"
                 >
                   <Trash2 class="w-3 h-3" />
@@ -568,7 +635,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
 
         <!-- Ungrouped Repositories -->
         <div
-          class="space-y-0.5 rounded-md transition"
+          class="space-y-0.5 rounded-[6px] transition-colors"
           :class="dragOverTarget === '__ungrouped__' ? 'bg-primary/10 ring-1 ring-primary/40 p-0.5' : ''"
           @dragover="handleGroupDragOver($event, '__ungrouped__')"
           @dragleave="handleGroupDragLeave('__ungrouped__')"
@@ -576,7 +643,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
         >
           <div
             v-if="draggingRepoPath && ungroupedRepositories.length === 0"
-            class="px-2 py-1 text-[10px] text-muted-foreground italic text-center border border-dashed border-border rounded"
+            class="px-2 py-1 text-[10px] text-muted-foreground italic text-center border border-dashed border-border rounded-[4px]"
           >
             {{ t('Drop here to ungroup') }}
           </div>
@@ -592,35 +659,35 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @keydown.space.prevent="handleSwitchRepo(repo.path)"
             role="button"
             tabindex="0"
-            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-            :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-bold border border-primary/30 shadow-xs' : 'text-foreground hover:bg-secondary'"
+            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
+            :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70'"
           >
-            <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
+            <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
               <span class="min-w-0 truncate">{{ repo.name }}</span>
             </div>
 
-            <div class="ml-1 flex shrink-0 items-center gap-1">
+            <div class="ml-1 flex shrink-0 items-center gap-1 text-[10px] tabular-nums">
               <span
                 v-if="repoStore.repoSyncStatuses[repo.path]?.incoming.length"
-                class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                class="flex items-center gap-0.5 font-semibold text-rose-500"
                 :title="`${t('Incoming')} (${repoStore.repoSyncStatuses[repo.path].incoming.length})`"
               >
-                <ArrowDownCircle class="h-3.5 w-3.5" />
+                <ArrowDownCircle class="h-3 w-3" />
                 <span>{{ repoStore.repoSyncStatuses[repo.path].incoming.length }}</span>
               </span>
               <span
                 v-if="repoStore.repoSyncStatuses[repo.path]?.outgoing.length"
-                class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                class="flex items-center gap-0.5 font-semibold text-emerald-500"
                 :title="`${t('Outgoing')} (${repoStore.repoSyncStatuses[repo.path].outgoing.length})`"
               >
-                <ArrowUpCircle class="h-3.5 w-3.5" />
+                <ArrowUpCircle class="h-3 w-3" />
                 <span>{{ repoStore.repoSyncStatuses[repo.path].outgoing.length }}</span>
               </span>
               <button
                 v-if="repoStore.repoList.length > 1"
                 @click.stop="repoStore.removeRepo(repo.path)"
-                class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-rose-600 text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                class="shrink-0 p-0.5 rounded-[4px] hover:bg-destructive/15 hover:text-destructive text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                 :title="t('Remove from Workspace')"
               >
                 <Trash2 class="w-3 h-3" />
@@ -632,18 +699,19 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     </div>
 
     <!-- Local Branches Section -->
-    <div class="p-2 border-b border-border">
+    <div class="p-2">
       <div
         @click="isBranchesOpen = !isBranchesOpen"
-        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between px-1.5 py-1 rounded-[4px] cursor-pointer hover:text-foreground transition-colors"
       >
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-1">
           <component :is="isBranchesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Local Branches') }} ({{ localBranches.length }})</span>
+          <span>{{ t('Local Branches') }}</span>
+          <span class="ml-0.5 px-1.5 py-0 rounded-full bg-secondary text-[10px] font-medium tabular-nums text-muted-foreground">{{ localBranches.length }}</span>
         </div>
         <button
           @click.stop="repoStore.openModal('branch')"
-          class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+          class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           :title="t('Create Branch')"
         >
           <Plus class="w-3.5 h-3.5" />
@@ -659,7 +727,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @click="toggleBranchDirectory('local', row.node.path)"
           >
             <component :is="collapsedLocalBranchDirectories.has(row.node.path) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
-            <component :is="collapsedLocalBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+            <component :is="collapsedLocalBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500" />
             <span class="truncate">{{ row.node.name }}</span>
           </div>
           <div
@@ -668,36 +736,36 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @click="handleLocateCommit(row.branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"
-            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition text-xs group"
-            :class="row.branch.is_head ? 'bg-primary/10 text-primary font-bold border-l-2 border-primary shadow-xs' : 'text-foreground hover:bg-secondary'"
+            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
+            :class="row.branch.is_head ? 'bg-primary/10 text-primary font-semibold border-l-2 border-primary' : 'text-foreground hover:bg-accent/70'"
             :style="{ paddingLeft: `${0.5 + row.depth * 0.8}rem` }"
           >
-            <div class="flex min-w-0 flex-1 items-center space-x-1.5 overflow-hidden">
+            <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               <GitBranch class="w-3.5 h-3.5 shrink-0" :class="row.branch.is_head ? 'text-primary' : 'text-muted-foreground'" />
               <span class="min-w-0 truncate">{{ branchLeafName(row.branch.name) }}</span>
             </div>
 
-            <div class="ml-1 flex shrink-0 items-center space-x-1">
+            <div class="ml-1 flex shrink-0 items-center gap-1 text-[10px] tabular-nums">
               <span
                 v-if="row.branch.behind_count"
-                class="flex items-center gap-0.5 font-semibold text-rose-600 dark:text-rose-400"
+                class="flex items-center gap-0.5 font-semibold text-rose-500"
                 :title="`${t('Incoming')} (${row.branch.behind_count})`"
               >
-                <ArrowDownCircle class="h-3.5 w-3.5" />
+                <ArrowDownCircle class="h-3 w-3" />
                 <span>{{ row.branch.behind_count }}</span>
               </span>
               <span
                 v-if="row.branch.ahead_count"
-                class="flex items-center gap-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
+                class="flex items-center gap-0.5 font-semibold text-emerald-500"
                 :title="`${t('Outgoing')} (${row.branch.ahead_count})`"
               >
-                <ArrowUpCircle class="h-3.5 w-3.5" />
+                <ArrowUpCircle class="h-3 w-3" />
                 <span>{{ row.branch.ahead_count }}</span>
               </span>
-              <Check v-if="row.branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0 font-bold" />
+              <Check v-if="row.branch.is_head" class="w-3.5 h-3.5 text-primary shrink-0" />
               <button
                 @click.stop="openContextMenu($event, row.branch)"
-                class="shrink-0 p-0.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                class="shrink-0 p-0.5 rounded-[4px] hover:bg-accent text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                 :title="t('More actions')"
               >
                 <MoreVertical class="w-3 h-3" />
@@ -709,29 +777,30 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     </div>
 
     <!-- Worktrees Section -->
-    <div class="p-2 border-b border-border">
+    <div class="p-2">
       <button
-        class="w-full flex items-center justify-between rounded-md px-1.5 py-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition"
+        class="w-full flex items-center justify-between rounded-[4px] px-2 py-1.5 text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-colors"
         :title="t('Manage Worktrees')"
         @click="repoStore.openModal('worktreeManager')"
       >
-        <span class="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase">
+        <span class="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase">
           <FolderGit2 class="w-3.5 h-3.5 text-teal-500" />
           {{ t('Worktrees') }}
         </span>
-        <span class="text-[10px]">{{ t('Manage') }}</span>
+        <span class="text-[10px] text-primary font-medium">{{ t('Manage') }}</span>
       </button>
     </div>
 
     <!-- Remote Branches Section -->
-    <div class="p-2 border-b border-border">
+    <div class="p-2">
       <div
         @click="isRemotesOpen = !isRemotesOpen"
-        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between px-1.5 py-1 rounded-[4px] cursor-pointer hover:text-foreground transition-colors"
       >
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-1">
           <component :is="isRemotesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Remote Branches') }} ({{ remoteBranches.length }})</span>
+          <span>{{ t('Remote Branches') }}</span>
+          <span class="ml-0.5 px-1.5 py-0 rounded-full bg-secondary text-[10px] font-medium tabular-nums text-muted-foreground">{{ remoteBranches.length }}</span>
         </div>
       </div>
 
@@ -744,7 +813,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @click="toggleBranchDirectory('remote', row.node.path)"
           >
             <component :is="collapsedRemoteBranchDirectories.has(row.node.path) ? ChevronRight : ChevronDown" class="w-3 h-3 shrink-0" />
-            <component :is="collapsedRemoteBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500/90" />
+            <component :is="collapsedRemoteBranchDirectories.has(row.node.path) ? Folder : FolderOpen" class="w-3.5 h-3.5 shrink-0 text-amber-500" />
             <span class="truncate">{{ row.node.name }}</span>
           </div>
           <div
@@ -753,10 +822,10 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
             @click="handleLocateCommit(row.branch.target_commit_id)"
             @contextmenu.prevent="openContextMenu($event, row.branch)"
             :title="t('Click to locate in log; double-click to checkout')"
-            class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
+            class="flex items-center gap-1.5 px-2 py-1 rounded-[4px] hover:bg-accent/70 hover:text-foreground cursor-pointer truncate text-xs transition-colors"
             :style="{ paddingLeft: `${0.5 + row.depth * 0.8}rem` }"
           >
-            <Globe class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 opacity-80 shrink-0" />
+            <Globe class="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span class="truncate">{{ branchLeafName(row.branch.name) }}</span>
           </div>
         </template>
@@ -764,33 +833,105 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     </div>
 
     <!-- Tags Section -->
-    <div class="p-2 border-b border-border">
+    <div class="p-2">
       <div
         @click="isTagsOpen = !isTagsOpen"
-        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between px-1.5 py-1 rounded-[4px] cursor-pointer hover:text-foreground transition-colors"
       >
-        <div class="flex items-center space-x-1">
-          <component :is="isTagsOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Tags') }} ({{ repoStore.tags.length }})</span>
+        <div class="flex items-center gap-1 min-w-0">
+          <component :is="isTagsOpen ? ChevronDown : ChevronRight" class="w-3 h-3 shrink-0" />
+          <span class="truncate">{{ t('Tags') }}</span>
+          <span class="ml-0.5 px-1.5 py-0 rounded-full bg-secondary text-[10px] font-medium tabular-nums text-muted-foreground">{{ repoStore.tags.length }}</span>
         </div>
-        <button
-          @click.stop="repoStore.openModal('tag')"
-          class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-          :title="t('Create Tag')"
-        >
-          <Plus class="w-3.5 h-3.5" />
-        </button>
+        <div class="flex items-center gap-0.5 shrink-0">
+          <button
+            @click.stop="handleSyncTags"
+            :disabled="isSyncingTags || !repoStore.remotes.length"
+            data-testid="sync-tags-btn"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+            :title="t('Sync Tags')"
+          >
+            <RefreshCw class="w-3.5 h-3.5" :class="isSyncingTags ? 'animate-spin' : ''" />
+          </button>
+          <button
+            @click.stop="handlePushAllTags"
+            :disabled="!repoStore.tags.length || !repoStore.remotes.length"
+            data-testid="push-all-tags-btn"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+            :title="t('Push All Tags')"
+          >
+            <ArrowUpCircle class="w-3.5 h-3.5" />
+          </button>
+          <button
+            @click.stop="repoStore.openModal('tag')"
+            class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            :title="t('Create Tag')"
+          >
+            <Plus class="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <div v-if="isTagsOpen" class="mt-1 space-y-0.5 text-muted-foreground">
-        <div
-          v-for="tag in repoStore.tags"
-          :key="tag.name"
-          @click="handleLocateCommit(tag.target_commit_id)"
-          class="flex items-center space-x-1.5 px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate text-xs"
-        >
-          <Tag class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 opacity-80 shrink-0" />
-          <span class="truncate">{{ tag.name }}</span>
+      <div v-if="isTagsOpen" class="mt-1 space-y-1 text-muted-foreground">
+        <div v-if="repoStore.tags.length > 10" class="relative px-1">
+          <Search class="w-3 h-3 text-muted-foreground/70 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            v-model="tagFilterQuery"
+            type="text"
+            :placeholder="t('Filter tags...')"
+            class="w-full h-6 pl-6 pr-6 text-[11px] rounded-[4px] bg-background border border-border/80 text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+          <button
+            v-if="tagFilterQuery"
+            @click.stop="tagFilterQuery = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </div>
+
+        <div v-if="filteredTags.length === 0 && tagFilterQuery" class="px-2 py-1 text-[11px] text-muted-foreground/75 italic">
+          {{ t('No matching tags') }}
+        </div>
+
+        <div v-else class="max-h-60 overflow-y-auto pr-0.5 space-y-0.5">
+          <div
+            v-for="tag in visibleTags"
+            :key="tag.name"
+            @click="handleLocateCommit(tag.target_commit_id)"
+            class="group/tag flex items-center justify-between gap-1 px-2 py-1 rounded-[4px] hover:bg-accent/70 hover:text-foreground cursor-pointer text-xs transition-colors"
+            :title="tag.message ? `${tag.name}: ${tag.message}` : tag.name"
+          >
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+              <Tag class="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span class="truncate">{{ tag.name }}</span>
+            </div>
+            <div class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/tag:opacity-100 focus-within:opacity-100 transition-opacity">
+              <button
+                v-if="repoStore.remotes.length > 0"
+                @click.stop="handlePushTag(tag.name)"
+                class="p-0.5 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground"
+                :title="t('Push Tag')"
+              >
+                <ArrowUpCircle class="w-3 h-3" />
+              </button>
+              <button
+                @click.stop="handleDeleteTag(tag.name)"
+                class="p-0.5 rounded-[4px] hover:bg-destructive/15 text-muted-foreground hover:text-destructive"
+                :title="t('Delete Tag')"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          <button
+            v-if="filteredTags.length > visibleTags.length"
+            @click.stop="visibleTagLimit += 100"
+            class="w-full py-1 px-2 text-[11px] text-primary hover:bg-primary/10 rounded-[4px] transition-colors text-center font-medium"
+          >
+            {{ t('Show more ({count} remaining)', { count: filteredTags.length - visibleTags.length }) }}
+          </button>
         </div>
       </div>
     </div>
@@ -799,15 +940,16 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
     <div class="p-2">
       <div
         @click="isStashesOpen = !isStashesOpen"
-        class="dbx-section-heading flex items-center justify-between text-muted-foreground font-bold px-1.5 py-0.5 cursor-pointer hover:text-foreground text-[10px] tracking-wider uppercase"
+        class="dbx-section-heading flex items-center justify-between px-1.5 py-1 rounded-[4px] cursor-pointer hover:text-foreground transition-colors"
       >
-        <div class="flex items-center space-x-1">
+        <div class="flex items-center gap-1">
           <component :is="isStashesOpen ? ChevronDown : ChevronRight" class="w-3 h-3" />
-          <span>{{ t('Stashes') }} ({{ repoStore.stashes.length }})</span>
+          <span>{{ t('Stashes') }}</span>
+          <span class="ml-0.5 px-1.5 py-0 rounded-full bg-secondary text-[10px] font-medium tabular-nums text-muted-foreground">{{ repoStore.stashes.length }}</span>
         </div>
         <button
           @click.stop="repoStore.openModal('stash')"
-          class="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+          class="p-1 rounded-[4px] hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           :title="t('Save Stash')"
         >
           <Plus class="w-3.5 h-3.5" />
@@ -819,13 +961,13 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
           v-for="stash in repoStore.stashes"
           :key="stash.index"
           @click="repoStore.openModal('stash')"
-          class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-secondary hover:text-foreground cursor-pointer truncate group text-xs"
+          class="flex items-center justify-between px-2 py-1 rounded-[4px] hover:bg-accent/70 hover:text-foreground cursor-pointer truncate group text-xs transition-colors"
         >
-          <div class="flex items-center space-x-1.5 truncate">
-            <Archive class="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 opacity-80 shrink-0" />
+          <div class="flex items-center gap-1.5 truncate">
+            <Archive class="w-3.5 h-3.5 text-orange-500 shrink-0" />
             <span class="truncate">{{ stash.message }}</span>
           </div>
-          <span class="text-[10px] text-primary font-bold opacity-0 group-hover:opacity-100">{{ t('Manage') }}</span>
+          <span class="text-[10px] text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">{{ t('Manage') }}</span>
         </div>
       </div>
     </div>
@@ -855,68 +997,64 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
         @contextmenu.prevent="groupContextMenu = null; workspaceContextMenu = null"
       >
         <div
-          class="fixed w-48 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          class="fixed arco-menu w-52 text-xs select-none"
           :style="{ left: `${groupContextMenu.x}px`, top: `${groupContextMenu.y}px` }"
           role="menu"
           @click.stop
         >
-          <div class="py-1">
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary"
-              @click="openAddRepoModal(groupContextMenu.groupName)"
-            >
-              <Plus class="h-3.5 w-3.5 text-primary" />
-              <span>{{ t('Add Repository to Group') }}</span>
-            </button>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary"
-              @click="handleRenameGroup(groupContextMenu.groupName)"
-            >
-              <Edit3 class="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{{ t('Rename Group') }}</span>
-            </button>
-          </div>
-          <div class="py-1">
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handleFetchAllRepos"
-            >
-              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span>{{ t('Fetch All') }}</span>
-            </button>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handlePullAllRepos"
-            >
-              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-              <span>{{ t('Pull All') }}</span>
-            </button>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handlePushAllRepos"
-            >
-              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{{ t('Push All') }}</span>
-            </button>
-          </div>
-          <div class="py-1">
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-destructive/20"
-              @click="handleDeleteGroup(groupContextMenu.groupName)"
-            >
-              <Trash2 class="h-3.5 w-3.5" />
-              <span>{{ t('Delete Group') }}</span>
-            </button>
-          </div>
+          <button
+            role="menuitem"
+            class="arco-menu-item"
+            @click="openAddRepoModal(groupContextMenu.groupName)"
+          >
+            <Plus class="h-3.5 w-3.5 text-primary" />
+            <span>{{ t('Add Repository to Group') }}</span>
+          </button>
+          <button
+            role="menuitem"
+            class="arco-menu-item"
+            @click="handleRenameGroup(groupContextMenu.groupName)"
+          >
+            <Edit3 class="h-3.5 w-3.5 text-muted-foreground" />
+            <span>{{ t('Rename Group') }}</span>
+          </button>
+          <div class="arco-menu-divider"></div>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handleFetchAllRepos"
+          >
+            <RefreshCw class="h-3.5 w-3.5 text-primary" />
+            <span>{{ t('Fetch All') }}</span>
+          </button>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handlePullAllRepos"
+          >
+            <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
+            <span>{{ t('Pull All') }}</span>
+          </button>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handlePushAllRepos"
+          >
+            <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
+            <span>{{ t('Push All') }}</span>
+          </button>
+          <div class="arco-menu-divider"></div>
+          <button
+            role="menuitem"
+            class="arco-menu-item arco-menu-item-danger"
+            @click="handleDeleteGroup(groupContextMenu.groupName)"
+          >
+            <Trash2 class="h-3.5 w-3.5" />
+            <span>{{ t('Delete Group') }}</span>
+          </button>
         </div>
       </div>
       <div
@@ -926,43 +1064,41 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
         @contextmenu.prevent="workspaceContextMenu = null"
       >
         <div
-          class="fixed w-60 rounded-lg border border-border bg-popover py-1 text-xs text-foreground shadow-2xl select-none divide-y divide-border/60"
+          class="fixed arco-menu w-60 text-xs select-none"
           :style="{ left: `${workspaceContextMenu.x}px`, top: `${workspaceContextMenu.y}px` }"
           role="menu"
           @click.stop
         >
-          <div class="py-1">
-            <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
-            </div>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handleFetchAllRepos"
-            >
-              <RefreshCw class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span>{{ t('Fetch All') }}</span>
-            </button>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handlePullAllRepos"
-            >
-              <ArrowDownCircle class="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-              <span>{{ t('Pull All') }}</span>
-            </button>
-            <button
-              role="menuitem"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary disabled:opacity-50"
-              :disabled="isBulkOperating"
-              @click="handlePushAllRepos"
-            >
-              <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{{ t('Push All') }}</span>
-            </button>
+          <div class="arco-menu-section">
+            {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
           </div>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handleFetchAllRepos"
+          >
+            <RefreshCw class="h-3.5 w-3.5 text-primary" />
+            <span>{{ t('Fetch All') }}</span>
+          </button>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handlePullAllRepos"
+          >
+            <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
+            <span>{{ t('Pull All') }}</span>
+          </button>
+          <button
+            role="menuitem"
+            class="arco-menu-item disabled:opacity-50"
+            :disabled="isBulkOperating"
+            @click="handlePushAllRepos"
+          >
+            <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
+            <span>{{ t('Push All') }}</span>
+          </button>
         </div>
       </div>
     </Teleport>
@@ -972,7 +1108,7 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
 <style scoped>
 .branch-directory-row {
   align-items: center;
-  border-radius: 0.375rem;
+  border-radius: 4px;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   display: flex;
@@ -980,12 +1116,13 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
   font-weight: 600;
   gap: 0.25rem;
   min-width: 0;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.3rem;
   padding-right: 0.5rem;
-  padding-top: 0.25rem;
+  padding-top: 0.3rem;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .branch-directory-row:hover {
-  background: hsl(var(--secondary));
+  background: hsl(var(--accent) / 0.7);
   color: hsl(var(--foreground));
 }
 </style>

@@ -62,17 +62,28 @@ export const initRepo = async (repoPath: string): Promise<{ success: boolean; pa
   return data;
 };
 
-export const cloneRepo = async (url: string, destination: string): Promise<{ success: boolean; path: string; name: string }> => {
+export const cloneRepo = async (
+  url: string,
+  destination: string,
+  credentials?: { username?: string; password?: string },
+): Promise<{ success: boolean; path: string; name: string }> => {
+  const username = credentials?.username?.trim() || undefined;
+  const password = credentials?.password || undefined;
   getConsole().logCommand(`git clone "${redactRemoteUrl(url)}" "${destination}"`);
   if (isTauri()) {
-    const info = await invoke<RepositoryInfo>('clone_repo', { url, destination });
+    const info = await invoke<RepositoryInfo>('clone_repo', {
+      url,
+      destination,
+      username,
+      password,
+    });
     getConsole().logSuccess(`Cloned ${redactRemoteUrl(url)} into ${destination}`);
     return { success: true, path: info.path, name: info.name };
   }
   const res = await gitbxFetch('/api/repo/clone', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, destination }),
+    body: JSON.stringify({ url, destination, username, password }),
   });
   const data = await res.json();
   if (!res.ok || !data?.success) {
@@ -289,6 +300,74 @@ export const createTag = async (
     throw new Error(data.error);
   }
   getConsole().logSuccess(`Tag '${name}' created.`);
+};
+
+export const syncTags = async (repoPath: string, remote?: string): Promise<void> => {
+  const cmd = `git fetch ${remote || 'origin'} --prune --tags --prune-tags --force`;
+  getConsole().logCommand(cmd);
+  if (isTauri()) {
+    await invoke('sync_tags', { repoPath, remote: remote || null });
+    getConsole().logSuccess('Tags synchronized with remote.');
+    return;
+  }
+  const res = await gitbxFetch('/api/repo/tag/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath, remote: remote || null }),
+  });
+  await parseGitResponse(res, 'Failed to sync tags');
+  getConsole().logSuccess('Tags synchronized with remote.');
+};
+
+export const pushTag = async (repoPath: string, name: string, remote = 'origin'): Promise<void> => {
+  const cmd = `git push "${remote}" "refs/tags/${name}"`;
+  getConsole().logCommand(cmd);
+  if (isTauri()) {
+    await invoke('push_tag', { repoPath, remote, name });
+    getConsole().logSuccess(`Pushed tag '${name}' to '${remote}'.`);
+    return;
+  }
+  const res = await gitbxFetch('/api/repo/tag/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath, remote, name }),
+  });
+  await parseGitResponse(res, `Failed to push tag '${name}'`);
+  getConsole().logSuccess(`Pushed tag '${name}' to '${remote}'.`);
+};
+
+export const pushAllTags = async (repoPath: string, remote = 'origin'): Promise<void> => {
+  const cmd = `git push "${remote}" --tags`;
+  getConsole().logCommand(cmd);
+  if (isTauri()) {
+    await invoke('push_all_tags', { repoPath, remote });
+    getConsole().logSuccess(`Pushed all tags to '${remote}'.`);
+    return;
+  }
+  const res = await gitbxFetch('/api/repo/tag/push-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath, remote }),
+  });
+  await parseGitResponse(res, 'Failed to push tags');
+  getConsole().logSuccess(`Pushed all tags to '${remote}'.`);
+};
+
+export const deleteTag = async (repoPath: string, name: string, remote?: string): Promise<void> => {
+  const cmd = `git tag -d "${name}"${remote ? ` && git push "${remote}" --delete tag "${name}"` : ''}`;
+  getConsole().logCommand(cmd);
+  if (isTauri()) {
+    await invoke('delete_tag', { repoPath, name, remote: remote || null });
+    getConsole().logSuccess(`Deleted tag '${name}'${remote ? ` (local & ${remote})` : ''}.`);
+    return;
+  }
+  const res = await gitbxFetch('/api/repo/tag/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath, name, remote: remote || null }),
+  });
+  await parseGitResponse(res, `Failed to delete tag '${name}'`);
+  getConsole().logSuccess(`Deleted tag '${name}'${remote ? ` (local & ${remote})` : ''}.`);
 };
 
 export const listStashes = async (repoPath: string): Promise<StashItem[]> => {
@@ -521,7 +600,7 @@ export const mergeBranch = async (
 
   if (isTauri()) {
     try {
-      await invoke('merge', { repoPath, target, strategy });
+      await invoke('merge', { repoPath, target, strategy, message: message || null });
       getConsole().logSuccess(`Merged '${target}' into HEAD cleanly.`);
       return { success: true };
     } catch (err: any) {

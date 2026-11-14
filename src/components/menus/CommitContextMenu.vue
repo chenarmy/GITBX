@@ -137,81 +137,90 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="fixed z-50 w-64 bg-popover border border-border rounded-lg shadow-2xl py-1 text-xs select-none text-foreground divide-y divide-border/60"
-    :style="menuStyle"
-    @click.stop
-  >
-    <div class="py-1">
+  <Teleport to="body">
+    <div
+      class="fixed z-50 arco-menu w-64 text-xs select-none"
+      :style="menuStyle"
+      role="menu"
+      @click.stop
+    >
       <button
         @click="handleCherryPick"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <GitCommit class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+        <GitCommit class="w-3.5 h-3.5 text-primary shrink-0" />
         <span>{{ t('Cherry-pick Commit...') }}</span>
       </button>
 
       <button
         @click="handleRevert"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <RotateCcw class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+        <RotateCcw class="w-3.5 h-3.5 text-amber-500 shrink-0" />
         <span>{{ t('Revert Commit...') }}</span>
       </button>
 
       <button
         @click="handleReset"
-        class="w-full px-3 py-1.5 text-left hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-300 flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item arco-menu-item-danger font-medium"
       >
-        <RotateCcw class="w-3.5 h-3.5 text-rose-500 shrink-0" />
+        <RotateCcw class="w-3.5 h-3.5 shrink-0" />
         <span>{{ t("Reset '{branch}' to this Commit...", { branch: repoStore.repoInfo?.head_branch || 'HEAD' }) }}</span>
       </button>
-    </div>
 
-    <div class="py-1">
+      <div class="arco-menu-divider"></div>
+
       <button
         @click="handleNewBranch"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <GitBranch class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+        <GitBranch class="w-3.5 h-3.5 text-violet-500 shrink-0" />
         <span>{{ t('New Branch at this Commit...') }}</span>
       </button>
 
       <button
         @click="handleNewTag"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <Tag class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+        <Tag class="w-3.5 h-3.5 text-amber-500 shrink-0" />
         <span>{{ t('New Tag at this Commit...') }}</span>
       </button>
-    </div>
 
-    <div class="py-1">
+      <div class="arco-menu-divider"></div>
+
       <button
         @click="handleRebaseOnto"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <GitPullRequest class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+        <GitPullRequest class="w-3.5 h-3.5 text-sky-500 shrink-0" />
         <span>{{ t('Rebase onto this Commit...') }}</span>
       </button>
 
       <button
         @click="handleMergeInto"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 font-medium transition"
+        role="menuitem"
+        class="arco-menu-item font-medium"
       >
-        <GitMerge class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+        <GitMerge class="w-3.5 h-3.5 text-amber-500 shrink-0" />
         <span>{{ t('Merge this Commit into HEAD...') }}</span>
       </button>
-    </div>
 
-    <div class="py-1">
+      <div class="arco-menu-divider"></div>
+
       <button
         @click="handleCopySha"
-        class="w-full px-3 py-1.5 text-left hover:bg-secondary flex items-center space-x-2 text-muted-foreground hover:text-foreground font-medium transition"
+        role="menuitem"
+        class="arco-menu-item text-muted-foreground font-medium"
       >
         <Copy class="w-3.5 h-3.5 shrink-0" />
         <span>{{ t('Copy Commit SHA ({sha})', { sha: commit.short_id }) }}</span>
       </button>
     </div>
-  </div>
+  </Teleport>
 </template>

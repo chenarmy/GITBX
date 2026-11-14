@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { useRepoStore } from '@/stores/repo';
-import { GitBranch, X, AlertCircle } from 'lucide-vue-next';
+import { GitBranch, AlertCircle } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useI18n } from '@/i18n';
 
 const repoStore = useRepoStore();
@@ -60,87 +61,65 @@ async function handleCreate() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isBranchModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="closeModal"
+    :title="t('Create new branch')"
+    icon-bg-class="bg-purple-500/10 text-purple-500"
+    body-class="space-y-4"
+    @close="closeModal"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Create new branch')"
-      class="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
-        <div class="flex items-center space-x-2">
-          <GitBranch class="w-4 h-4 text-purple-400" aria-hidden="true" />
-          <span class="font-bold text-sm text-foreground">{{ t('Create new branch') }}</span>
-        </div>
-        <button
-          type="button"
-          aria-label="Close dialog"
-          @click="closeModal"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
-        >
-          <X class="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
+    <template #icon>
+      <GitBranch class="w-4 h-4" aria-hidden="true" />
+    </template>
 
-      <div class="p-4 space-y-4">
-        <div
-          v-if="errorMsg"
-          class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center space-x-2"
-        >
-          <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
-          <span>{{ errorMsg }}</span>
-        </div>
+    <div v-if="errorMsg" class="arco-alert arco-alert-danger">
+      <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
+      <span>{{ errorMsg }}</span>
+    </div>
 
-        <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Branch Name') }}</label>
-          <input
-            v-model="branchName"
-            type="text"
-            placeholder="e.g. feat/user-auth or fix/issue-123"
-            class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            @keydown.enter="handleCreate"
-          />
-        </div>
+    <div>
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Branch Name') }}</label>
+      <input
+        v-model="branchName"
+        type="text"
+        placeholder="e.g. feat/user-auth or fix/issue-123"
+        class="arco-input mt-1.5"
+        @keydown.enter="handleCreate"
+      />
+    </div>
 
-        <div class="p-2.5 rounded bg-muted/40 border border-border space-y-1">
-          <div class="text-muted-foreground">{{ t('Starting Point:') }}</div>
-          <div class="font-mono text-foreground">
-            {{ startingPointDisplay }}
-          </div>
-        </div>
-
-        <label class="flex items-center space-x-2 cursor-pointer select-none">
-          <input
-            v-model="checkoutOnCreate"
-            type="checkbox"
-            class="rounded border-border text-primary focus:ring-primary"
-          />
-          <span class="text-foreground">{{ t('Checkout branch after creation') }}</span>
-        </label>
-      </div>
-
-      <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
-        <button
-          type="button"
-          @click="closeModal"
-          class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
-        >
-          {{ t('Cancel') }}
-        </button>
-        <button
-          type="button"
-          @click="handleCreate"
-          :disabled="!branchName.trim() || isSubmitting"
-          class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
-        >
-          {{ isSubmitting ? 'Creating...' : t('Create Branch') }}
-        </button>
+    <div class="rounded-[6px] border border-border/80 bg-[hsl(var(--arco-fill-1))] p-3 space-y-1">
+      <div class="text-[11px] text-muted-foreground">{{ t('Starting Point:') }}</div>
+      <div class="font-mono text-foreground text-[12px]">
+        {{ startingPointDisplay }}
       </div>
     </div>
-  </div>
+
+    <label class="flex items-center space-x-2 cursor-pointer select-none">
+      <input
+        v-model="checkoutOnCreate"
+        type="checkbox"
+        class="accent-[hsl(var(--primary))]"
+      />
+      <span class="text-foreground">{{ t('Checkout branch after creation') }}</span>
+    </label>
+
+    <template #footer>
+      <button
+        type="button"
+        @click="closeModal"
+        class="arco-btn arco-btn-secondary"
+      >
+        {{ t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        @click="handleCreate"
+        :disabled="!branchName.trim() || isSubmitting"
+        class="arco-btn arco-btn-primary"
+      >
+        {{ isSubmitting ? 'Creating...' : t('Create Branch') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

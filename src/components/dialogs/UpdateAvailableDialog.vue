@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Download, ExternalLink, X } from 'lucide-vue-next';
+import { Download, ExternalLink } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { useI18n } from '@/i18n';
 import { renderReleaseMarkdown, useUpdatesStore } from '@/stores/updates';
 
@@ -12,89 +13,86 @@ const renderedNotes = computed(() => renderReleaseMarkdown(
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="updates.isDialogOpen"
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-    @keydown.esc.window="updates.status !== 'downloading' && updates.cancelUpdate()"
+    :title="t('New version available')"
+    max-width-class="max-w-xl"
+    height-class="max-h-[80vh]"
+    z-index-class="z-[60]"
+    :close-disabled="updates.status === 'downloading'"
+    body-class="flex-1 space-y-3 overflow-hidden"
+    footer-class="flex-wrap"
+    @close="updates.cancelUpdate()"
   >
+    <template #icon>
+      <Download class="w-4 h-4" />
+    </template>
+
+    <p class="text-[12px] text-foreground leading-relaxed">
+      {{ t('GITBX {latest} is available. You are using {current}.', {
+        latest: updates.latestVersion || '',
+        current: updates.currentVersion,
+      }) }}
+    </p>
+
     <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('New version available')"
-      class="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-card text-xs"
-      @click.stop
-    >
-      <header class="flex h-12 items-center justify-between border-b border-border px-4">
-        <h2 class="text-sm font-bold">{{ t('New version available') }}</h2>
-        <button
-          type="button"
-          aria-label="Close dialog"
-          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-foreground/50"
-          :disabled="updates.status === 'downloading'"
-          @click="updates.cancelUpdate()"
-        >
-          <X class="h-4 w-4" aria-hidden="true" />
-        </button>
-      </header>
+      class="release-markdown arco-card max-h-72 overflow-y-auto bg-[hsl(var(--arco-fill-1))] p-3.5 text-[12px] leading-5"
+      v-html="renderedNotes"
+    />
 
-      <div class="flex-1 space-y-3 overflow-hidden p-4">
-        <p>
-          {{ t('GITBX {latest} is available. You are using {current}.', {
-            latest: updates.latestVersion || '',
-            current: updates.currentVersion,
-          }) }}
-        </p>
-
-        <div class="release-markdown max-h-72 overflow-y-auto rounded border border-border bg-background p-3 leading-5" v-html="renderedNotes" />
-
-        <div v-if="updates.status === 'downloading' || updates.status === 'ready'" class="space-y-1.5">
-          <div class="flex justify-between text-[10px] text-muted-foreground">
-            <span>{{ updates.status === 'ready' ? t('Installing update...') : t('Downloading update...') }}</span>
-            <span>{{ updates.progress }}%</span>
-          </div>
-          <div class="h-1.5 overflow-hidden rounded-full bg-muted">
-            <div class="h-full bg-primary transition-all" :style="{ width: `${updates.progress}%` }" />
-          </div>
-        </div>
-
-        <div v-if="updates.error" class="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
-          {{ updates.error }}
-        </div>
+    <div v-if="updates.status === 'downloading' || updates.status === 'ready'" class="space-y-1.5">
+      <div class="flex justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
+        <span>{{ updates.status === 'ready' ? t('Installing update...') : t('Downloading update...') }}</span>
+        <span class="text-primary">{{ updates.progress }}%</span>
       </div>
-
-      <footer class="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
-        <button
-          class="rounded border border-border bg-card px-3 py-1.5 hover:bg-accent disabled:opacity-50"
-          :disabled="updates.status === 'downloading'"
-          @click="updates.cancelUpdate()"
-        >
-          {{ t('Cancel') }}
-        </button>
-        <button
-          class="rounded px-3 py-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
-          :disabled="updates.status === 'downloading' || !updates.latestVersion"
-          @click="updates.latestVersion && updates.skipVersion(updates.latestVersion)"
-        >
-          {{ t('Skip this version') }}
-        </button>
-        <button
-          class="inline-flex items-center gap-1 rounded border border-border bg-card px-3 py-1.5 hover:bg-accent"
-          @click="updates.openReleasePage()"
-        >
-          <ExternalLink class="h-3.5 w-3.5" />
-          {{ t('Open download page') }}
-        </button>
-        <button
-          class="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          :disabled="updates.status === 'downloading' || updates.status === 'ready'"
-          @click="updates.downloadAndInstall()"
-        >
-          <Download class="h-3.5 w-3.5" />
-          {{ updates.status === 'downloading' ? t('Downloading...') : t('Download and install') }}
-        </button>
-      </footer>
+      <div class="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          class="h-full rounded-full bg-primary transition-all duration-200"
+          :style="{ width: `${updates.progress}%` }"
+        />
+      </div>
     </div>
-  </div>
+
+    <div v-if="updates.error" class="arco-alert arco-alert-danger">
+      {{ updates.error }}
+    </div>
+
+    <template #footer>
+      <button
+        type="button"
+        class="arco-btn arco-btn-secondary"
+        :disabled="updates.status === 'downloading'"
+        @click="updates.cancelUpdate()"
+      >
+        {{ t('Cancel') }}
+      </button>
+      <button
+        type="button"
+        class="arco-btn arco-btn-text"
+        :disabled="updates.status === 'downloading' || !updates.latestVersion"
+        @click="updates.latestVersion && updates.skipVersion(updates.latestVersion)"
+      >
+        {{ t('Skip this version') }}
+      </button>
+      <button
+        type="button"
+        class="arco-btn arco-btn-outline"
+        @click="updates.openReleasePage()"
+      >
+        <ExternalLink class="h-3.5 w-3.5" />
+        {{ t('Open download page') }}
+      </button>
+      <button
+        type="button"
+        class="arco-btn arco-btn-primary"
+        :disabled="updates.status === 'downloading' || updates.status === 'ready'"
+        @click="updates.downloadAndInstall()"
+      >
+        <Download class="h-3.5 w-3.5" />
+        {{ updates.status === 'downloading' ? t('Downloading...') : t('Download and install') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>
 
 <style scoped>

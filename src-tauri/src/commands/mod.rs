@@ -7,4 +7,3 @@ pub mod mcp;
 pub mod repo;
 pub mod terminal;
 pub mod update;
-

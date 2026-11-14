@@ -7,10 +7,13 @@ import {
   FolderPlus,
   FolderOpen,
   Download,
-  X,
   AlertCircle,
   FolderSearch,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-vue-next';
+import ArcoModal from '@/components/ui/ArcoModal.vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useI18n } from '@/i18n';
 import { formatGitError } from '@/api/common';
@@ -25,6 +28,10 @@ const activeTab = ref<'local' | 'clone' | 'init'>('local');
 const localPath = ref('');
 const cloneUrl = ref('');
 const cloneDestination = ref('');
+const cloneUsername = ref('');
+const clonePassword = ref('');
+const showCloneAuth = ref(false);
+const showClonePassword = ref(false);
 const initPath = ref('');
 const selectedGroup = ref('');
 
@@ -48,6 +55,10 @@ watch(
   ([isOpen, targetGroup]) => {
     if (isOpen) {
       selectedGroup.value = targetGroup || '';
+      errorMsg.value = null;
+    } else {
+      clonePassword.value = '';
+      showClonePassword.value = false;
     }
   },
   { immediate: true },
@@ -106,11 +117,22 @@ async function handleClone() {
   isSubmitting.value = true;
   errorMsg.value = null;
   try {
-    const res = await gitApi.cloneRepo(cloneUrl.value.trim(), cloneDestination.value.trim());
+    const credentials =
+      cloneUsername.value.trim() || clonePassword.value
+        ? {
+            username: cloneUsername.value.trim() || undefined,
+            password: clonePassword.value || undefined,
+          }
+        : undefined;
+    const res = await gitApi.cloneRepo(cloneUrl.value.trim(), cloneDestination.value.trim(), credentials);
     if (res.success) {
       await repoStore.addRepo(res.path, selectedGroup.value.trim() || undefined);
       cloneUrl.value = '';
       cloneDestination.value = '';
+      cloneUsername.value = '';
+      clonePassword.value = '';
+      showCloneAuth.value = false;
+      showClonePassword.value = false;
       repoStore.closeModal('addRepo');
     }
   } catch (err: any) {
@@ -118,9 +140,26 @@ async function handleClone() {
     if (typeof err === 'string') {
       try { cloneError = JSON.parse(err); } catch { /* Plain text Git error. */ }
     }
-    errorMsg.value = cloneError?.code === 'CLONE_DESTINATION_NOT_EMPTY'
-      ? t('Clone destination is not empty. Choose an empty folder or a new path. If the repository is already on this computer, add it as an existing local repository.')
-      : formatGitError(err, t('Failed to clone repository'));
+    const formatted = formatGitError(err, t('Failed to clone repository'));
+    const lower = formatted.toLowerCase();
+    const isAuthError =
+      cloneError?.code === 'AUTH_FAILED' ||
+      lower.includes('401') ||
+      lower.includes('403') ||
+      lower.includes('authentication') ||
+      lower.includes('credential') ||
+      lower.includes('username') ||
+      lower.includes('access denied') ||
+      lower.includes('unauthorized');
+
+    if (cloneError?.code === 'CLONE_DESTINATION_NOT_EMPTY') {
+      errorMsg.value = t('Clone destination is not empty. Choose an empty folder or a new path. If the repository is already on this computer, add it as an existing local repository.');
+    } else if (isAuthError) {
+      showCloneAuth.value = true;
+      errorMsg.value = t('Authentication required or failed. Enter your username and password / access token below, then retry.');
+    } else {
+      errorMsg.value = formatted;
+    }
   } finally {
     isSubmitting.value = false;
   }
@@ -146,218 +185,248 @@ async function handleInit() {
 </script>
 
 <template>
-  <div
+  <ArcoModal
     v-if="repoStore.isAddRepoModalOpen"
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    @keydown.esc.window="repoStore.closeModal('addRepo')"
+    :title="t('Add Repository')"
+    max-width-class="max-w-lg"
+    body-class="space-y-4"
+    @close="repoStore.closeModal('addRepo')"
   >
-    <div
-      role="dialog"
-      aria-modal="true"
-      :aria-label="t('Add Repository')"
-      class="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs"
-      @click.stop
-    >
-      <!-- Header -->
-      <div class="h-11 bg-muted/50 px-4 flex items-center justify-between border-b border-border select-none">
-        <div class="flex items-center space-x-2">
-          <FolderGit2 class="w-4 h-4 text-primary" aria-hidden="true" />
-          <span class="font-bold text-sm text-foreground">{{ t('Add Repository') }}</span>
-        </div>
+    <template #icon>
+      <FolderGit2 class="w-4 h-4" aria-hidden="true" />
+    </template>
+
+    <template #below-header>
+      <div class="arco-tabs bg-[hsl(var(--arco-fill-1))] shrink-0 select-none">
         <button
           type="button"
-          aria-label="Close dialog"
-          @click="repoStore.closeModal('addRepo')"
-          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-1 focus:ring-foreground/50"
-        >
-          <X class="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
-
-      <!-- Navigation Tabs -->
-      <div class="h-10 bg-muted/20 border-b border-border flex items-center px-4 space-x-2 select-none">
-        <button
           @click="activeTab = 'local'"
-          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'local' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="arco-tab"
+          :class="{ 'arco-tab-active': activeTab === 'local' }"
         >
           <FolderSearch class="w-3.5 h-3.5" />
           <span>{{ t('Add Existing Local Repo') }}</span>
         </button>
         <button
+          type="button"
           @click="activeTab = 'clone'"
-          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'clone' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="arco-tab"
+          :class="{ 'arco-tab-active': activeTab === 'clone' }"
         >
           <Download class="w-3.5 h-3.5" />
           <span>{{ t('Clone from Remote') }}</span>
         </button>
         <button
+          type="button"
           @click="activeTab = 'init'"
-          class="px-3 py-1.5 border-b-2 font-medium transition flex items-center space-x-1.5"
-          :class="activeTab === 'init' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'"
+          class="arco-tab"
+          :class="{ 'arco-tab-active': activeTab === 'init' }"
         >
           <FolderPlus class="w-3.5 h-3.5" />
           <span>{{ t('Create New Repo') }}</span>
         </button>
       </div>
+    </template>
 
-      <!-- Body Content -->
-      <div class="p-5 space-y-4">
-        <!-- Error Alert -->
-        <div
-          v-if="errorMsg"
-          class="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center space-x-2"
+    <!-- Error Alert -->
+    <div v-if="errorMsg" class="arco-alert arco-alert-danger">
+      <AlertCircle class="w-4 h-4 shrink-0" />
+      <span>{{ errorMsg }}</span>
+    </div>
+
+    <!-- 1. Tab: Local -->
+    <div v-if="activeTab === 'local'" class="space-y-3">
+      <div>
+        <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Local Repository Path') }}</label>
+        <div class="flex items-center space-x-2 mt-1.5">
+          <input
+            v-model="localPath"
+            type="text"
+            placeholder="e.g. D:\Projects\my-app or /Users/username/repo"
+            class="arco-input min-w-0 flex-1"
+            @keydown.enter="handleAddLocal"
+          />
+          <button
+            v-if="isDesktop"
+            type="button"
+            :title="t('Select Folder')"
+            class="arco-btn arco-btn-outline shrink-0"
+            @click="selectDirectory('local')"
+          >
+            <FolderOpen class="w-3.5 h-3.5" />
+            <span>{{ t('Browse') }}</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-muted-foreground mt-1.5">
+          Select or paste the path to an existing Git repository directory on your computer.
+        </p>
+      </div>
+    </div>
+
+    <!-- 2. Tab: Clone -->
+    <div v-else-if="activeTab === 'clone'" class="space-y-3">
+      <div>
+        <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Remote URL (HTTPS / SSH)') }}</label>
+        <input
+          v-model="cloneUrl"
+          type="text"
+          placeholder="https://github.com/owner/repository.git"
+          class="arco-input mt-1.5"
+        />
+      </div>
+      <div>
+        <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Destination Folder') }}</label>
+        <div class="flex items-center space-x-2 mt-1.5">
+          <input
+            v-model="cloneDestination"
+            type="text"
+            placeholder="e.g. D:\Projects\cloned-repo"
+            class="arco-input min-w-0 flex-1"
+            @keydown.enter="handleClone"
+          />
+          <button
+            v-if="isDesktop"
+            type="button"
+            :title="t('Select Folder')"
+            class="arco-btn arco-btn-outline shrink-0"
+            @click="selectDirectory('clone')"
+          >
+            <FolderOpen class="w-3.5 h-3.5" />
+            <span>{{ t('Browse') }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="rounded-[6px] border border-border/80 bg-[hsl(var(--arco-fill-1))] p-2.5 space-y-2.5">
+        <button
+          type="button"
+          class="w-full flex items-center justify-between text-[11px] font-semibold text-foreground hover:text-primary transition-colors"
+          @click="showCloneAuth = !showCloneAuth"
         >
-          <AlertCircle class="w-4 h-4 shrink-0" />
-          <span>{{ errorMsg }}</span>
-        </div>
-
-        <!-- 1. Tab: Local -->
-        <div v-if="activeTab === 'local'" class="space-y-3">
+          <span class="flex items-center gap-1.5">
+            <KeyRound class="w-3.5 h-3.5 text-primary" />
+            <span>{{ t('Authentication Credentials (Optional)') }}</span>
+          </span>
+          <span class="text-[10px] text-primary">{{ showCloneAuth ? t('Hide') : t('Enter Username / Token') }}</span>
+        </button>
+        <div v-if="showCloneAuth" class="grid grid-cols-1 gap-2 pt-1 border-t border-border/70">
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Local Repository Path') }}</label>
-            <div class="flex items-center space-x-2 mt-1">
-              <input
-                v-model="localPath"
-                type="text"
-                placeholder="e.g. D:\Projects\my-app or /Users/username/repo"
-                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                @keydown.enter="handleAddLocal"
-              />
-              <button
-                v-if="isDesktop"
-                type="button"
-                :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
-                @click="selectDirectory('local')"
-              >
-                <FolderOpen class="w-3.5 h-3.5" />
-                <span>{{ t('Browse') }}</span>
-              </button>
-            </div>
-            <p class="text-[10px] text-muted-foreground mt-1">
-              Select or paste the path to an existing Git repository directory on your computer.
-            </p>
-          </div>
-        </div>
-
-        <!-- 2. Tab: Clone -->
-        <div v-else-if="activeTab === 'clone'" class="space-y-3">
-          <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Remote URL (HTTPS / SSH)') }}</label>
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Username') }}</label>
             <input
-              v-model="cloneUrl"
+              v-model="cloneUsername"
               type="text"
-              placeholder="https://github.com/owner/repository.git"
-              class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              autocomplete="username"
+              :placeholder="t('Git username or email')"
+              class="arco-input mt-1"
             />
           </div>
           <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Destination Folder') }}</label>
-            <div class="flex items-center space-x-2 mt-1">
+            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Password / Personal Access Token') }}</label>
+            <div class="relative mt-1 flex items-center">
               <input
-                v-model="cloneDestination"
-                type="text"
-                placeholder="e.g. D:\Projects\cloned-repo"
-                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                v-model="clonePassword"
+                :type="showClonePassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                :placeholder="t('Password or personal access token')"
+                class="arco-input pr-8"
                 @keydown.enter="handleClone"
               />
               <button
-                v-if="isDesktop"
                 type="button"
-                :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
-                @click="selectDirectory('clone')"
+                class="absolute right-2 text-muted-foreground hover:text-foreground transition-colors"
+                :title="showClonePassword ? t('Hide') : t('Show')"
+                @click="showClonePassword = !showClonePassword"
               >
-                <FolderOpen class="w-3.5 h-3.5" />
-                <span>{{ t('Browse') }}</span>
+                <EyeOff v-if="showClonePassword" class="w-3.5 h-3.5" />
+                <Eye v-else class="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
-
-        <!-- 3. Tab: Init -->
-        <div v-else-if="activeTab === 'init'" class="space-y-3">
-          <div>
-            <label class="text-[11px] font-semibold text-muted-foreground">{{ t('New Repository Directory') }}</label>
-            <div class="flex items-center space-x-2 mt-1">
-              <input
-                v-model="initPath"
-                type="text"
-                placeholder="e.g. D:\Projects\new-project"
-                class="min-w-0 flex-1 bg-background border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                @keydown.enter="handleInit"
-              />
-              <button
-                v-if="isDesktop"
-                type="button"
-                :title="t('Select Folder')"
-                class="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
-                @click="selectDirectory('init')"
-              >
-                <FolderOpen class="w-3.5 h-3.5" />
-                <span>{{ t('Browse') }}</span>
-              </button>
-            </div>
-            <p class="text-[10px] text-muted-foreground mt-1">
-              GITBX will create the folder if it doesn't exist and run `git init`.
-            </p>
-          </div>
-        </div>
-
-        <!-- Optional Repository Group -->
-        <div>
-          <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Repository Group (Optional)') }}</label>
-          <input
-            v-model="selectedGroup"
-            type="text"
-            list="gitbx-repo-groups-list"
-            :placeholder="t('Select or enter a group name (leave empty for ungrouped)')"
-            class="w-full bg-background border border-border rounded px-3 py-2 mt-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <datalist id="gitbx-repo-groups-list">
-            <option v-for="group in availableGroups" :key="group" :value="group" />
-          </datalist>
-        </div>
-      </div>
-
-      <!-- Footer CTA -->
-      <div class="h-12 bg-muted/30 px-4 flex items-center justify-end space-x-2 border-t border-border">
-        <button
-          @click="repoStore.closeModal('addRepo')"
-          class="px-3 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition"
-        >
-          {{ t('Cancel') }}
-        </button>
-
-        <button
-          v-if="activeTab === 'local'"
-          @click="handleAddLocal"
-          :disabled="!localPath.trim() || isSubmitting"
-          class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
-        >
-          {{ isSubmitting ? 'Verifying...' : t('Add Repository') }}
-        </button>
-
-        <button
-          v-else-if="activeTab === 'clone'"
-          @click="handleClone"
-          :disabled="!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting"
-          class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
-        >
-          {{ isSubmitting ? 'Cloning...' : t('Clone') }}
-        </button>
-
-        <button
-          v-else-if="activeTab === 'init'"
-          @click="handleInit"
-          :disabled="!initPath.trim() || isSubmitting"
-          class="px-4 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition disabled:opacity-40"
-        >
-          {{ isSubmitting ? 'Initializing...' : t('Create New Repo') }}
-        </button>
       </div>
     </div>
-  </div>
+
+    <!-- 3. Tab: Init -->
+    <div v-else-if="activeTab === 'init'" class="space-y-3">
+      <div>
+        <label class="text-[11px] font-semibold text-muted-foreground">{{ t('New Repository Directory') }}</label>
+        <div class="flex items-center space-x-2 mt-1.5">
+          <input
+            v-model="initPath"
+            type="text"
+            placeholder="e.g. D:\Projects\new-project"
+            class="arco-input min-w-0 flex-1"
+            @keydown.enter="handleInit"
+          />
+          <button
+            v-if="isDesktop"
+            type="button"
+            :title="t('Select Folder')"
+            class="arco-btn arco-btn-outline shrink-0"
+            @click="selectDirectory('init')"
+          >
+            <FolderOpen class="w-3.5 h-3.5" />
+            <span>{{ t('Browse') }}</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-muted-foreground mt-1.5">
+          GITBX will create the folder if it doesn't exist and run `git init`.
+        </p>
+      </div>
+    </div>
+
+    <!-- Optional Repository Group -->
+    <div>
+      <label class="text-[11px] font-semibold text-muted-foreground">{{ t('Repository Group (Optional)') }}</label>
+      <input
+        v-model="selectedGroup"
+        type="text"
+        list="gitbx-repo-groups-list"
+        :placeholder="t('Select or enter a group name (leave empty for ungrouped)')"
+        class="arco-input mt-1.5"
+      />
+      <datalist id="gitbx-repo-groups-list">
+        <option v-for="group in availableGroups" :key="group" :value="group" />
+      </datalist>
+    </div>
+
+    <template #footer>
+      <button
+        type="button"
+        @click="repoStore.closeModal('addRepo')"
+        class="arco-btn arco-btn-secondary"
+      >
+        {{ t('Cancel') }}
+      </button>
+
+      <button
+        v-if="activeTab === 'local'"
+        type="button"
+        @click="handleAddLocal"
+        :disabled="!localPath.trim() || isSubmitting"
+        class="arco-btn arco-btn-primary"
+      >
+        {{ isSubmitting ? 'Verifying...' : t('Add Repository') }}
+      </button>
+
+      <button
+        v-else-if="activeTab === 'clone'"
+        type="button"
+        @click="handleClone"
+        :disabled="!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting"
+        class="arco-btn arco-btn-primary"
+      >
+        {{ isSubmitting ? 'Cloning...' : t('Clone') }}
+      </button>
+
+      <button
+        v-else-if="activeTab === 'init'"
+        type="button"
+        @click="handleInit"
+        :disabled="!initPath.trim() || isSubmitting"
+        class="arco-btn arco-btn-primary"
+      >
+        {{ isSubmitting ? 'Initializing...' : t('Create New Repo') }}
+      </button>
+    </template>
+  </ArcoModal>
 </template>

@@ -27,17 +27,18 @@ const filters = ref<GraphFilters>({
 const commitContextMenu = ref<{ commit: GraphCommitNode; x: number; y: number } | null>(null);
 
 const LANE_COLORS = [
-  '#2563eb', // blue
-  '#7c3aed', // purple
-  '#059669', // emerald
-  '#d97706', // amber
-  '#db2777', // pink
-  '#0891b2', // cyan
+  '#165DFF', // Arco Blue
+  '#722ED1', // Arco Purple
+  '#00B42A', // Arco Green
+  '#FF7D00', // Arco Orange
+  '#F53F3F', // Arco Red
+  '#14C9C9', // Arco Cyan
 ];
 
 const ROW_HEIGHT = 28;
 const LANE_WIDTH = 16;
 const NODE_RADIUS = 4.5;
+const MAX_VISIBLE_TAG_REFS = 2;
 
 const graphWidth = computed(() => {
   const maximumLane = visibleCommits.value.reduce((maximum, node) => Math.max(
@@ -239,7 +240,7 @@ function formatTime(timestamp: number) {
     />
 
     <!-- Header row -->
-    <div class="dbx-pane-header h-7 bg-muted/40 border-b border-border flex items-center text-muted-foreground font-bold px-2 select-none">
+    <div class="dbx-pane-header h-7 border-b border-border flex items-center text-muted-foreground font-semibold px-2.5 select-none">
       <div class="shrink-0 pl-2" :style="{ width: `${graphWidth}px` }">{{ t('Graph') }}</div>
       <div class="flex-1 pl-2">{{ t('Description') }}</div>
       <div class="w-32">{{ t('Author') }}</div>
@@ -273,31 +274,39 @@ function formatTime(timestamp: number) {
             :id="`commit-${commit.id}`"
             @click="handleSelectCommit(commit)"
             @contextmenu.prevent="openCommitContextMenu($event, commit)"
-            class="h-7 flex items-center px-2 cursor-pointer transition select-none border-b border-border/40 hover:bg-secondary/70"
-            :class="repoStore.selectedCommit?.id === commit.id ? 'bg-primary/10 text-primary font-bold' : 'text-foreground'"
+            class="h-7 flex items-center px-2.5 cursor-pointer transition-colors select-none border-b border-border/40 hover:bg-accent/60"
+            :class="repoStore.selectedCommit?.id === commit.id ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'"
           >
             <!-- Graph lane placeholder spacing -->
             <div class="shrink-0" :style="{ width: `${graphWidth}px` }"></div>
 
             <!-- Description & Branch / Tag Pills -->
-            <div class="flex-1 flex items-center space-x-1.5 truncate pr-2">
+            <div class="flex-1 flex items-center gap-1.5 truncate pr-2">
               <!-- Branch Pills -->
               <span
                 v-for="refName in commit.branch_refs"
                 :key="refName"
-                class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 shrink-0"
+                class="arco-tag bg-primary/10 text-primary border-primary/25 font-semibold shrink-0"
               >
                 {{ refName }}
               </span>
 
-              <!-- Tag Pills -->
+              <!-- Tag Pills (capped cleanly when a commit carries many tags) -->
               <span
-                v-for="tagName in commit.tag_refs"
+                v-for="tagName in commit.tag_refs.slice(0, MAX_VISIBLE_TAG_REFS)"
                 :key="tagName"
-                class="inline-flex items-center space-x-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 shrink-0"
+                class="arco-tag bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-semibold shrink-0"
+                :title="tagName"
               >
                 <Tag class="w-2.5 h-2.5" />
-                <span>{{ tagName }}</span>
+                <span class="max-w-[120px] truncate">{{ tagName }}</span>
+              </span>
+              <span
+                v-if="commit.tag_refs.length > MAX_VISIBLE_TAG_REFS"
+                class="arco-tag bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-semibold shrink-0 tabular-nums"
+                :title="commit.tag_refs.join(', ')"
+              >
+                +{{ commit.tag_refs.length - MAX_VISIBLE_TAG_REFS }}
               </span>
 
               <span class="truncate font-medium">{{ commit.summary }}</span>
@@ -307,14 +316,14 @@ function formatTime(timestamp: number) {
             <div class="w-32 truncate text-muted-foreground">{{ commit.author_name }}</div>
 
             <!-- Date -->
-            <div class="w-24 text-muted-foreground opacity-80">{{ formatTime(commit.author_time) }}</div>
+            <div class="w-24 text-muted-foreground/85 tabular-nums">{{ formatTime(commit.author_time) }}</div>
 
             <!-- Short ID -->
-            <div class="w-20 font-mono text-[11px] text-muted-foreground opacity-75">{{ commit.short_id }}</div>
+            <div class="w-20 font-mono text-[11px] text-muted-foreground/85 tabular-nums">{{ commit.short_id }}</div>
           </div>
-          <div v-if="repoStore.graphHasMore" class="flex justify-center p-2 border-b border-border/40">
+          <div v-if="repoStore.graphHasMore" class="flex justify-center p-2.5 border-b border-border/40">
             <button
-              class="px-3 py-1 rounded border border-border bg-secondary hover:bg-muted disabled:opacity-50"
+              class="arco-btn arco-btn-outline arco-btn-sm"
               :disabled="repoStore.isLoadingMoreCommits"
               @click="repoStore.loadMoreCommits()"
             >
