@@ -3631,7 +3631,9 @@ mod tests {
         commit_all(&seed, "base");
 
         let sub_url = sub_origin_path.to_string_lossy().replace('\\', "/");
-        let mut submodule = seed.submodule(&sub_url, Path::new("deps/sub"), true).unwrap();
+        let mut submodule = seed
+            .submodule(&sub_url, Path::new("deps/sub"), true)
+            .unwrap();
         submodule.clone(None).unwrap();
         submodule.add_finalize().unwrap();
         commit_all(&seed, "add submodule");
@@ -3640,7 +3642,9 @@ mod tests {
         let mut remote = seed
             .remote("origin", origin_path.to_str().unwrap())
             .unwrap();
-        remote.push(&["refs/heads/main:refs/heads/main"], None).unwrap();
+        remote
+            .push(&["refs/heads/main:refs/heads/main"], None)
+            .unwrap();
         drop(remote);
         drop(seed);
 
@@ -3656,8 +3660,7 @@ mod tests {
 
         // Push a new commit from peer to origin
         let peer_path = dir.path().join("peer");
-        GitService::clone_repo(origin_path.to_str().unwrap(), peer_path.to_str().unwrap())
-            .unwrap();
+        GitService::clone_repo(origin_path.to_str().unwrap(), peer_path.to_str().unwrap()).unwrap();
         {
             let peer = crate::Repository::open(&peer_path).unwrap();
             fs::write(peer_path.join("incoming.txt"), "from remote\n").unwrap();

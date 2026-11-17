@@ -318,8 +318,39 @@ function handleRepoDragStart(event: DragEvent, repoPath: string) {
   }
 }
 
+function hasDragType(event: DragEvent, type: string): boolean {
+  const types = event.dataTransfer?.types;
+  if (!types) return false;
+  return Array.from(types).some((item) => item.toLowerCase() === type);
+}
+
+function isRepositoryDrag(event: DragEvent): boolean {
+  return Boolean(
+    draggingRepoPath.value ||
+    (!draggingGroupName.value && (
+      hasDragType(event, 'application/x-gitbx-repo') ||
+      hasDragType(event, 'text/plain')
+    ))
+  );
+}
+
+function isGroupDrag(event: DragEvent): boolean {
+  return Boolean(
+    draggingGroupName.value ||
+    hasDragType(event, 'application/x-gitbx-group')
+  );
+}
+
+function handleDragEnter(event: DragEvent) {
+  if (!isRepositoryDrag(event) && !isGroupDrag(event)) return;
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+}
+
 function handleRepoDragOver(event: DragEvent, targetRepoPath: string) {
-  if (!draggingRepoPath.value) return;
+  if (!isRepositoryDrag(event)) return;
   event.preventDefault();
   event.stopPropagation();
   if (event.dataTransfer) {
@@ -372,7 +403,7 @@ function handleGroupDragStart(event: DragEvent, groupName: string) {
 }
 
 function handleGroupDragOver(event: DragEvent, target: string, groupName?: string) {
-  if (draggingGroupName.value && groupName) {
+  if (isGroupDrag(event) && groupName) {
     event.preventDefault();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
@@ -389,7 +420,7 @@ function handleGroupDragOver(event: DragEvent, target: string, groupName?: strin
     };
     return;
   }
-  if (!draggingRepoPath.value) return;
+  if (!isRepositoryDrag(event)) return;
   event.preventDefault();
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
@@ -652,6 +683,7 @@ async function handleDeleteTag(name: string) {
             dragOverTarget === `group:${group.name}` ? 'bg-primary/10 ring-1 ring-primary/40' : '',
             draggingGroupName === group.name ? 'opacity-50' : '',
           ]"
+          @dragenter="handleDragEnter"
           @dragover="handleGroupDragOver($event, `group:${group.name}`, group.name)"
           @dragleave="handleGroupDragLeave($event, `group:${group.name}`, group.name)"
           @drop="handleGroupDrop($event, group.name)"
@@ -712,6 +744,7 @@ async function handleDeleteTag(name: string) {
               :key="repo.path"
               draggable="true"
               @dragstart.stop="handleRepoDragStart($event, repo.path)"
+              @dragenter.stop="handleDragEnter"
               @dragover="handleRepoDragOver($event, repo.path)"
               @dragleave="handleRepoDragLeave($event, repo.path)"
               @drop="handleRepoDrop($event, repo.path)"
@@ -772,6 +805,7 @@ async function handleDeleteTag(name: string) {
         <div
           class="space-y-0.5 rounded-[6px] transition-colors"
           :class="dragOverTarget === '__ungrouped__' ? 'bg-primary/10 ring-1 ring-primary/40 p-0.5' : ''"
+          @dragenter="handleDragEnter"
           @dragover="handleGroupDragOver($event, '__ungrouped__')"
           @dragleave="handleGroupDragLeave($event, '__ungrouped__')"
           @drop="handleGroupDrop($event, null)"
@@ -787,6 +821,7 @@ async function handleDeleteTag(name: string) {
             :key="repo.path"
             draggable="true"
             @dragstart.stop="handleRepoDragStart($event, repo.path)"
+            @dragenter.stop="handleDragEnter"
             @dragover="handleRepoDragOver($event, repo.path)"
             @dragleave="handleRepoDragLeave($event, repo.path)"
             @drop="handleRepoDrop($event, repo.path)"
