@@ -7,7 +7,6 @@ import { useNotificationStore } from '@/stores/notification';
 import { useUpdatesStore } from '@/stores/updates';
 import { useI18n } from '@/i18n';
 import {
-  FolderGit2,
   Sparkles,
   Sun,
   Moon,
@@ -203,9 +202,7 @@ onUnmounted(() => {
     <!-- Left: App Logo & Repo Dropdown Selector -->
     <div class="flex items-center gap-2">
       <div class="flex items-center gap-2 font-bold tracking-tight cursor-pointer hover:opacity-90 transition-opacity pr-1">
-        <div class="w-6 h-6 rounded-[6px] bg-gradient-to-br from-primary to-blue-500 shadow-sm flex items-center justify-center text-primary-foreground">
-          <FolderGit2 class="w-3.5 h-3.5" />
-        </div>
+        <img src="/favicon.png" alt="" class="w-6 h-6 shrink-0" aria-hidden="true" />
         <span class="text-[13px] font-bold tracking-wide text-foreground">GITBX</span>
       </div>
 

@@ -1,22 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="716" height="716" viewBox="0 0 716 716" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#111B78"/>
-      <stop offset="1" stop-color="#050B4D"/>
+    <linearGradient id="gitbx-blue" x1="88" y1="72" x2="424" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4A88FF"/>
+      <stop offset="0.52" stop-color="#2563F5"/>
+      <stop offset="1" stop-color="#1748D8"/>
     </linearGradient>
-    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#11C8FF"/>
-      <stop offset="1" stop-color="#0799E6"/>
-    </linearGradient>
-    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#5C2BFF"/>
-      <stop offset="1" stop-color="#3515D8"/>
+    <linearGradient id="gitbx-shine" x1="128" y1="72" x2="342" y2="388" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0.18"/>
+      <stop offset="0.58" stop-color="white" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <path d="M62 173 290 42l132 76-228 132L62 173Z" fill="url(#navy)"/>
-  <path d="M39 221c0-13 14-21 25-15l118 68c9 5 14 14 14 24v144c0 14-15 22-27 15L52 389c-8-5-13-14-13-23V221Z" fill="url(#cyan)"/>
-  <path d="m252 240 65-38 65 38v137l-65 38-65-38V240Z" fill="url(#violet)"/>
-  <path d="m338 166 111-64 135 78-111 64-135-78Z" fill="url(#cyan)"/>
-  <path d="m81 492 132-76 132 77-132 76-132-77Z" fill="url(#navy)"/>
-  <path d="m389 428 132-76 135 78-132 76-135 78-70-40 70-116Z" fill="url(#violet)"/>
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#gitbx-blue)"/>
+  <g transform="translate(105 98.5) scale(12.6)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"/>
+    <circle cx="13" cy="12" r="2"/>
+    <path d="M18 19c-2.8 0-5-2.2-5-5v8"/>
+    <circle cx="20" cy="19" r="2"/>
+  </g>
+  <path d="M144 88C113 88 88 113 88 144V236C88 153 153 88 236 88H144Z" fill="url(#gitbx-shine)"/>
 </svg>
