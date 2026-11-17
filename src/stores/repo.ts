@@ -210,6 +210,60 @@ export const useRepoStore = defineStore('repo', () => {
     saveReposToStorage();
   };
 
+  const reorderRepo = (
+    sourcePath: string,
+    targetPath: string,
+    position: 'before' | 'after' = 'before'
+  ): boolean => {
+    const cleanSource = normalizeStoredRepoPath(sourcePath);
+    const cleanTarget = normalizeStoredRepoPath(targetPath);
+    if (!cleanSource || !cleanTarget || cleanSource === cleanTarget) return false;
+
+    const sourceIndex = repoList.value.findIndex((r) => r.path === cleanSource);
+    const targetIndex = repoList.value.findIndex((r) => r.path === cleanTarget);
+    if (sourceIndex === -1 || targetIndex === -1) return false;
+
+    const targetGroup = repoList.value[targetIndex].group;
+    const [movedRepo] = repoList.value.splice(sourceIndex, 1);
+    if (targetGroup) {
+      movedRepo.group = targetGroup;
+    } else {
+      delete movedRepo.group;
+    }
+
+    const nextTargetIndex = repoList.value.findIndex((r) => r.path === cleanTarget);
+    if (nextTargetIndex === -1) return false;
+    const insertIndex = position === 'after' ? nextTargetIndex + 1 : nextTargetIndex;
+    repoList.value.splice(insertIndex, 0, movedRepo);
+    saveReposToStorage();
+    return true;
+  };
+
+  const reorderRepoGroup = (
+    sourceGroup: string,
+    targetGroup: string,
+    position: 'before' | 'after' = 'before'
+  ): boolean => {
+    const cleanSource = sourceGroup.trim();
+    const cleanTarget = targetGroup.trim();
+    if (!cleanSource || !cleanTarget || cleanSource === cleanTarget) return false;
+
+    ensureGroupExists(cleanSource);
+    ensureGroupExists(cleanTarget);
+
+    const sourceIndex = repoGroups.value.indexOf(cleanSource);
+    const targetIndex = repoGroups.value.indexOf(cleanTarget);
+    if (sourceIndex === -1 || targetIndex === -1) return false;
+
+    const [movedGroup] = repoGroups.value.splice(sourceIndex, 1);
+    const nextTargetIndex = repoGroups.value.indexOf(cleanTarget);
+    if (nextTargetIndex === -1) return false;
+    const insertIndex = position === 'after' ? nextTargetIndex + 1 : nextTargetIndex;
+    repoGroups.value.splice(insertIndex, 0, movedGroup);
+    saveReposToStorage();
+    return true;
+  };
+
   const clearLoadedRepoData = () => {
     repoInfo.value = null;
     statusSummary.value = emptyStatusSummary();
@@ -1012,6 +1066,8 @@ export const useRepoStore = defineStore('repo', () => {
     renameRepoGroup,
     deleteRepoGroup,
     setRepoGroup,
+    reorderRepo,
+    reorderRepoGroup,
     stageFile,
     stageAll,
     stageFiles,

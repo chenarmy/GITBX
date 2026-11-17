@@ -42,7 +42,8 @@ impl Repository {
         opts.include_untracked(true)
             .recurse_untracked_dirs(true)
             .renames_head_to_index(true)
-            .renames_index_to_workdir(true);
+            .renames_index_to_workdir(true)
+            .exclude_submodules(true);
 
         let statuses = self.inner().statuses(Some(&mut opts))?;
 
@@ -294,6 +295,79 @@ mod tests {
 
         fs::write(directory.path().join("file.txt"), "one\r\ntwo\r\n").unwrap();
         let repo = Repository::open(directory.path()).unwrap();
+        assert_eq!(repo.get_status().unwrap().total_changes, 0);
+        assert!(!repo.info().unwrap().is_dirty);
+    }
+
+    #[test]
+    fn ignores_dirty_submodule_in_status_stage_all_and_commit() {
+        let root = tempdir().unwrap();
+        let sub_origin_dir = root.path().join("sub_origin");
+        let sub_origin = git2::Repository::init(&sub_origin_dir).unwrap();
+        fs::write(sub_origin_dir.join("sub.txt"), "sub-v1\n").unwrap();
+        {
+            let mut idx = sub_origin.index().unwrap();
+            idx.add_path(std::path::Path::new("sub.txt")).unwrap();
+            idx.write().unwrap();
+            let tree_id = idx.write_tree().unwrap();
+            let tree = sub_origin.find_tree(tree_id).unwrap();
+            let sig = Signature::now("Test", "test@example.com").unwrap();
+            sub_origin
+                .commit(Some("HEAD"), &sig, &sig, "sub init", &tree, &[])
+                .unwrap();
+        }
+
+        let main_dir = root.path().join("main");
+        let main_repo = git2::Repository::init(&main_dir).unwrap();
+        fs::write(main_dir.join("README.md"), "hello\n").unwrap();
+        {
+            let mut idx = main_repo.index().unwrap();
+            idx.add_path(std::path::Path::new("README.md")).unwrap();
+            idx.write().unwrap();
+            let tree_id = idx.write_tree().unwrap();
+            let tree = main_repo.find_tree(tree_id).unwrap();
+            let sig = Signature::now("Test", "test@example.com").unwrap();
+            main_repo
+                .commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+                .unwrap();
+        }
+
+        let sub_url = sub_origin_dir.to_string_lossy().replace('\\', "/");
+        let mut submodule = main_repo
+            .submodule(&sub_url, std::path::Path::new("deps/sub"), true)
+            .unwrap();
+        submodule.clone(None).unwrap();
+        submodule.add_finalize().unwrap();
+        {
+            let mut idx = main_repo.index().unwrap();
+            idx.add_path(std::path::Path::new(".gitmodules")).unwrap();
+            idx.add_path(std::path::Path::new("deps/sub")).unwrap();
+            idx.write().unwrap();
+            let tree_id = idx.write_tree().unwrap();
+            let tree = main_repo.find_tree(tree_id).unwrap();
+            let parent = main_repo.head().unwrap().peel_to_commit().unwrap();
+            let sig = Signature::now("Test", "test@example.com").unwrap();
+            main_repo
+                .commit(Some("HEAD"), &sig, &sig, "add submodule", &tree, &[&parent])
+                .unwrap();
+        }
+        drop(submodule);
+        drop(main_repo);
+
+        // Make the submodule dirty (modified tracked file + untracked file inside submodule)
+        fs::write(main_dir.join("deps/sub/sub.txt"), "sub-dirty\n").unwrap();
+        fs::write(main_dir.join("deps/sub/untracked.txt"), "temp\n").unwrap();
+
+        let repo = Repository::open(&main_dir).unwrap();
+        assert_eq!(repo.get_status().unwrap().total_changes, 0);
+        assert!(!repo.info().unwrap().is_dirty);
+
+        // Modify a normal file in the main repo, stage_all, and commit
+        fs::write(main_dir.join("README.md"), "hello world\n").unwrap();
+        assert_eq!(repo.get_status().unwrap().total_changes, 1);
+        repo.stage_all().unwrap();
+        repo.create_commit("update readme", "Test", "test@example.com")
+            .unwrap();
         assert_eq!(repo.get_status().unwrap().total_changes, 0);
         assert!(!repo.info().unwrap().is_dirty);
     }

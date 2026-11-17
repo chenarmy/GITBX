@@ -3605,4 +3605,73 @@ mod tests {
             "upstream update\n"
         );
     }
+
+    #[test]
+    fn pull_succeeds_when_repository_has_dirty_submodule() {
+        let dir = tempdir().unwrap();
+
+        // Create submodule origin
+        let sub_origin_path = dir.path().join("sub_origin");
+        let sub_origin = Repository::init(&sub_origin_path).unwrap();
+        fs::write(sub_origin_path.join("sub.txt"), "sub v1\n").unwrap();
+        commit_all(&sub_origin, "sub init");
+        drop(sub_origin);
+
+        // Create bare remote for main repo
+        let origin_path = dir.path().join("origin.git");
+        let origin_repo = Repository::init_bare(&origin_path).unwrap();
+        origin_repo.set_head("refs/heads/main").unwrap();
+        drop(origin_repo);
+
+        // Create seed repo with submodule and push to origin
+        let seed_path = dir.path().join("seed");
+        let seed = Repository::init(&seed_path).unwrap();
+        seed.set_head("refs/heads/main").unwrap();
+        fs::write(seed_path.join("README.md"), "base\n").unwrap();
+        commit_all(&seed, "base");
+
+        let sub_url = sub_origin_path.to_string_lossy().replace('\\', "/");
+        let mut submodule = seed.submodule(&sub_url, Path::new("deps/sub"), true).unwrap();
+        submodule.clone(None).unwrap();
+        submodule.add_finalize().unwrap();
+        commit_all(&seed, "add submodule");
+        drop(submodule);
+
+        let mut remote = seed
+            .remote("origin", origin_path.to_str().unwrap())
+            .unwrap();
+        remote.push(&["refs/heads/main:refs/heads/main"], None).unwrap();
+        drop(remote);
+        drop(seed);
+
+        // Clone into local repo
+        let local_path = dir.path().join("local");
+        GitService::clone_repo(origin_path.to_str().unwrap(), local_path.to_str().unwrap())
+            .unwrap();
+        let local_str = local_path.to_str().unwrap();
+
+        // Make submodule dirty in local repo
+        fs::create_dir_all(local_path.join("deps/sub")).unwrap();
+        fs::write(local_path.join("deps/sub/untracked.txt"), "dirty\n").unwrap();
+
+        // Push a new commit from peer to origin
+        let peer_path = dir.path().join("peer");
+        GitService::clone_repo(origin_path.to_str().unwrap(), peer_path.to_str().unwrap())
+            .unwrap();
+        {
+            let peer = crate::Repository::open(&peer_path).unwrap();
+            fs::write(peer_path.join("incoming.txt"), "from remote\n").unwrap();
+            commit_all(peer.inner(), "incoming commit");
+            peer.push_branch("origin", "main").unwrap();
+        }
+
+        // Pull in local repo must succeed even though submodule is dirty
+        GitService::pull_with_strategy(local_str, "origin", "merge").unwrap();
+        assert_eq!(
+            fs::read_to_string(local_path.join("incoming.txt"))
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "from remote\n"
+        );
+    }
 }

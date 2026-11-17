@@ -91,7 +91,10 @@ function readInitialCollapsedRepoGroups(): Set<string> {
 }
 const collapsedRepoGroups = ref(readInitialCollapsedRepoGroups());
 const draggingRepoPath = ref<string | null>(null);
+const draggingGroupName = ref<string | null>(null);
 const dragOverTarget = ref<string | null>(null);
+const repoDropIndicator = ref<{ path: string; position: 'before' | 'after' } | null>(null);
+const groupDropIndicator = ref<{ name: string; position: 'before' | 'after' } | null>(null);
 
 const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(null);
 const repositoryContextMenu = ref<{ path: string; x: number; y: number } | null>(null);
@@ -283,39 +286,149 @@ async function handleDeleteGroup(groupName: string) {
   notification.info(t('Group Deleted'), groupName);
 }
 
+function getVerticalDropPosition(event: DragEvent): 'before' | 'after' {
+  const target = event.currentTarget as HTMLElement | null;
+  if (!target) return 'after';
+  const rect = target.getBoundingClientRect();
+  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
+
+function isLeavingElement(event: DragEvent): boolean {
+  const currentTarget = event.currentTarget as HTMLElement | null;
+  const relatedTarget = event.relatedTarget as Node | null;
+  return Boolean(currentTarget && relatedTarget && currentTarget.contains(relatedTarget));
+}
+
+function resetDragState() {
+  draggingRepoPath.value = null;
+  draggingGroupName.value = null;
+  dragOverTarget.value = null;
+  repoDropIndicator.value = null;
+  groupDropIndicator.value = null;
+}
+
 function handleRepoDragStart(event: DragEvent, repoPath: string) {
+  draggingGroupName.value = null;
+  groupDropIndicator.value = null;
   draggingRepoPath.value = repoPath;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', repoPath);
+    event.dataTransfer.setData('application/x-gitbx-repo', repoPath);
   }
 }
 
-function handleRepoDragEnd() {
-  draggingRepoPath.value = null;
+function handleRepoDragOver(event: DragEvent, targetRepoPath: string) {
+  if (!draggingRepoPath.value) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
   dragOverTarget.value = null;
+  if (draggingRepoPath.value === targetRepoPath) {
+    repoDropIndicator.value = null;
+    return;
+  }
+  repoDropIndicator.value = {
+    path: targetRepoPath,
+    position: getVerticalDropPosition(event),
+  };
 }
 
-function handleGroupDragOver(event: DragEvent, target: string) {
+function handleRepoDragLeave(event: DragEvent, targetRepoPath: string) {
+  if (isLeavingElement(event)) return;
+  if (repoDropIndicator.value?.path === targetRepoPath) {
+    repoDropIndicator.value = null;
+  }
+}
+
+function handleRepoDrop(event: DragEvent, targetRepoPath: string) {
+  const sourcePath =
+    draggingRepoPath.value ||
+    event.dataTransfer?.getData('application/x-gitbx-repo') ||
+    event.dataTransfer?.getData('text/plain');
+  if (!sourcePath) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const position =
+    repoDropIndicator.value?.path === targetRepoPath
+      ? repoDropIndicator.value.position
+      : getVerticalDropPosition(event);
+  resetDragState();
+  if (sourcePath !== targetRepoPath) {
+    repoStore.reorderRepo(sourcePath, targetRepoPath, position);
+  }
+}
+
+function handleGroupDragStart(event: DragEvent, groupName: string) {
+  draggingRepoPath.value = null;
+  repoDropIndicator.value = null;
+  draggingGroupName.value = groupName;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/x-gitbx-group', groupName);
+  }
+}
+
+function handleGroupDragOver(event: DragEvent, target: string, groupName?: string) {
+  if (draggingGroupName.value && groupName) {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    dragOverTarget.value = null;
+    repoDropIndicator.value = null;
+    if (draggingGroupName.value === groupName) {
+      groupDropIndicator.value = null;
+      return;
+    }
+    groupDropIndicator.value = {
+      name: groupName,
+      position: getVerticalDropPosition(event),
+    };
+    return;
+  }
   if (!draggingRepoPath.value) return;
   event.preventDefault();
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
+  repoDropIndicator.value = null;
   dragOverTarget.value = target;
 }
 
-function handleGroupDragLeave(target: string) {
+function handleGroupDragLeave(event: DragEvent, target: string, groupName?: string) {
+  if (isLeavingElement(event)) return;
   if (dragOverTarget.value === target) {
     dragOverTarget.value = null;
+  }
+  if (groupName && groupDropIndicator.value?.name === groupName) {
+    groupDropIndicator.value = null;
   }
 }
 
 function handleGroupDrop(event: DragEvent, groupName: string | null) {
+  const sourceGroup = draggingGroupName.value || event.dataTransfer?.getData('application/x-gitbx-group');
+  if (sourceGroup && groupName) {
+    event.preventDefault();
+    const position =
+      groupDropIndicator.value?.name === groupName
+        ? groupDropIndicator.value.position
+        : getVerticalDropPosition(event);
+    resetDragState();
+    if (sourceGroup !== groupName) {
+      repoStore.reorderRepoGroup(sourceGroup, groupName, position);
+    }
+    return;
+  }
+
   event.preventDefault();
-  const repoPath = draggingRepoPath.value || event.dataTransfer?.getData('text/plain');
-  draggingRepoPath.value = null;
-  dragOverTarget.value = null;
+  const repoPath =
+    draggingRepoPath.value ||
+    event.dataTransfer?.getData('application/x-gitbx-repo') ||
+    event.dataTransfer?.getData('text/plain');
+  resetDragState();
   if (!repoPath) return;
   repoStore.setRepoGroup(repoPath, groupName);
   if (groupName && collapsedRepoGroups.value.has(groupName)) {
@@ -534,13 +647,24 @@ async function handleDeleteTag(name: string) {
         <div
           v-for="group in groupedRepositories"
           :key="`repo-group:${group.name}`"
-          class="space-y-0.5 rounded-[6px] transition-colors"
-          :class="dragOverTarget === `group:${group.name}` ? 'bg-primary/10 ring-1 ring-primary/40' : ''"
-          @dragover="handleGroupDragOver($event, `group:${group.name}`)"
-          @dragleave="handleGroupDragLeave(`group:${group.name}`)"
+          class="relative space-y-0.5 rounded-[6px] transition-colors"
+          :class="[
+            dragOverTarget === `group:${group.name}` ? 'bg-primary/10 ring-1 ring-primary/40' : '',
+            draggingGroupName === group.name ? 'opacity-50' : '',
+          ]"
+          @dragover="handleGroupDragOver($event, `group:${group.name}`, group.name)"
+          @dragleave="handleGroupDragLeave($event, `group:${group.name}`, group.name)"
           @drop="handleGroupDrop($event, group.name)"
         >
           <div
+            v-if="groupDropIndicator?.name === group.name"
+            class="pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary z-10"
+            :class="groupDropIndicator.position === 'before' ? 'top-0' : 'bottom-0'"
+          />
+          <div
+            draggable="true"
+            @dragstart.stop="handleGroupDragStart($event, group.name)"
+            @dragend="resetDragState"
             class="branch-directory-row group/repogroup justify-between pr-1"
             @click.stop="toggleRepoGroup(group.name)"
             @contextmenu.prevent.stop="openGroupContextMenu($event, group.name)"
@@ -587,17 +711,28 @@ async function handleDeleteTag(name: string) {
               v-for="repo in group.repos"
               :key="repo.path"
               draggable="true"
-              @dragstart="handleRepoDragStart($event, repo.path)"
-              @dragend="handleRepoDragEnd"
+              @dragstart.stop="handleRepoDragStart($event, repo.path)"
+              @dragover="handleRepoDragOver($event, repo.path)"
+              @dragleave="handleRepoDragLeave($event, repo.path)"
+              @drop="handleRepoDrop($event, repo.path)"
+              @dragend="resetDragState"
               @click.stop="handleSwitchRepo(repo.path)"
               @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
               @keydown.enter.prevent="handleSwitchRepo(repo.path)"
               @keydown.space.prevent="handleSwitchRepo(repo.path)"
               role="button"
               tabindex="0"
-              class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
-              :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70'"
+              class="relative flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
+              :class="[
+                repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70',
+                draggingRepoPath === repo.path ? 'opacity-50' : '',
+              ]"
             >
+              <div
+                v-if="repoDropIndicator?.path === repo.path"
+                class="pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary z-10"
+                :class="repoDropIndicator.position === 'before' ? 'top-0' : 'bottom-0'"
+              />
               <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                 <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
                 <span class="min-w-0 truncate">{{ repo.name }}</span>
@@ -638,7 +773,7 @@ async function handleDeleteTag(name: string) {
           class="space-y-0.5 rounded-[6px] transition-colors"
           :class="dragOverTarget === '__ungrouped__' ? 'bg-primary/10 ring-1 ring-primary/40 p-0.5' : ''"
           @dragover="handleGroupDragOver($event, '__ungrouped__')"
-          @dragleave="handleGroupDragLeave('__ungrouped__')"
+          @dragleave="handleGroupDragLeave($event, '__ungrouped__')"
           @drop="handleGroupDrop($event, null)"
         >
           <div
@@ -651,17 +786,28 @@ async function handleDeleteTag(name: string) {
             v-for="repo in ungroupedRepositories"
             :key="repo.path"
             draggable="true"
-            @dragstart="handleRepoDragStart($event, repo.path)"
-            @dragend="handleRepoDragEnd"
+            @dragstart.stop="handleRepoDragStart($event, repo.path)"
+            @dragover="handleRepoDragOver($event, repo.path)"
+            @dragleave="handleRepoDragLeave($event, repo.path)"
+            @drop="handleRepoDrop($event, repo.path)"
+            @dragend="resetDragState"
             @click.stop="handleSwitchRepo(repo.path)"
             @contextmenu.prevent.stop="openRepositoryContextMenu($event, repo.path)"
             @keydown.enter.prevent="handleSwitchRepo(repo.path)"
             @keydown.space.prevent="handleSwitchRepo(repo.path)"
             role="button"
             tabindex="0"
-            class="flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
-            :class="repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70'"
+            class="relative flex min-w-0 items-center justify-between px-2 py-1.5 rounded-[4px] cursor-pointer transition-colors text-xs group"
+            :class="[
+              repoStore.activeRepoPath === repo.path ? 'bg-primary/10 text-primary font-semibold border border-primary/25' : 'text-foreground hover:bg-accent/70',
+              draggingRepoPath === repo.path ? 'opacity-50' : '',
+            ]"
           >
+            <div
+              v-if="repoDropIndicator?.path === repo.path"
+              class="pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary z-10"
+              :class="repoDropIndicator.position === 'before' ? 'top-0' : 'bottom-0'"
+            />
             <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               <FolderGit2 class="w-3.5 h-3.5 shrink-0" :class="repoStore.activeRepoPath === repo.path ? 'text-primary' : 'text-muted-foreground'" />
               <span class="min-w-0 truncate">{{ repo.name }}</span>
