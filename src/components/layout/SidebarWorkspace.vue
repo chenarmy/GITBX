@@ -9,6 +9,7 @@ import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { formatGitError } from '@/composables/useGitApi';
 import { useBranchCheckout } from '@/composables/useBranchCheckout';
+import { useContextMenuPosition } from '@/composables/useContextMenuPosition';
 import {
   FolderGit2,
   FolderPlus,
@@ -100,6 +101,18 @@ const contextMenu = ref<{ branch: BranchItem; x: number; y: number } | null>(nul
 const repositoryContextMenu = ref<{ path: string; x: number; y: number } | null>(null);
 const groupContextMenu = ref<{ groupName: string; x: number; y: number } | null>(null);
 const workspaceContextMenu = ref<{ x: number; y: number } | null>(null);
+const groupMenuRef = ref<HTMLElement | null>(null);
+const workspaceMenuRef = ref<HTMLElement | null>(null);
+const { menuStyle: groupContextMenuStyle } = useContextMenuPosition(
+  groupMenuRef,
+  () => groupContextMenu.value,
+  { fallbackWidth: 208, fallbackHeight: 240 },
+);
+const { menuStyle: workspaceContextMenuStyle } = useContextMenuPosition(
+  workspaceMenuRef,
+  () => (workspaceContextMenu.value && !groupContextMenu.value ? workspaceContextMenu.value : null),
+  { fallbackWidth: 240, fallbackHeight: 160 },
+);
 const isBulkOperating = ref(false);
 
 function openWorkspaceContextMenu(e: MouseEvent) {
@@ -109,8 +122,8 @@ function openWorkspaceContextMenu(e: MouseEvent) {
   repositoryContextMenu.value = null;
   groupContextMenu.value = null;
   workspaceContextMenu.value = {
-    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
-    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 200)),
+    x: e.clientX,
+    y: e.clientY,
   };
 }
 
@@ -325,12 +338,11 @@ function hasDragType(event: DragEvent, type: string): boolean {
 }
 
 function isRepositoryDrag(event: DragEvent): boolean {
+  if (isGroupDrag(event)) return false;
   return Boolean(
     draggingRepoPath.value ||
-    (!draggingGroupName.value && (
-      hasDragType(event, 'application/x-gitbx-repo') ||
-      hasDragType(event, 'text/plain')
-    ))
+    hasDragType(event, 'application/x-gitbx-repo') ||
+    hasDragType(event, 'text/plain')
   );
 }
 
@@ -375,6 +387,7 @@ function handleRepoDragLeave(event: DragEvent, targetRepoPath: string) {
 }
 
 function handleRepoDrop(event: DragEvent, targetRepoPath: string) {
+  if (isGroupDrag(event)) return;
   const sourcePath =
     draggingRepoPath.value ||
     event.dataTransfer?.getData('application/x-gitbx-repo') ||
@@ -399,6 +412,7 @@ function handleGroupDragStart(event: DragEvent, groupName: string) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/x-gitbx-group', groupName);
+    event.dataTransfer.setData('text/plain', groupName);
   }
 }
 
@@ -441,15 +455,19 @@ function handleGroupDragLeave(event: DragEvent, target: string, groupName?: stri
 
 function handleGroupDrop(event: DragEvent, groupName: string | null) {
   const sourceGroup = draggingGroupName.value || event.dataTransfer?.getData('application/x-gitbx-group');
-  if (sourceGroup && groupName) {
+  if (sourceGroup) {
     event.preventDefault();
-    const position =
-      groupDropIndicator.value?.name === groupName
-        ? groupDropIndicator.value.position
-        : getVerticalDropPosition(event);
-    resetDragState();
-    if (sourceGroup !== groupName) {
-      repoStore.reorderRepoGroup(sourceGroup, groupName, position);
+    if (groupName) {
+      const position =
+        groupDropIndicator.value?.name === groupName
+          ? groupDropIndicator.value.position
+          : getVerticalDropPosition(event);
+      resetDragState();
+      if (sourceGroup !== groupName) {
+        repoStore.reorderRepoGroup(sourceGroup, groupName, position);
+      }
+    } else {
+      resetDragState();
     }
     return;
   }
@@ -555,6 +573,7 @@ function openContextMenu(e: MouseEvent, branch: BranchItem) {
   e.preventDefault();
   repositoryContextMenu.value = null;
   groupContextMenu.value = null;
+  workspaceContextMenu.value = null;
   contextMenu.value = {
     branch,
     x: e.clientX,
@@ -566,6 +585,7 @@ function openRepositoryContextMenu(e: MouseEvent, path: string) {
   e.preventDefault();
   contextMenu.value = null;
   groupContextMenu.value = null;
+  workspaceContextMenu.value = null;
   repositoryContextMenu.value = { path, x: e.clientX, y: e.clientY };
 }
 
@@ -573,10 +593,11 @@ function openGroupContextMenu(e: MouseEvent, groupName: string) {
   e.preventDefault();
   contextMenu.value = null;
   repositoryContextMenu.value = null;
+  workspaceContextMenu.value = null;
   groupContextMenu.value = {
     groupName,
-    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 200)),
-    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 140)),
+    x: e.clientX,
+    y: e.clientY,
   };
 }
 
@@ -1178,10 +1199,12 @@ async function handleDeleteTag(name: string) {
         @contextmenu.prevent="groupContextMenu = null; workspaceContextMenu = null"
       >
         <div
+          ref="groupMenuRef"
           class="fixed arco-menu w-52 text-xs select-none"
-          :style="{ left: `${groupContextMenu.x}px`, top: `${groupContextMenu.y}px` }"
+          :style="groupContextMenuStyle"
           role="menu"
           @click.stop
+          @contextmenu.prevent
         >
           <button
             role="menuitem"
@@ -1245,10 +1268,12 @@ async function handleDeleteTag(name: string) {
         @contextmenu.prevent="workspaceContextMenu = null"
       >
         <div
+          ref="workspaceMenuRef"
           class="fixed arco-menu w-60 text-xs select-none"
-          :style="{ left: `${workspaceContextMenu.x}px`, top: `${workspaceContextMenu.y}px` }"
+          :style="workspaceContextMenuStyle"
           role="menu"
           @click.stop
+          @contextmenu.prevent
         >
           <div class="arco-menu-section">
             {{ t('All Repositories ({count})', { count: repoStore.repoList.length }) }}
@@ -1287,6 +1312,9 @@ async function handleDeleteTag(name: string) {
 </template>
 
 <style scoped>
+[draggable="true"] {
+  -webkit-user-drag: element;
+}
 .branch-directory-row {
   align-items: center;
   border-radius: 4px;

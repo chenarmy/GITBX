@@ -26,6 +26,7 @@ import {
 import { useI18n } from '@/i18n';
 import { useChangelistStore } from '@/stores/changelist';
 import { usePushRecovery } from '@/composables/usePushRecovery';
+import { useContextMenuPosition } from '@/composables/useContextMenuPosition';
 import { formatGitError } from '@/composables/useGitApi';
 
 const repoStore = useRepoStore();
@@ -41,6 +42,12 @@ const isPulling = ref(false);
 const isPushing = ref(false);
 const isBulkOperating = ref(false);
 const toolbarMenu = ref<{ kind: 'fetch' | 'pull' | 'push'; x: number; y: number } | null>(null);
+const toolbarMenuRef = ref<HTMLElement | null>(null);
+const { menuStyle: toolbarMenuStyle } = useContextMenuPosition(
+  toolbarMenuRef,
+  () => toolbarMenu.value,
+  { fallbackWidth: 240, fallbackHeight: 220 },
+);
 const pullStrategy = ref<'merge' | 'rebase' | 'ff-only'>((localStorage.getItem('gitbx_pull_strategy') as any) || 'merge');
 const forceWithLease = ref(false);
 // Keep remote-tracking data fresh by default. Users who explicitly disable
@@ -87,8 +94,8 @@ function openToolbarMenu(e: MouseEvent, kind: 'fetch' | 'pull' | 'push') {
   isMoreActionsOpen.value = false;
   toolbarMenu.value = {
     kind,
-    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
-    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 200)),
+    x: e.clientX,
+    y: e.clientY,
   };
 }
 
@@ -596,10 +603,12 @@ async function handleAbortOperation(operation: 'merge' | 'rebase' | 'cherry-pick
         @contextmenu.prevent="closeToolbarMenu"
       >
         <div
+          ref="toolbarMenuRef"
           class="fixed arco-menu w-60 text-xs select-none"
-          :style="{ left: `${toolbarMenu.x}px`, top: `${toolbarMenu.y}px` }"
+          :style="toolbarMenuStyle"
           role="menu"
           @click.stop
+          @contextmenu.prevent
         >
           <div class="arco-menu-section">
             {{ t('Current Repository') }}

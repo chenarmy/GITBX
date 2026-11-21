@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { useNotificationStore } from '@/stores/notification';
 import { formatGitError } from '@/composables/useGitApi';
+import { useContextMenuPosition } from '@/composables/useContextMenuPosition';
 import { useI18n } from '@/i18n';
 import type { GraphCommitNode } from '@/types/graph';
 import {
@@ -37,14 +38,12 @@ const confirmation = useConfirmationStore();
 const notification = useNotificationStore();
 const { t } = useI18n();
 
-const menuStyle = computed(() => {
-  const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
-  const height = typeof window !== 'undefined' ? window.innerHeight : 800;
-  return {
-    left: `${Math.min(props.x, width - 270)}px`,
-    top: `${Math.min(props.y, height - 360)}px`,
-  };
-});
+const menuRef = ref<HTMLElement | null>(null);
+const { menuStyle } = useContextMenuPosition(
+  menuRef,
+  () => ({ x: props.x, y: props.y }),
+  { fallbackWidth: 256, fallbackHeight: 340 },
+);
 
 async function handleCherryPick() {
   try {
@@ -127,22 +126,30 @@ function handleClickOutside() {
   emit('close');
 }
 
+function handleKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape') emit('close');
+}
+
 onMounted(() => {
   window.addEventListener('click', handleClickOutside);
+  window.addEventListener('keydown', handleKeyDown);
 });
 
 onUnmounted(() => {
   window.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
 <template>
   <Teleport to="body">
     <div
+      ref="menuRef"
       class="fixed z-50 arco-menu w-64 text-xs select-none"
       :style="menuStyle"
       role="menu"
       @click.stop
+      @contextmenu.prevent
     >
       <button
         @click="handleCherryPick"

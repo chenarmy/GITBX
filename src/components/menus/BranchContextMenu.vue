@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRepoStore } from '@/stores/repo';
 import { formatGitError, useGitApi } from '@/composables/useGitApi';
 import { useNotificationStore } from '@/stores/notification';
@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n';
 import type { BranchItem } from '@/types/git';
 import { usePushRecovery } from '@/composables/usePushRecovery';
 import { useBranchCheckout } from '@/composables/useBranchCheckout';
+import { useContextMenuPosition } from '@/composables/useContextMenuPosition';
 import {
   CheckCircle2,
   GitBranch,
@@ -63,15 +64,12 @@ const trackedBranchName = computed(() => {
   return `origin/${props.branch.name}`;
 });
 
-const menuStyle = computed(() => {
-  const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
-  const height = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const menuHeight = isCurrentBranch.value ? 290 : isRemoteBranch.value ? 310 : 450;
-  return {
-    left: `${Math.min(props.x, width - 300)}px`,
-    top: `${Math.min(props.y, height - menuHeight)}px`,
-  };
-});
+const menuRef = ref<HTMLElement | null>(null);
+const { menuStyle } = useContextMenuPosition(
+  menuRef,
+  () => ({ x: props.x, y: props.y }),
+  { fallbackWidth: 288, fallbackHeight: 450 },
+);
 
 async function handleCheckout() {
   try {
@@ -263,22 +261,30 @@ function handleClickOutside() {
   emit('close');
 }
 
+function handleKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape') emit('close');
+}
+
 onMounted(() => {
   window.addEventListener('click', handleClickOutside);
+  window.addEventListener('keydown', handleKeyDown);
 });
 
 onUnmounted(() => {
   window.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
 <template>
   <Teleport to="body">
     <div
+      ref="menuRef"
       class="fixed z-50 arco-menu w-72 text-xs select-none"
       :style="menuStyle"
       role="menu"
       @click.stop
+      @contextmenu.prevent
     >
       <!-- CASE 1: Current Active Branch -->
       <template v-if="isCurrentBranch">

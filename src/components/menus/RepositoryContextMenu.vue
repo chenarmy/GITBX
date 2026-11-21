@@ -6,6 +6,7 @@ import { useRepoStore } from '@/stores/repo';
 import { useNotificationStore } from '@/stores/notification';
 import { useConfirmationStore } from '@/stores/confirmation';
 import { usePushRecovery } from '@/composables/usePushRecovery';
+import { useContextMenuPosition } from '@/composables/useContextMenuPosition';
 import { useI18n } from '@/i18n';
 
 const props = defineProps<{ path: string; x: number; y: number }>();
@@ -17,6 +18,7 @@ const confirmation = useConfirmationStore();
 const { t } = useI18n();
 const { pushWithRecovery } = usePushRecovery();
 const isSyncing = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
 
 const currentRepo = computed(() => repoStore.repoList.find((r) => r.path === props.path));
 const currentGroup = computed(() => currentRepo.value?.group || '');
@@ -33,13 +35,11 @@ const allGroups = computed(() => {
   return groups;
 });
 
-const menuStyle = computed(() => {
-  const estimatedHeight = 320 + allGroups.value.length * 28;
-  return {
-    left: `${Math.max(8, Math.min(props.x, window.innerWidth - 230))}px`,
-    top: `${Math.max(8, Math.min(props.y, window.innerHeight - Math.min(estimatedHeight, 380)))}px`,
-  };
-});
+const { menuStyle } = useContextMenuPosition(
+  menuRef,
+  () => ({ x: props.x, y: props.y }),
+  { fallbackWidth: 224, fallbackHeight: 380 },
+);
 
 function assignToGroup(groupName: string | null) {
   repoStore.setRepoGroup(props.path, groupName);
@@ -163,16 +163,23 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'Escape') emit('close');
 }
 
+function handleScroll(event: Event) {
+  if (menuRef.value && event.target instanceof Node && menuRef.value.contains(event.target)) {
+    return;
+  }
+  closeMenu();
+}
+
 onMounted(() => {
   window.addEventListener('click', closeMenu);
   window.addEventListener('keydown', handleKeyDown);
-  window.addEventListener('scroll', closeMenu, true);
+  window.addEventListener('scroll', handleScroll, true);
 });
 
 onUnmounted(() => {
   window.removeEventListener('click', closeMenu);
   window.removeEventListener('keydown', handleKeyDown);
-  window.removeEventListener('scroll', closeMenu, true);
+  window.removeEventListener('scroll', handleScroll, true);
 });
 
 function closeMenu() {
@@ -183,6 +190,7 @@ function closeMenu() {
 <template>
   <Teleport to="body">
     <div
+      ref="menuRef"
       class="fixed z-50 arco-menu w-56 text-xs select-none"
       :style="menuStyle"
       role="menu"
