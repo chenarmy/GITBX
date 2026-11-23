@@ -895,60 +895,97 @@ export const useRepoStore = defineStore('repo', () => {
     failed: Array<{ path: string; error: string }>;
   }
 
-  const fetchAllRepos = async (): Promise<BulkOperationResult> => {
+  const resolveBulkTargetPaths = (repoPaths?: string[]): string[] => {
+    if (repoPaths === undefined) {
+      return repoList.value.map((repo) => repo.path);
+    }
+    const seen = new Set<string>();
+    const resolved: string[] = [];
+    for (const rawPath of repoPaths) {
+      const normalized = normalizeStoredRepoPath(rawPath).trim();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      resolved.push(normalized);
+    }
+    return resolved;
+  };
+
+  const refreshBulkTargetsAfterOperation = async (targetPaths: string[], scoped: boolean) => {
+    if (targetPaths.length === 0) return;
+    if (scoped) {
+      await Promise.allSettled(targetPaths.map((path) => refreshSyncStatus(path)));
+    } else {
+      await refreshAllRepoSyncStatuses(false);
+    }
+    const activePath = activeRepoPath.value ? normalizeStoredRepoPath(activeRepoPath.value) : '';
+    if (activePath && (!scoped || targetPaths.includes(activePath))) {
+      await loadRepo(activePath).catch(() => undefined);
+    }
+  };
+
+  const fetchAllRepos = async (repoPaths?: string[]): Promise<BulkOperationResult> => {
+    const targetPaths = resolveBulkTargetPaths(repoPaths);
+    if (targetPaths.length === 0) {
+      return { succeeded: [], failed: [] };
+    }
     const succeeded: string[] = [];
     const failed: Array<{ path: string; error: string }> = [];
     const results = await Promise.allSettled(
-      repoList.value.map(async (repo) => {
-        await gitApi.fetchRemote(repo.path);
-        return repo.path;
+      targetPaths.map(async (repoPath) => {
+        await gitApi.fetchRemote(repoPath);
+        return repoPath;
       })
     );
     results.forEach((result, index) => {
-      const repoPath = repoList.value[index]?.path || '';
+      const repoPath = targetPaths[index] || '';
       if (result.status === 'fulfilled') succeeded.push(repoPath);
       else failed.push({ path: repoPath, error: formatGitError(result.reason) });
     });
-    await refreshAllRepoSyncStatuses(false);
-    if (activeRepoPath.value) {
-      await loadRepo(activeRepoPath.value).catch(() => undefined);
-    }
+    await refreshBulkTargetsAfterOperation(targetPaths, repoPaths !== undefined);
     return { succeeded, failed };
   };
 
-  const pullAllRepos = async (strategy: 'merge' | 'rebase' | 'ff-only' = 'merge'): Promise<BulkOperationResult> => {
+  const pullAllRepos = async (
+    strategy: 'merge' | 'rebase' | 'ff-only' = 'merge',
+    repoPaths?: string[]
+  ): Promise<BulkOperationResult> => {
+    const targetPaths = resolveBulkTargetPaths(repoPaths);
+    if (targetPaths.length === 0) {
+      return { succeeded: [], failed: [] };
+    }
     const succeeded: string[] = [];
     const failed: Array<{ path: string; error: string }> = [];
-    for (const repo of [...repoList.value]) {
+    for (const repoPath of targetPaths) {
       try {
-        await gitApi.pullRemote(repo.path, strategy);
-        succeeded.push(repo.path);
+        await gitApi.pullRemote(repoPath, strategy);
+        succeeded.push(repoPath);
       } catch (error) {
-        failed.push({ path: repo.path, error: formatGitError(error) });
+        failed.push({ path: repoPath, error: formatGitError(error) });
       }
     }
-    await refreshAllRepoSyncStatuses(false);
-    if (activeRepoPath.value) {
-      await loadRepo(activeRepoPath.value).catch(() => undefined);
-    }
+    await refreshBulkTargetsAfterOperation(targetPaths, repoPaths !== undefined);
     return { succeeded, failed };
   };
 
-  const pushAllRepos = async (forceWithLease = false): Promise<BulkOperationResult> => {
+  const pushAllRepos = async (
+    forceWithLease = false,
+    repoPaths?: string[]
+  ): Promise<BulkOperationResult> => {
+    const targetPaths = resolveBulkTargetPaths(repoPaths);
+    if (targetPaths.length === 0) {
+      return { succeeded: [], failed: [] };
+    }
     const succeeded: string[] = [];
     const failed: Array<{ path: string; error: string }> = [];
-    for (const repo of [...repoList.value]) {
+    for (const repoPath of targetPaths) {
       try {
-        await gitApi.pushRemote(repo.path, forceWithLease);
-        succeeded.push(repo.path);
+        await gitApi.pushRemote(repoPath, forceWithLease);
+        succeeded.push(repoPath);
       } catch (error) {
-        failed.push({ path: repo.path, error: formatGitError(error) });
+        failed.push({ path: repoPath, error: formatGitError(error) });
       }
     }
-    await refreshAllRepoSyncStatuses(false);
-    if (activeRepoPath.value) {
-      await loadRepo(activeRepoPath.value).catch(() => undefined);
-    }
+    await refreshBulkTargetsAfterOperation(targetPaths, repoPaths !== undefined);
     return { succeeded, failed };
   };
 

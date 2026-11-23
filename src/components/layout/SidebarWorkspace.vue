@@ -127,29 +127,69 @@ function openWorkspaceContextMenu(e: MouseEvent) {
   };
 }
 
-function formatBulkResult(action: string, result: { succeeded: string[]; failed: Array<{ path: string; error: string }> }) {
+function getGroupRepoPaths(groupName: string): string[] {
+  return repoStore.repoList
+    .filter((repo) => repo.group === groupName)
+    .map((repo) => repo.path);
+}
+
+const activeGroupContextRepoCount = computed(() => {
+  if (!groupContextMenu.value) return 0;
+  return getGroupRepoPaths(groupContextMenu.value.groupName).length;
+});
+
+function getPullStrategy(): 'merge' | 'rebase' | 'ff-only' {
+  const saved = localStorage.getItem('gitbx_pull_strategy');
+  return saved === 'rebase' || saved === 'ff-only' ? saved : 'merge';
+}
+
+function formatBulkResult(
+  action: string,
+  result: { succeeded: string[]; failed: Array<{ path: string; error: string }> },
+  groupName?: string,
+) {
   const total = result.succeeded.length + result.failed.length;
+  const scopeSuffix = groupName ? ` (${groupName})` : '';
   if (result.failed.length === 0) {
-    notification.success(t('{action} All Completed', { action }), t('{succeeded}/{total} repositories succeeded.', { succeeded: result.succeeded.length, total }));
+    notification.success(
+      `${t('{action} All Completed', { action })}${scopeSuffix}`,
+      t('{succeeded}/{total} repositories succeeded.', { succeeded: result.succeeded.length, total }),
+    );
   } else if (result.succeeded.length === 0) {
-    notification.error(t('{action} All Failed', { action }), result.failed.slice(0, 3).map((f) => `${f.path}: ${f.error}`).join('\n') || t('All repositories failed.'));
+    notification.error(
+      `${t('{action} All Failed', { action })}${scopeSuffix}`,
+      result.failed.slice(0, 3).map((f) => `${f.path}: ${f.error}`).join('\n') || t('All repositories failed.'),
+    );
   } else {
     notification.warning(
-      t('{action} All Partially Completed', { action }),
-      t('{succeeded}/{total} succeeded. Failed: {failed}', { succeeded: result.succeeded.length, total, failed: result.failed.map((f) => f.path.split(/[\\/]/).pop() || f.path).join(', ') })
+      `${t('{action} All Partially Completed', { action })}${scopeSuffix}`,
+      t('{succeeded}/{total} succeeded. Failed: {failed}', {
+        succeeded: result.succeeded.length,
+        total,
+        failed: result.failed.map((f) => f.path.split(/[\\/]/).pop() || f.path).join(', '),
+      }),
     );
   }
 }
 
-async function handleFetchAllRepos() {
+async function handleFetchAllRepos(groupName?: string) {
   if (isBulkOperating.value) return;
+  const targetGroup = typeof groupName === 'string' ? groupName : undefined;
   workspaceContextMenu.value = null;
   groupContextMenu.value = null;
+  const targetPaths = targetGroup !== undefined ? getGroupRepoPaths(targetGroup) : undefined;
+  const count = targetPaths ? targetPaths.length : repoStore.repoList.length;
+  if (count === 0) return;
   isBulkOperating.value = true;
-  notification.info(t('Git Fetch'), t('Fetching all repositories ({count})...', { count: repoStore.repoList.length }));
+  notification.info(
+    t('Git Fetch'),
+    targetGroup !== undefined
+      ? t("Fetching repositories in group '{group}' ({count})...", { group: targetGroup, count })
+      : t('Fetching all repositories ({count})...', { count }),
+  );
   try {
-    const result = await repoStore.fetchAllRepos();
-    formatBulkResult(t('Fetch'), result);
+    const result = await repoStore.fetchAllRepos(targetPaths);
+    formatBulkResult(t('Fetch'), result, targetGroup);
   } catch (error) {
     notification.error(t('Fetch Failed'), formatGitError(error));
   } finally {
@@ -157,16 +197,25 @@ async function handleFetchAllRepos() {
   }
 }
 
-async function handlePullAllRepos() {
+async function handlePullAllRepos(groupName?: string) {
   if (isBulkOperating.value) return;
+  const targetGroup = typeof groupName === 'string' ? groupName : undefined;
   workspaceContextMenu.value = null;
   groupContextMenu.value = null;
+  const targetPaths = targetGroup !== undefined ? getGroupRepoPaths(targetGroup) : undefined;
+  const count = targetPaths ? targetPaths.length : repoStore.repoList.length;
+  if (count === 0) return;
   isBulkOperating.value = true;
-  const strategy = (localStorage.getItem('gitbx_pull_strategy') as 'merge' | 'rebase' | 'ff-only') || 'merge';
-  notification.info(t('Git Pull'), t('Pulling all repositories ({count})...', { count: repoStore.repoList.length }));
+  const strategy = getPullStrategy();
+  notification.info(
+    t('Git Pull'),
+    targetGroup !== undefined
+      ? t("Pulling repositories in group '{group}' ({count})...", { group: targetGroup, count })
+      : t('Pulling all repositories ({count})...', { count }),
+  );
   try {
-    const result = await repoStore.pullAllRepos(strategy);
-    formatBulkResult(t('Pull'), result);
+    const result = await repoStore.pullAllRepos(strategy, targetPaths);
+    formatBulkResult(t('Pull'), result, targetGroup);
   } catch (error) {
     notification.error(t('Pull Failed'), formatGitError(error));
   } finally {
@@ -174,15 +223,24 @@ async function handlePullAllRepos() {
   }
 }
 
-async function handlePushAllRepos() {
+async function handlePushAllRepos(groupName?: string) {
   if (isBulkOperating.value) return;
+  const targetGroup = typeof groupName === 'string' ? groupName : undefined;
   workspaceContextMenu.value = null;
   groupContextMenu.value = null;
+  const targetPaths = targetGroup !== undefined ? getGroupRepoPaths(targetGroup) : undefined;
+  const count = targetPaths ? targetPaths.length : repoStore.repoList.length;
+  if (count === 0) return;
   isBulkOperating.value = true;
-  notification.info(t('Git Push'), t('Pushing all repositories ({count})...', { count: repoStore.repoList.length }));
+  notification.info(
+    t('Git Push'),
+    targetGroup !== undefined
+      ? t("Pushing repositories in group '{group}' ({count})...", { group: targetGroup, count })
+      : t('Pushing all repositories ({count})...', { count }),
+  );
   try {
-    const result = await repoStore.pushAllRepos(false);
-    formatBulkResult(t('Push'), result);
+    const result = await repoStore.pushAllRepos(false, targetPaths);
+    formatBulkResult(t('Push'), result, targetGroup);
   } catch (error) {
     notification.error(t('Push Failed'), formatGitError(error));
   } finally {
@@ -1226,8 +1284,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handleFetchAllRepos"
+            :disabled="isBulkOperating || activeGroupContextRepoCount === 0"
+            @click="handleFetchAllRepos(groupContextMenu.groupName)"
           >
             <RefreshCw class="h-3.5 w-3.5 text-primary" />
             <span>{{ t('Fetch All') }}</span>
@@ -1235,8 +1293,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handlePullAllRepos"
+            :disabled="isBulkOperating || activeGroupContextRepoCount === 0"
+            @click="handlePullAllRepos(groupContextMenu.groupName)"
           >
             <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
             <span>{{ t('Pull All') }}</span>
@@ -1244,8 +1302,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handlePushAllRepos"
+            :disabled="isBulkOperating || activeGroupContextRepoCount === 0"
+            @click="handlePushAllRepos(groupContextMenu.groupName)"
           >
             <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
             <span>{{ t('Push All') }}</span>
@@ -1281,8 +1339,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handleFetchAllRepos"
+            :disabled="isBulkOperating || repoStore.repoList.length === 0"
+            @click="handleFetchAllRepos()"
           >
             <RefreshCw class="h-3.5 w-3.5 text-primary" />
             <span>{{ t('Fetch All') }}</span>
@@ -1290,8 +1348,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handlePullAllRepos"
+            :disabled="isBulkOperating || repoStore.repoList.length === 0"
+            @click="handlePullAllRepos()"
           >
             <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
             <span>{{ t('Pull All') }}</span>
@@ -1299,8 +1357,8 @@ async function handleDeleteTag(name: string) {
           <button
             role="menuitem"
             class="arco-menu-item disabled:opacity-50"
-            :disabled="isBulkOperating"
-            @click="handlePushAllRepos"
+            :disabled="isBulkOperating || repoStore.repoList.length === 0"
+            @click="handlePushAllRepos()"
           >
             <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
             <span>{{ t('Push All') }}</span>
