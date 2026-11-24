@@ -2574,6 +2574,9 @@ for (const loc of Object.keys(repoGroupTranslations) as Locale[]) {
 
 const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
   en: {
+    'Fetch {group}': 'Fetch {group}',
+    'Pull {group}': 'Pull {group}',
+    'Push {group}': 'Push {group}',
     'Fetch All': 'Fetch All',
     'Pull All': 'Pull All',
     'Push All': 'Push All',
@@ -2596,6 +2599,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': 'All repositories failed.',
   },
   'zh-CN': {
+    'Fetch {group}': '获取「{group}」',
+    'Pull {group}': '拉取「{group}」',
+    'Push {group}': '推送「{group}」',
     'Fetch All': '获取全部',
     'Pull All': '拉取全部',
     'Push All': '推送全部',
@@ -2618,6 +2624,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': '所有仓库均失败。',
   },
   'zh-TW': {
+    'Fetch {group}': '擷取「{group}」',
+    'Pull {group}': '拉取「{group}」',
+    'Push {group}': '推送「{group}」',
     'Fetch All': '擷取全部',
     'Pull All': '拉取全部',
     'Push All': '推送全部',
@@ -2640,6 +2649,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': '所有儲存庫均失敗。',
   },
   ja: {
+    'Fetch {group}': '「{group}」をフェッチ',
+    'Pull {group}': '「{group}」をプル',
+    'Push {group}': '「{group}」をプッシュ',
     'Fetch All': 'すべてフェッチ',
     'Pull All': 'すべてプル',
     'Push All': 'すべてプッシュ',
@@ -2659,6 +2671,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': 'すべてのリポジトリが失敗しました。',
   },
   de: {
+    'Fetch {group}': '{group} abrufen',
+    'Pull {group}': '{group} pullen',
+    'Push {group}': '{group} pushen',
     'Fetch All': 'Alle abrufen',
     'Pull All': 'Alle pullen',
     'Push All': 'Alle pushen',
@@ -2678,6 +2693,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': 'Alle Repositorys fehlgeschlagen.',
   },
   es: {
+    'Fetch {group}': 'Obtener {group}',
+    'Pull {group}': 'Extraer {group}',
+    'Push {group}': 'Enviar {group}',
     'Fetch All': 'Obtener todo',
     'Pull All': 'Extraer todo',
     'Push All': 'Enviar todo',
@@ -2697,6 +2715,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': 'Todos los repositorios fallaron.',
   },
   fr: {
+    'Fetch {group}': 'Récupérer {group}',
+    'Pull {group}': 'Tirer {group}',
+    'Push {group}': 'Envoyer {group}',
     'Fetch All': 'Tout récupérer',
     'Pull All': 'Tout tirer',
     'Push All': 'Tout envoyer',
@@ -2716,6 +2737,9 @@ const bulkSyncTranslations: Record<Locale, MessageCatalog> = {
     'All repositories failed.': 'Tous les dépôts ont échoué.',
   },
   ar: {
+    'Fetch {group}': 'جلب {group}',
+    'Pull {group}': 'سحب {group}',
+    'Push {group}': 'دفع {group}',
     'Fetch All': 'جلب الكل',
     'Pull All': 'سحب الكل',
     'Push All': 'دفع الكل',

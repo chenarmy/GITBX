@@ -1288,7 +1288,7 @@ async function handleDeleteTag(name: string) {
             @click="handleFetchAllRepos(groupContextMenu.groupName)"
           >
             <RefreshCw class="h-3.5 w-3.5 text-primary" />
-            <span>{{ t('Fetch All') }}</span>
+            <span class="min-w-0 truncate" :title="t('Fetch {group}', { group: groupContextMenu.groupName })">{{ t('Fetch {group}', { group: groupContextMenu.groupName }) }}</span>
           </button>
           <button
             role="menuitem"
@@ -1297,7 +1297,7 @@ async function handleDeleteTag(name: string) {
             @click="handlePullAllRepos(groupContextMenu.groupName)"
           >
             <ArrowDownCircle class="h-3.5 w-3.5 text-rose-500" />
-            <span>{{ t('Pull All') }}</span>
+            <span class="min-w-0 truncate" :title="t('Pull {group}', { group: groupContextMenu.groupName })">{{ t('Pull {group}', { group: groupContextMenu.groupName }) }}</span>
           </button>
           <button
             role="menuitem"
@@ -1306,7 +1306,7 @@ async function handleDeleteTag(name: string) {
             @click="handlePushAllRepos(groupContextMenu.groupName)"
           >
             <ArrowUpCircle class="h-3.5 w-3.5 text-emerald-500" />
-            <span>{{ t('Push All') }}</span>
+            <span class="min-w-0 truncate" :title="t('Push {group}', { group: groupContextMenu.groupName })">{{ t('Push {group}', { group: groupContextMenu.groupName }) }}</span>
           </button>
           <div class="arco-menu-divider"></div>
           <button
